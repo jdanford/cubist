@@ -5,15 +5,20 @@ use tokio::{io::AsyncRead, task::yield_now};
 
 use crate::{error::Error, hash::Hash};
 
+pub const DEFAULT_COMPRESSION_LEVEL: u32 = 3;
+pub const DEFAULT_TARGET_BLOCK_SIZE: u32 = 1024 * 1024;
+pub const COPY_CHUNK_SIZE: usize = 8 * 1024;
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Block;
 
 pub type BlockHash = Hash<Block>;
 
-pub const DEFAULT_COMPRESSION_LEVEL: u32 = 3;
-pub const DEFAULT_TARGET_BLOCK_SIZE: u32 = 1024 * 1024;
-pub const HASH_SIZE: usize = blake3::OUT_LEN;
-pub const COPY_CHUNK_SIZE: usize = 8 * 1024;
+impl BlockHash {
+    pub fn key(&self) -> String {
+        format!("block/{}", self)
+    }
+}
 
 pub async fn hash(data: &[u8]) -> Result<BlockHash, Error> {
     let mut hasher = blake3::Hasher::new();

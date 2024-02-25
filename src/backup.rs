@@ -1,19 +1,18 @@
 use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-    pin::pin,
+    collections::BTreeMap, path::{Path, PathBuf}, pin::pin
 };
 
+use chrono::{DateTime, Utc};
 use tokio::fs::{self, File};
 use tokio_stream::StreamExt;
 use walkdir::{DirEntry, WalkDir};
 
 use crate::{
-    archive::Archive,
-    block::{self, BlockHash, HASH_SIZE},
+    block::{self, BlockHash},
     cloud::Cloud,
     error::Error,
-    file::{FileHash, Metadata, Node},
+    file::{Archive, FileHash, Metadata, Node},
+    hash,
 };
 
 struct BackupArgs {
@@ -36,6 +35,7 @@ pub async fn backup(
     paths: Vec<PathBuf>,
 ) -> Result<(), Error> {
     let archive = Archive::new();
+    let time = Utc::now();
 
     let args = BackupArgs {
         cloud,
@@ -51,8 +51,24 @@ pub async fn backup(
         upload_recursive(&args, &mut state, path).await?;
     }
 
-    // TODO: upload archive
+    upload_archive(&args, &state, time).await?;
+    Ok(())
+}
 
+async fn upload_archive(
+    args: &BackupArgs,
+    state: &BackupState,
+    time: DateTime<Utc>,
+) -> Result<(), Error> {
+    let mut data = vec![];
+    ciborium::into_writer(&state.archive, &mut data)?;
+
+    let timestamp = time.format("%+").to_string();
+    let key = format!("archive/{}", timestamp);
+    args.cloud.put(&args.bucket, &key, data).await?;
+
+    let latest_key = "archive/latest";
+    args.cloud.put(&args.bucket, latest_key, timestamp.into()).await?;
     Ok(())
 }
 
@@ -78,7 +94,7 @@ async fn upload_from_dir_entry(
     let path = entry.path();
     let file_type = entry.file_type();
     let native_metadata = fs::metadata(path).await?;
-    let metadata = Metadata::from_native(native_metadata)?;
+    let metadata = Metadata::from_native(native_metadata);
 
     let node = (if file_type.is_file() {
         let mut file = File::open(path).await?;
@@ -110,10 +126,10 @@ async fn upload_file(
     file_hash: FileHash,
     block_hashes: Vec<BlockHash>,
 ) -> Result<(), Error> {
-    let key = file_hash.to_string();
+    let key = file_hash.key();
     if !args.cloud.exists(&args.bucket, &key).await? {
-        let chunk_size = args.target_block_size;
-        let chunk_hash_count = chunk_size as usize / HASH_SIZE;
+        let chunk_size = args.target_block_size as usize;
+        let chunk_hash_count = chunk_size / hash::SIZE;
         let chunks = block_hashes.chunks(chunk_hash_count).map(concat_hashes);
         args.cloud.put_streaming(&args.bucket, &key, chunks).await?;
     }
@@ -143,7 +159,7 @@ async fn upload_blocks(
 
 async fn upload_block(args: &BackupArgs, data: &[u8]) -> Result<BlockHash, Error> {
     let block_hash = block::hash(data).await?;
-    let key = block_hash.to_string();
+    let key = block_hash.key();
     if !args.cloud.exists(&args.bucket, &key).await? {
         let compressed_data = block::compress(data, args.compression_level).await?;
         args.cloud.put(&args.bucket, &key, compressed_data).await?;

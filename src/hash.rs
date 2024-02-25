@@ -1,8 +1,10 @@
 use std::{fmt, marker::PhantomData, ops::Deref};
 
-use crate::block::HASH_SIZE;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub const SIZE: usize = blake3::OUT_LEN;
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Hash<T>(blake3::Hash, PhantomData<T>);
 
 impl<T> Deref for Hash<T> {
@@ -20,14 +22,14 @@ impl<T> From<blake3::Hash> for Hash<T> {
 }
 
 impl<T> Hash<T> {
-    pub fn from_bytes(bytes: [u8; HASH_SIZE]) -> Self {
+    pub fn from_bytes(bytes: [u8; SIZE]) -> Self {
         Hash(blake3::Hash::from_bytes(bytes), PhantomData)
     }
 }
 
 impl<T> fmt::Display for Hash<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(&self.0, f)
+        fmt::Display::fmt(&self.0, f)
     }
 }
 

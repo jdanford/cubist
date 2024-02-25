@@ -1,20 +1,21 @@
 use std::{
     collections::HashMap,
-    io::SeekFrom,
+    fs::Permissions,
+    io::{Cursor, SeekFrom},
+    os::unix::fs::{chown, lchown, PermissionsExt},
     path::{Path, PathBuf},
 };
 
 use tokio::{
-    fs::{create_dir, symlink, File, OpenOptions},
+    fs::{create_dir, set_permissions, symlink, symlink_metadata, File, OpenOptions},
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
 };
 
 use crate::{
-    archive::Archive,
     block::{decompress_and_verify, BlockHash},
     cloud::Cloud,
     error::Error,
-    file::{FileHash, Node},
+    file::{Archive, FileHash, Node},
 };
 
 struct RestoreArgs {
@@ -45,8 +46,7 @@ impl LocalBlock {
 }
 
 pub async fn restore(cloud: Cloud, bucket: String, output_path: PathBuf) -> Result<(), Error> {
-    // TODO: download archive
-    let archive = Archive::new();
+    let archive = download_archive(&cloud, &bucket).await?;
     let local_blocks = HashMap::new();
 
     let args = RestoreArgs {
@@ -66,12 +66,31 @@ pub async fn restore(cloud: Cloud, bucket: String, output_path: PathBuf) -> Resu
     Ok(())
 }
 
+async fn download_archive(cloud: &Cloud, bucket: &str) -> Result<Archive, Error> {
+    let latest_key = "archive/latest";
+    let timestamp: String = cloud
+        .get(bucket, latest_key)
+        .await
+        .and_then(|bytes| String::from_utf8(bytes).map_err(|err| err.into()))?;
+
+    let key = format!("archive/{}", timestamp);
+    let serialized_archive = cloud.get(bucket, &key).await?;
+
+    let reader = Cursor::new(serialized_archive);
+    let archive = ciborium::from_reader(reader)?;
+    Ok(archive)
+}
+
 async fn restore_from_node(
     args: &RestoreArgs,
     state: &mut RestoreState,
     path: &Path,
     node: &Node,
 ) -> Result<(), Error> {
+    if try_exists(path).await? {
+        return Err(Error::file_already_exists(path));
+    }
+
     match node {
         Node::File { hash, .. } => {
             download_from_hash(args, state, node, path, hash).await?;
@@ -84,8 +103,23 @@ async fn restore_from_node(
         }
     }
 
-    // restore_metadata()
+    restore_metadata(path, node).await?;
+    Ok(())
+}
 
+async fn restore_metadata(path: &Path, node: &Node) -> Result<(), Error> {
+    let owner = node.metadata().owner;
+    let group = node.metadata().group;
+    let mode = node.metadata().mode;
+
+    if node.is_symlink() {
+        lchown(path, Some(owner), Some(group))?;
+    } else {
+        chown(path, Some(owner), Some(group))?;
+    }
+
+    let permissions = Permissions::from_mode(mode);
+    set_permissions(path, permissions).await?;
     Ok(())
 }
 
@@ -96,7 +130,7 @@ async fn download_from_hash(
     path: &Path,
     hash: &FileHash,
 ) -> Result<(), Error> {
-    let key = hash.to_string();
+    let key = hash.key();
     let packed_block_hashes = args.cloud.get(&args.bucket, &key).await?;
     let block_hashes = packed_block_hashes
         .chunks_exact(32)
@@ -162,7 +196,15 @@ async fn read_local_block(args: &RestoreArgs, local_block: &LocalBlock) -> Resul
 }
 
 async fn download_remote_block(args: &RestoreArgs, hash: &BlockHash) -> Result<Vec<u8>, Error> {
-    let key = hash.to_string();
+    let key = hash.key();
     let data = args.cloud.get(&args.bucket, &key).await?;
     Ok(data)
+}
+
+async fn try_exists(path: impl AsRef<Path>) -> Result<bool, Error> {
+    match symlink_metadata(path).await {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
 }

@@ -1,77 +1,49 @@
 use std::{
     collections::{btree_map, BTreeMap, HashMap},
     ffi::{OsStr, OsString},
-    os::unix::fs::MetadataExt,
     path::{Component, Path, PathBuf},
 };
 
-use crate::{archive::unix_timestamp, error::Error, hash::Hash};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct File;
+use crate::error::Error;
 
-pub type FileHash = Hash<File>;
+use super::Node;
 
-pub struct Metadata {
-    pub inode: u64,
-    pub mode: u32,
-    pub group: u32,
-    pub owner: u32,
-    pub accessed: i64,
-    pub created: i64,
-    pub modified: i64,
-}
-
-impl Metadata {
-    pub fn from_native(native: std::fs::Metadata) -> Result<Self, Error> {
-        Ok(Metadata {
-            inode: native.ino(),
-            mode: native.mode(),
-            group: native.gid(),
-            owner: native.uid(),
-            accessed: native.accessed().map(unix_timestamp)?,
-            created: native.created().map(unix_timestamp)?,
-            modified: native.modified().map(unix_timestamp)?,
-        })
-    }
-}
-
-pub enum Node {
-    File {
-        metadata: Metadata,
-        hash: FileHash,
-    },
-    Symlink {
-        metadata: Metadata,
-        path: PathBuf,
-    },
-    Directory {
-        metadata: Metadata,
-        children: BTreeMap<OsString, Node>,
-    },
-}
-
-impl Node {
-    pub fn metadata(&self) -> &Metadata {
-        match self {
-            Node::File { metadata, .. } => metadata,
-            Node::Symlink { metadata, .. } => metadata,
-            Node::Directory { metadata, .. } => metadata,
-        }
-    }
-}
-
-pub struct FileTree {
+#[derive(Debug)]
+pub struct Archive {
     root: BTreeMap<OsString, Node>,
     paths: HashMap<u64, PathBuf>,
 }
 
-impl FileTree {
+impl Serialize for Archive {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        Serialize::serialize(&self.root, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Archive {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Archive, D::Error> {
+        let root = BTreeMap::deserialize(deserializer)?;
+        Ok(Archive::from_root(root))
+    }
+}
+
+impl Archive {
     pub fn new() -> Self {
-        FileTree {
+        Archive {
             root: BTreeMap::new(),
             paths: HashMap::new(),
         }
+    }
+
+    pub fn from_root(root: BTreeMap<OsString, Node>) -> Self {
+        let mut paths = HashMap::new();
+        for (path, node) in FileWalker::from_root(&root) {
+            paths.insert(node.metadata().inode, path);
+        }
+
+        Archive { root, paths }
     }
 
     pub fn insert(&mut self, path: &Path, node: Node) -> Result<(), Error> {
@@ -91,7 +63,7 @@ impl FileTree {
         }
 
         if children.contains_key(name) {
-            return Err(Error::path_already_exists(path));
+            return Err(Error::path_already_archived(path));
         }
 
         self.paths.insert(node.metadata().inode, path.to_owned());
@@ -104,36 +76,42 @@ impl FileTree {
     }
 
     pub fn walk(&self) -> FileWalker<'_> {
-        FileWalker {
-            path: PathBuf::new(),
-            dirs: vec![self.root.iter()],
-        }
+        FileWalker::from_root(&self.root)
     }
 }
 
 pub struct FileWalker<'a> {
     path: PathBuf,
-    dirs: Vec<btree_map::Iter<'a, OsString, Node>>,
+    layers: Vec<btree_map::Iter<'a, OsString, Node>>,
+}
+
+impl<'a> FileWalker<'a> {
+    fn from_root(root: &'a BTreeMap<OsString, Node>) -> FileWalker<'a> {
+        FileWalker {
+            path: PathBuf::new(),
+            layers: vec![root.iter()],
+        }
+    }
 }
 
 impl<'a> Iterator for FileWalker<'a> {
     type Item = (PathBuf, &'a Node);
 
     fn next(&mut self) -> Option<Self::Item> {
-        while let Some(layer) = self.dirs.last_mut() {
+        while let Some(layer) = self.layers.last_mut() {
             if let Some((name, node)) = layer.next() {
                 let node_path = self.path.join(name);
 
                 if let Node::Directory { children, .. } = node {
                     self.path.push(name);
-                    self.dirs.push(children.iter());
+                    self.layers.push(children.iter());
                 }
 
                 return Option::Some((node_path, node));
             }
 
             self.path.pop();
-            self.dirs.pop();
+            self.layers.pop();
         }
 
         Option::None
