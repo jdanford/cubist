@@ -33,10 +33,6 @@ pub enum Error {
     #[error("empty path")]
     EmptyPath,
 
-    // TODO: lol
-    #[error("`{0}` is a weird file")]
-    WeirdFile(PathBuf),
-
     #[error("invalid timestamp `{0}`")]
     InvalidTimestamp(i64),
 
@@ -100,12 +96,6 @@ pub enum Error {
     #[error("{0}")]
     Serializer(String),
 }
-
-// impl From<std::io::Error> for Error {
-//     fn from(source: std::io::Error) -> Self {
-//         panic!("{:#?}", source)
-//     }
-// }
 
 impl<E, R> From<SdkError<E, R>> for Error {
     fn from(error: SdkError<E, R>) -> Self {

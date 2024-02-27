@@ -3,7 +3,7 @@ use std::os::unix::fs::MetadataExt;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Metadata {
     pub inode: u64,
     pub mode: u32,

@@ -81,8 +81,8 @@ impl Storage for LocalStorage {
         let path = self.object_path(bucket, key);
         self.create_bucket_dir(bucket).await?;
         let mut file = OpenOptions::new()
-            .create(true)
             .write(true)
+            .create(true)
             .open(path)
             .await?;
 

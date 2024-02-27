@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{metadata::Metadata, FileHash};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Node {
     File {

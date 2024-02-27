@@ -2,11 +2,16 @@ use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
     pin::pin,
+    sync::{Arc, Mutex},
 };
 
+use async_channel::{Receiver, Sender};
 use chrono::{DateTime, Utc};
+use log::{info, warn};
 use tokio::{
     fs::{self, File},
+    spawn,
+    sync::Semaphore,
     task::spawn_blocking,
 };
 use tokio_stream::StreamExt;
@@ -14,16 +19,17 @@ use walkdir::{DirEntry, WalkDir};
 
 use crate::{
     block::{self, BlockHash},
-    error::{Error, Result},
+    error::Result,
     file::{read_metadata, Archive, FileHash, Node},
     hash,
-    storage::Storage,
+    storage::{LocalStorage, Storage},
 };
 
-struct BackupArgs<S> {
-    storage: S,
+struct BackupArgs {
+    storage: LocalStorage,
     compression_level: u32,
     target_block_size: u32,
+    max_concurrency: usize,
     bucket: String,
     paths: Vec<PathBuf>,
 }
@@ -32,42 +38,60 @@ struct BackupState {
     archive: Archive,
 }
 
-pub async fn backup<S: Storage>(
-    storage: S,
+struct PendingFile {
+    local_path: PathBuf,
+    archive_path: PathBuf,
+}
+
+pub async fn backup(
+    storage: LocalStorage,
     compression_level: u32,
     target_block_size: u32,
+    max_concurrency: usize,
     bucket: String,
     paths: Vec<PathBuf>,
 ) -> Result<()> {
     let time = Utc::now();
     let archive = Archive::new();
-
-    let args = BackupArgs {
+    let args = Arc::new(BackupArgs {
         storage,
         compression_level,
         target_block_size,
+        max_concurrency,
         bucket,
         paths,
-    };
+    });
+    let state = Arc::new(Mutex::new(BackupState { archive }));
+    let (sender, receiver) = async_channel::bounded(args.max_concurrency);
 
-    let mut state = BackupState { archive };
+    let uploader_args = args.clone();
+    let uploader_state = state.clone();
+    let uploader_task = spawn(async move {
+        upload_pending_files(
+            uploader_args.clone(),
+            uploader_state.clone(),
+            receiver.clone(),
+        )
+        .await;
+    });
 
     for path in &args.paths {
-        upload_recursive(&args, &mut state, path).await?;
+        backup_recursive(args.clone(), state.clone(), sender.clone(), path).await?;
     }
 
-    upload_archive(&args, state.archive, time).await?;
+    uploader_task.await?;
+    upload_archive(args.clone(), state.clone(), time).await?;
     Ok(())
 }
 
-async fn upload_archive<S: Storage>(
-    args: &BackupArgs<S>,
-    archive: Archive,
+async fn upload_archive(
+    args: Arc<BackupArgs>,
+    state: Arc<Mutex<BackupState>>,
     time: DateTime<Utc>,
 ) -> Result<()> {
     let data = spawn_blocking(move || {
         let mut data = vec![];
-        ciborium::into_writer(&archive, &mut data)?;
+        ciborium::into_writer(&state.lock().unwrap().archive, &mut data)?;
         Result::Ok(data)
     })
     .await??;
@@ -83,78 +107,106 @@ async fn upload_archive<S: Storage>(
     Ok(())
 }
 
-async fn upload_recursive<S: Storage>(
-    args: &BackupArgs<S>,
-    state: &mut BackupState,
+async fn backup_recursive(
+    args: Arc<BackupArgs>,
+    state: Arc<Mutex<BackupState>>,
+    sender: Sender<PendingFile>,
     path: &Path,
 ) -> Result<()> {
     let walker = WalkDir::new(path);
-
     for entry_result in walker {
         let entry = entry_result?;
         if entry.file_type().is_dir() && entry.depth() == 0 {
             continue;
         }
 
-        upload_from_dir_entry(args, state, entry, path).await?;
+        backup_from_entry(args.clone(), state.clone(), sender.clone(), entry, path).await?;
     }
 
     Ok(())
 }
 
-async fn upload_from_dir_entry<S: Storage>(
-    args: &BackupArgs<S>,
-    state: &mut BackupState,
+async fn backup_from_entry(
+    _args: Arc<BackupArgs>,
+    state: Arc<Mutex<BackupState>>,
+    sender: Sender<PendingFile>,
     entry: DirEntry,
     base_path: &Path,
 ) -> Result<()> {
     let local_path = entry.path();
     let archive_path = local_path.strip_prefix(base_path)?;
-    println!("{}", archive_path.to_string_lossy());
+    info!("backing up `{}`", archive_path.to_string_lossy());
 
     let file_type = entry.file_type();
     if file_type.is_file() {
-        upload_from_path(args, state, local_path, archive_path).await?;
+        let pending_file = PendingFile {
+            local_path: local_path.to_owned(),
+            archive_path: archive_path.to_owned(),
+        };
+        sender.send(pending_file).await?;
     } else if file_type.is_symlink() {
         let metadata = read_metadata(local_path).await?;
         let path = fs::read_link(local_path).await?;
         let node = Node::Symlink { metadata, path };
-        state.archive.insert(archive_path, node)?;
+        state.lock().unwrap().archive.insert(archive_path, node)?;
     } else if file_type.is_dir() {
         let metadata = read_metadata(local_path).await?;
         let children = BTreeMap::new();
         let node = Node::Directory { metadata, children };
-        state.archive.insert(archive_path, node)?;
+        state.lock().unwrap().archive.insert(archive_path, node)?;
     } else {
-        // TODO: skip?
-        return Err(Error::WeirdFile(local_path.to_owned()));
+        warn!("skipping special file `{}`", local_path.to_string_lossy());
     };
 
     Ok(())
 }
 
-async fn upload_from_path<S: Storage>(
-    args: &BackupArgs<S>,
-    state: &mut BackupState,
-    local_path: &Path,
-    archive_path: &Path,
+async fn upload_pending_files(
+    args: Arc<BackupArgs>,
+    state: Arc<Mutex<BackupState>>,
+    receiver: Receiver<PendingFile>,
+) {
+    let semaphore = Arc::new(Semaphore::new(args.max_concurrency));
+    while let Ok(pending_file) = receiver.recv().await {
+        let args = args.clone();
+        let state = state.clone();
+        let permit = semaphore.clone().acquire_owned().await.unwrap();
+
+        spawn(async move {
+            upload_pending_file(args, state, pending_file)
+                .await
+                .unwrap();
+            drop(permit);
+        });
+    }
+}
+
+async fn upload_pending_file(
+    args: Arc<BackupArgs>,
+    state: Arc<Mutex<BackupState>>,
+    pending_file: PendingFile,
 ) -> Result<()> {
-    let metadata = read_metadata(local_path).await?;
-    let mut file = File::open(local_path).await?;
-    let (file_hash, block_hashes) = upload_blocks(args, &mut file).await?;
-    upload_file(args, file_hash, block_hashes).await?;
+    info!("uploading `{}`", pending_file.archive_path.to_string_lossy());
+    let metadata = read_metadata(&pending_file.local_path).await?;
+    let mut file = File::open(&pending_file.local_path).await?;
+    let (file_hash, block_hashes) = upload_blocks(args.clone(), &mut file).await?;
+    upload_file(args.clone(), file_hash, block_hashes).await?;
 
     let node = Node::File {
         metadata,
         hash: file_hash,
     };
 
-    state.archive.insert(archive_path, node)?;
+    state
+        .lock()
+        .unwrap()
+        .archive
+        .insert(&pending_file.archive_path, node)?;
     Ok(())
 }
 
-async fn upload_file<S: Storage>(
-    args: &BackupArgs<S>,
+async fn upload_file(
+    args: Arc<BackupArgs>,
     file_hash: FileHash,
     block_hashes: Vec<BlockHash>,
 ) -> Result<()> {
@@ -171,18 +223,19 @@ async fn upload_file<S: Storage>(
     Ok(())
 }
 
-async fn upload_blocks<S: Storage>(
-    args: &BackupArgs<S>,
+async fn upload_blocks(
+    args: Arc<BackupArgs>,
     file: &mut File,
 ) -> Result<(FileHash, Vec<BlockHash>)> {
     let mut chunker = block::chunker(file, args.target_block_size);
     let mut chunks = pin!(chunker.as_stream());
+
     let mut hasher = blake3::Hasher::new();
     let mut block_hashes = Vec::new();
 
     while let Some(chunk_result) = chunks.next().await {
         let chunk = chunk_result?;
-        let block_hash = upload_block(args, &chunk.data).await?;
+        let block_hash = upload_block(args.clone(), &chunk.data).await?;
         hasher.update(block_hash.as_bytes());
         block_hashes.push(block_hash);
     }
@@ -191,9 +244,10 @@ async fn upload_blocks<S: Storage>(
     Ok((file_hash, block_hashes))
 }
 
-async fn upload_block<S: Storage>(args: &BackupArgs<S>, data: &[u8]) -> Result<BlockHash> {
+async fn upload_block(args: Arc<BackupArgs>, data: &[u8]) -> Result<BlockHash> {
     let block_hash = block::hash(data).await?;
     let key = block_hash.key();
+
     if !args.storage.exists(&args.bucket, &key).await? {
         let compressed_data = block::compress(data, args.compression_level).await?;
         args.storage
