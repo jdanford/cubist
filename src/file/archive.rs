@@ -6,7 +6,7 @@ use std::{
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::error::Error;
+use crate::error::{Error, Result};
 
 use super::Node;
 
@@ -17,13 +17,15 @@ pub struct Archive {
 }
 
 impl Serialize for Archive {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
         Serialize::serialize(&self.root, serializer)
     }
 }
 
 impl<'de> Deserialize<'de> for Archive {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Archive, D::Error> {
+    fn deserialize<D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<Archive, D::Error> {
         let root = BTreeMap::deserialize(deserializer)?;
         Ok(Archive::from_root(root))
     }
@@ -46,24 +48,33 @@ impl Archive {
         Archive { root, paths }
     }
 
-    pub fn insert(&mut self, path: &Path, node: Node) -> Result<(), Error> {
+    pub fn insert(&mut self, path: &Path, node: Node) -> Result<()> {
         let (keys, name) = path_keys(path)?;
+
+        let mut current_path = PathBuf::new();
         let mut children = &mut self.root;
 
         for key in keys.iter().cloned() {
-            if let Some(Node::Directory {
-                children: subdir_children,
-                ..
-            }) = children.get_mut(key)
-            {
-                children = subdir_children;
-            } else {
-                return Err(Error::invalid_path(path));
+            current_path.push(key);
+
+            match children.get_mut(key) {
+                Some(Node::Directory {
+                    children: grandchildren,
+                    ..
+                }) => {
+                    children = grandchildren;
+                }
+                Some(_) => {
+                    return Err(Error::FileIsNotDirectory(current_path));
+                }
+                None => {
+                    return Err(Error::DirectoryDoesNotExist(current_path));
+                }
             }
         }
 
         if children.contains_key(name) {
-            return Err(Error::path_already_archived(path));
+            return Err(Error::PathAlreadyArchived(path.to_owned()));
         }
 
         self.paths.insert(node.metadata().inode, path.to_owned());
@@ -118,12 +129,12 @@ impl<'a> Iterator for FileWalker<'a> {
     }
 }
 
-fn path_keys(path: &Path) -> Result<(Vec<&OsStr>, &OsStr), Error> {
+fn path_keys(path: &Path) -> Result<(Vec<&OsStr>, &OsStr)> {
     let mut keys = path
         .components()
         .filter_map(get_normal_component)
         .collect::<Vec<_>>();
-    let name = keys.pop().ok_or_else(|| Error::invalid_path(path))?;
+    let name = keys.pop().ok_or(Error::EmptyPath)?;
     Ok((keys, name))
 }
 

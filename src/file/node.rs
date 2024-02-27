@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, ffi::OsString, path::PathBuf};
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use super::{metadata::Metadata, FileHash};
 
@@ -33,15 +33,15 @@ impl Node {
         }
     }
 
-    pub fn is_file(&self) -> bool {
-        matches!(self, Node::File { .. })
-    }
+    // pub fn is_file(&self) -> bool {
+    //     matches!(self, Node::File { .. })
+    // }
 
     pub fn is_symlink(&self) -> bool {
         matches!(self, Node::Symlink { .. })
     }
 
-    pub fn is_directory(&self) -> bool {
-        matches!(self, Node::Directory { .. })
-    }
+    // pub fn is_directory(&self) -> bool {
+    //     matches!(self, Node::Directory { .. })
+    // }
 }

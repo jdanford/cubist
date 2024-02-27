@@ -3,20 +3,24 @@ use aws_sdk_s3::{
     Client,
 };
 
-use crate::error::Error;
+use crate::error::Result;
 
-pub struct Cloud {
+use super::core::Storage;
+
+pub struct CloudStorage {
     client: aws_sdk_s3::Client,
 }
 
-impl Cloud {
-    pub async fn from_env() -> Cloud {
+impl CloudStorage {
+    pub async fn from_env() -> CloudStorage {
         let s3_config = aws_config::load_from_env().await;
         let client = Client::new(&s3_config);
-        Cloud { client }
+        CloudStorage { client }
     }
+}
 
-    pub async fn exists(&self, bucket: &str, key: &str) -> Result<bool, Error> {
+impl Storage for CloudStorage {
+    async fn exists(&self, bucket: &str, key: &str) -> Result<bool> {
         let head_result = self
             .client
             .head_object()
@@ -27,7 +31,7 @@ impl Cloud {
         Ok(head_result.is_ok())
     }
 
-    pub async fn get(&self, bucket: &str, key: &str) -> Result<Vec<u8>, Error> {
+    async fn get(&self, bucket: &str, key: &str) -> Result<Vec<u8>> {
         let object = self
             .client
             .get_object()
@@ -39,7 +43,7 @@ impl Cloud {
         Ok(data)
     }
 
-    pub async fn put(&self, bucket: &str, key: &str, data: Vec<u8>) -> Result<(), Error> {
+    async fn put(&self, bucket: &str, key: &str, data: Vec<u8>) -> Result<()> {
         self.client
             .put_object()
             .bucket(bucket)
@@ -50,12 +54,10 @@ impl Cloud {
         Ok(())
     }
 
-    pub async fn put_streaming<I: Iterator<Item = Vec<u8>>>(
-        &self,
-        bucket: &str,
-        key: &str,
-        chunks: I,
-    ) -> Result<(), Error> {
+    async fn put_streaming<I>(&self, bucket: &str, key: &str, chunks: I) -> Result<()>
+    where
+        I: Iterator<Item = Vec<u8>>,
+    {
         let multipart_upload_res = self
             .client
             .create_multipart_upload()

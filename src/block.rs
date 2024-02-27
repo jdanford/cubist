@@ -3,10 +3,11 @@ use std::io::{Cursor, Read, Write};
 use fastcdc::v2020::AsyncStreamCDC;
 use tokio::{io::AsyncRead, task::yield_now};
 
-use crate::{error::Error, hash::Hash};
+use crate::{
+    error::{Error, Result},
+    hash::Hash,
+};
 
-pub const DEFAULT_COMPRESSION_LEVEL: u32 = 3;
-pub const DEFAULT_TARGET_BLOCK_SIZE: u32 = 1024 * 1024;
 pub const COPY_CHUNK_SIZE: usize = 8 * 1024;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -16,11 +17,11 @@ pub type BlockHash = Hash<Block>;
 
 impl BlockHash {
     pub fn key(&self) -> String {
-        format!("block/{}", self)
+        format!("block:{}", self)
     }
 }
 
-pub async fn hash(data: &[u8]) -> Result<BlockHash, Error> {
+pub async fn hash(data: &[u8]) -> Result<BlockHash> {
     let mut hasher = blake3::Hasher::new();
 
     for chunk in data.chunks(COPY_CHUNK_SIZE) {
@@ -32,7 +33,7 @@ pub async fn hash(data: &[u8]) -> Result<BlockHash, Error> {
     Ok(hash)
 }
 
-pub async fn compress(data: &[u8], compression_level: u32) -> Result<Vec<u8>, Error> {
+pub async fn compress(data: &[u8], compression_level: u32) -> Result<Vec<u8>> {
     let buffer = Vec::with_capacity(data.len() / 2);
     let mut encoder = lz4::EncoderBuilder::new()
         .level(compression_level)
@@ -52,7 +53,7 @@ pub async fn compress(data: &[u8], compression_level: u32) -> Result<Vec<u8>, Er
 pub async fn decompress_and_verify(
     expected_hash: &BlockHash,
     compressed_data: &[u8],
-) -> Result<Vec<u8>, Error> {
+) -> Result<Vec<u8>> {
     let reader = Cursor::new(compressed_data);
     let mut decoder = lz4::Decoder::new(reader)?;
 
@@ -67,6 +68,8 @@ pub async fn decompress_and_verify(
         }
 
         hasher.write_all(&buffer[..n])?;
+        yield_now().await;
+
         data.write_all(&buffer[..n])?;
         yield_now().await;
     }

@@ -1,22 +1,27 @@
 use std::{
-    collections::BTreeMap, path::{Path, PathBuf}, pin::pin
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+    pin::pin,
 };
 
 use chrono::{DateTime, Utc};
-use tokio::fs::{self, File};
+use tokio::{
+    fs::{self, File},
+    task::spawn_blocking,
+};
 use tokio_stream::StreamExt;
 use walkdir::{DirEntry, WalkDir};
 
 use crate::{
     block::{self, BlockHash},
-    cloud::Cloud,
-    error::Error,
-    file::{Archive, FileHash, Metadata, Node},
+    error::{Error, Result},
+    file::{read_metadata, Archive, FileHash, Node},
     hash,
+    storage::Storage,
 };
 
-struct BackupArgs {
-    cloud: Cloud,
+struct BackupArgs<S> {
+    storage: S,
     compression_level: u32,
     target_block_size: u32,
     bucket: String,
@@ -27,18 +32,18 @@ struct BackupState {
     archive: Archive,
 }
 
-pub async fn backup(
-    cloud: Cloud,
+pub async fn backup<S: Storage>(
+    storage: S,
     compression_level: u32,
     target_block_size: u32,
     bucket: String,
     paths: Vec<PathBuf>,
-) -> Result<(), Error> {
-    let archive = Archive::new();
+) -> Result<()> {
     let time = Utc::now();
+    let archive = Archive::new();
 
     let args = BackupArgs {
-        cloud,
+        storage,
         compression_level,
         target_block_size,
         bucket,
@@ -47,100 +52,129 @@ pub async fn backup(
 
     let mut state = BackupState { archive };
 
-    for path in args.paths.iter() {
+    for path in &args.paths {
         upload_recursive(&args, &mut state, path).await?;
     }
 
-    upload_archive(&args, &state, time).await?;
+    upload_archive(&args, state.archive, time).await?;
     Ok(())
 }
 
-async fn upload_archive(
-    args: &BackupArgs,
-    state: &BackupState,
+async fn upload_archive<S: Storage>(
+    args: &BackupArgs<S>,
+    archive: Archive,
     time: DateTime<Utc>,
-) -> Result<(), Error> {
-    let mut data = vec![];
-    ciborium::into_writer(&state.archive, &mut data)?;
+) -> Result<()> {
+    let data = spawn_blocking(move || {
+        let mut data = vec![];
+        ciborium::into_writer(&archive, &mut data)?;
+        Result::Ok(data)
+    })
+    .await??;
 
-    let timestamp = time.format("%+").to_string();
-    let key = format!("archive/{}", timestamp);
-    args.cloud.put(&args.bucket, &key, data).await?;
+    let timestamp = time.format("%Y-%m-%dT%H:%M:%S").to_string();
+    let key = format!("archive:{}", timestamp);
+    args.storage.put(&args.bucket, &key, data).await?;
 
-    let latest_key = "archive/latest";
-    args.cloud.put(&args.bucket, latest_key, timestamp.into()).await?;
+    let latest_key = "archive:latest";
+    args.storage
+        .put(&args.bucket, latest_key, timestamp.into())
+        .await?;
     Ok(())
 }
 
-async fn upload_recursive(
-    args: &BackupArgs,
+async fn upload_recursive<S: Storage>(
+    args: &BackupArgs<S>,
     state: &mut BackupState,
     path: &Path,
-) -> Result<(), Error> {
+) -> Result<()> {
     let walker = WalkDir::new(path);
+
     for entry_result in walker {
         let entry = entry_result?;
-        upload_from_dir_entry(args, state, entry).await?;
+        if entry.file_type().is_dir() && entry.depth() == 0 {
+            continue;
+        }
+
+        upload_from_dir_entry(args, state, entry, path).await?;
     }
 
     Ok(())
 }
 
-async fn upload_from_dir_entry(
-    args: &BackupArgs,
+async fn upload_from_dir_entry<S: Storage>(
+    args: &BackupArgs<S>,
     state: &mut BackupState,
     entry: DirEntry,
-) -> Result<(), Error> {
-    let path = entry.path();
+    base_path: &Path,
+) -> Result<()> {
+    let local_path = entry.path();
+    let archive_path = local_path.strip_prefix(base_path)?;
+    println!("{}", archive_path.to_string_lossy());
+
     let file_type = entry.file_type();
-    let native_metadata = fs::metadata(path).await?;
-    let metadata = Metadata::from_native(native_metadata);
-
-    let node = (if file_type.is_file() {
-        let mut file = File::open(path).await?;
-        let (file_hash, block_hashes) = upload_blocks(args, &mut file).await?;
-        upload_file(args, file_hash, block_hashes).await?;
-
-        Ok(Node::File {
-            metadata,
-            hash: file_hash,
-        })
+    if file_type.is_file() {
+        upload_from_path(args, state, local_path, archive_path).await?;
     } else if file_type.is_symlink() {
-        let path = fs::read_link(path).await?;
-        Ok(Node::Symlink { metadata, path })
+        let metadata = read_metadata(local_path).await?;
+        let path = fs::read_link(local_path).await?;
+        let node = Node::Symlink { metadata, path };
+        state.archive.insert(archive_path, node)?;
     } else if file_type.is_dir() {
-        Ok(Node::Directory {
-            metadata,
-            children: BTreeMap::new(),
-        })
+        let metadata = read_metadata(local_path).await?;
+        let children = BTreeMap::new();
+        let node = Node::Directory { metadata, children };
+        state.archive.insert(archive_path, node)?;
     } else {
-        Err(Error::weird_file(path))
-    })?;
+        // TODO: skip?
+        return Err(Error::WeirdFile(local_path.to_owned()));
+    };
 
-    state.archive.insert(path, node)?;
     Ok(())
 }
 
-async fn upload_file(
-    args: &BackupArgs,
+async fn upload_from_path<S: Storage>(
+    args: &BackupArgs<S>,
+    state: &mut BackupState,
+    local_path: &Path,
+    archive_path: &Path,
+) -> Result<()> {
+    let metadata = read_metadata(local_path).await?;
+    let mut file = File::open(local_path).await?;
+    let (file_hash, block_hashes) = upload_blocks(args, &mut file).await?;
+    upload_file(args, file_hash, block_hashes).await?;
+
+    let node = Node::File {
+        metadata,
+        hash: file_hash,
+    };
+
+    state.archive.insert(archive_path, node)?;
+    Ok(())
+}
+
+async fn upload_file<S: Storage>(
+    args: &BackupArgs<S>,
     file_hash: FileHash,
     block_hashes: Vec<BlockHash>,
-) -> Result<(), Error> {
+) -> Result<()> {
     let key = file_hash.key();
-    if !args.cloud.exists(&args.bucket, &key).await? {
+    if !args.storage.exists(&args.bucket, &key).await? {
         let chunk_size = args.target_block_size as usize;
         let chunk_hash_count = chunk_size / hash::SIZE;
         let chunks = block_hashes.chunks(chunk_hash_count).map(concat_hashes);
-        args.cloud.put_streaming(&args.bucket, &key, chunks).await?;
+        args.storage
+            .put_streaming(&args.bucket, &key, chunks)
+            .await?;
     }
 
     Ok(())
 }
 
-async fn upload_blocks(
-    args: &BackupArgs,
+async fn upload_blocks<S: Storage>(
+    args: &BackupArgs<S>,
     file: &mut File,
-) -> Result<(FileHash, Vec<BlockHash>), Error> {
+) -> Result<(FileHash, Vec<BlockHash>)> {
     let mut chunker = block::chunker(file, args.target_block_size);
     let mut chunks = pin!(chunker.as_stream());
     let mut hasher = blake3::Hasher::new();
@@ -157,12 +191,14 @@ async fn upload_blocks(
     Ok((file_hash, block_hashes))
 }
 
-async fn upload_block(args: &BackupArgs, data: &[u8]) -> Result<BlockHash, Error> {
+async fn upload_block<S: Storage>(args: &BackupArgs<S>, data: &[u8]) -> Result<BlockHash> {
     let block_hash = block::hash(data).await?;
     let key = block_hash.key();
-    if !args.cloud.exists(&args.bucket, &key).await? {
+    if !args.storage.exists(&args.bucket, &key).await? {
         let compressed_data = block::compress(data, args.compression_level).await?;
-        args.cloud.put(&args.bucket, &key, compressed_data).await?;
+        args.storage
+            .put(&args.bucket, &key, compressed_data)
+            .await?;
     }
 
     Ok(block_hash)
@@ -172,9 +208,10 @@ fn concat_hashes(hashes: &[BlockHash]) -> Vec<u8> {
     concat_arrays(hashes.iter().map(|hash| hash.as_bytes()).cloned())
 }
 
-fn concat_arrays<T: Clone, const N: usize, I: ExactSizeIterator<Item = [T; N]>>(
-    arrays: I,
-) -> Vec<T> {
+fn concat_arrays<T: Clone, const N: usize, I>(arrays: I) -> Vec<T>
+where
+    I: ExactSizeIterator<Item = [T; N]>,
+{
     let len = arrays.len() * N;
     let mut output = Vec::with_capacity(len);
 

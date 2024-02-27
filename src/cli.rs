@@ -2,7 +2,9 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-use crate::block::{DEFAULT_COMPRESSION_LEVEL, DEFAULT_TARGET_BLOCK_SIZE};
+const DEFAULT_COMPRESSION_LEVEL: u32 = 3;
+const DEFAULT_TARGET_BLOCK_SIZE: u32 = 1024 * 1024;
+const DEFAULT_BUCKET: &str = "cubist";
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -21,15 +23,17 @@ pub enum Command {
         #[arg(long, default_value_t = DEFAULT_TARGET_BLOCK_SIZE)]
         target_block_size: u32,
 
-        #[arg(short, long)]
+        #[arg(short, long, default_value = DEFAULT_BUCKET)]
         bucket: String,
 
+        #[arg(required = true)]
         paths: Vec<PathBuf>,
     },
     Restore {
-        #[arg(short, long)]
+        #[arg(short, long, default_value = DEFAULT_BUCKET)]
         bucket: String,
 
+        #[arg(required = true)]
         path: PathBuf,
     },
 }

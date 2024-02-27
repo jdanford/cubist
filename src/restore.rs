@@ -7,19 +7,20 @@ use std::{
 };
 
 use tokio::{
-    fs::{create_dir, set_permissions, symlink, symlink_metadata, File, OpenOptions},
+    fs::{self, File, OpenOptions},
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
+    task::spawn_blocking,
 };
 
 use crate::{
-    block::{decompress_and_verify, BlockHash},
-    cloud::Cloud,
-    error::Error,
-    file::{Archive, FileHash, Node},
+    block::{self, BlockHash},
+    error::{Error, Result},
+    file::{try_exists, Archive, FileHash, Node},
+    storage::Storage,
 };
 
-struct RestoreArgs {
-    cloud: Cloud,
+struct RestoreArgs<S> {
+    storage: S,
     bucket: String,
     output_path: PathBuf,
     archive: Archive,
@@ -45,12 +46,12 @@ impl LocalBlock {
     }
 }
 
-pub async fn restore(cloud: Cloud, bucket: String, output_path: PathBuf) -> Result<(), Error> {
-    let archive = download_archive(&cloud, &bucket).await?;
+pub async fn restore<S: Storage>(storage: S, bucket: String, output_path: PathBuf) -> Result<()> {
+    let archive = download_archive(&storage, &bucket).await?;
     let local_blocks = HashMap::new();
 
     let args = RestoreArgs {
-        cloud,
+        storage,
         bucket,
         output_path,
         archive,
@@ -66,29 +67,27 @@ pub async fn restore(cloud: Cloud, bucket: String, output_path: PathBuf) -> Resu
     Ok(())
 }
 
-async fn download_archive(cloud: &Cloud, bucket: &str) -> Result<Archive, Error> {
-    let latest_key = "archive/latest";
-    let timestamp: String = cloud
-        .get(bucket, latest_key)
-        .await
-        .and_then(|bytes| String::from_utf8(bytes).map_err(|err| err.into()))?;
+async fn download_archive<S: Storage>(storage: &S, bucket: &str) -> Result<Archive> {
+    let latest_key = "archive:latest";
+    let timestamp_bytes = storage.get(bucket, latest_key).await?;
+    let timestamp = String::from_utf8(timestamp_bytes)?;
 
-    let key = format!("archive/{}", timestamp);
-    let serialized_archive = cloud.get(bucket, &key).await?;
+    let key = format!("archive:{}", timestamp);
+    let serialized_archive = storage.get(bucket, &key).await?;
 
     let reader = Cursor::new(serialized_archive);
-    let archive = ciborium::from_reader(reader)?;
+    let archive = spawn_blocking(move || ciborium::from_reader(reader)).await??;
     Ok(archive)
 }
 
-async fn restore_from_node(
-    args: &RestoreArgs,
+async fn restore_from_node<S: Storage>(
+    args: &RestoreArgs<S>,
     state: &mut RestoreState,
     path: &Path,
     node: &Node,
-) -> Result<(), Error> {
+) -> Result<()> {
     if try_exists(path).await? {
-        return Err(Error::file_already_exists(path));
+        return Err(Error::FileAlreadyExists(path.to_owned()));
     }
 
     match node {
@@ -96,18 +95,19 @@ async fn restore_from_node(
             download_from_hash(args, state, node, path, hash).await?;
         }
         Node::Symlink { path: src, .. } => {
-            symlink(src, path).await?;
+            fs::symlink(src, path).await?;
+            restore_metadata(path, node).await?;
         }
         Node::Directory { .. } => {
-            create_dir(path).await?;
+            fs::create_dir(path).await?;
+            restore_metadata(path, node).await?;
         }
     }
 
-    restore_metadata(path, node).await?;
     Ok(())
 }
 
-async fn restore_metadata(path: &Path, node: &Node) -> Result<(), Error> {
+async fn restore_metadata(path: &Path, node: &Node) -> Result<()> {
     let owner = node.metadata().owner;
     let group = node.metadata().group;
     let mode = node.metadata().mode;
@@ -119,19 +119,19 @@ async fn restore_metadata(path: &Path, node: &Node) -> Result<(), Error> {
     }
 
     let permissions = Permissions::from_mode(mode);
-    set_permissions(path, permissions).await?;
+    fs::set_permissions(path, permissions).await?;
     Ok(())
 }
 
-async fn download_from_hash(
-    args: &RestoreArgs,
+async fn download_from_hash<S: Storage>(
+    args: &RestoreArgs<S>,
     state: &mut RestoreState,
     node: &Node,
     path: &Path,
     hash: &FileHash,
-) -> Result<(), Error> {
+) -> Result<()> {
     let key = hash.key();
-    let packed_block_hashes = args.cloud.get(&args.bucket, &key).await?;
+    let packed_block_hashes = args.storage.get(&args.bucket, &key).await?;
     let block_hashes = packed_block_hashes
         .chunks_exact(32)
         .map(|bytes| BlockHash::from_bytes(bytes.try_into().unwrap()))
@@ -139,20 +139,21 @@ async fn download_from_hash(
 
     let mut file = OpenOptions::new().write(true).open(path).await?;
     download_blocks(args, state, node, &mut file, &block_hashes).await?;
+    restore_metadata(path, node).await?;
     Ok(())
 }
 
-async fn download_blocks(
-    args: &RestoreArgs,
+async fn download_blocks<S: Storage>(
+    args: &RestoreArgs<S>,
     state: &mut RestoreState,
     node: &Node,
     file: &mut File,
     block_hashes: &[BlockHash],
-) -> Result<(), Error> {
+) -> Result<()> {
     let mut offset = 0;
     for hash in block_hashes {
         let compressed_data = download_block(args, state, hash).await?;
-        let data = decompress_and_verify(hash, &compressed_data).await?;
+        let data = block::decompress_and_verify(hash, &compressed_data).await?;
         file.write_all(&data).await?;
 
         let length = data.len().try_into().expect("catastrophically large block");
@@ -168,11 +169,11 @@ async fn download_blocks(
     Ok(())
 }
 
-async fn download_block(
-    args: &RestoreArgs,
+async fn download_block<S: Storage>(
+    args: &RestoreArgs<S>,
     state: &mut RestoreState,
     hash: &BlockHash,
-) -> Result<Vec<u8>, Error> {
+) -> Result<Vec<u8>> {
     if let Some(local_block) = state.local_blocks.get(hash) {
         read_local_block(args, local_block).await
     } else {
@@ -180,7 +181,10 @@ async fn download_block(
     }
 }
 
-async fn read_local_block(args: &RestoreArgs, local_block: &LocalBlock) -> Result<Vec<u8>, Error> {
+async fn read_local_block<S: Storage>(
+    args: &RestoreArgs<S>,
+    local_block: &LocalBlock,
+) -> Result<Vec<u8>> {
     let path = args
         .archive
         .path(local_block.inode)
@@ -195,16 +199,11 @@ async fn read_local_block(args: &RestoreArgs, local_block: &LocalBlock) -> Resul
     Ok(data)
 }
 
-async fn download_remote_block(args: &RestoreArgs, hash: &BlockHash) -> Result<Vec<u8>, Error> {
+async fn download_remote_block<S: Storage>(
+    args: &RestoreArgs<S>,
+    hash: &BlockHash,
+) -> Result<Vec<u8>> {
     let key = hash.key();
-    let data = args.cloud.get(&args.bucket, &key).await?;
+    let data = args.storage.get(&args.bucket, &key).await?;
     Ok(data)
-}
-
-async fn try_exists(path: impl AsRef<Path>) -> Result<bool, Error> {
-    match symlink_metadata(path).await {
-        Ok(_) => Ok(true),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(error.into()),
-    }
 }
