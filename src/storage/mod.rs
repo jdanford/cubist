@@ -1,5 +1,5 @@
 mod cloud;
-mod core;
 mod local;
+mod inner;
 
-pub use {cloud::CloudStorage, core::Storage, local::LocalStorage};
+pub use {cloud::CloudStorage, local::LocalStorage, inner::Storage};

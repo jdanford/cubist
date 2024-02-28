@@ -21,11 +21,11 @@ use crate::{
     error::{Error, Result},
     file::{try_exists, Archive, FileHash, FileType, Metadata, Node},
     hash,
-    storage::{LocalStorage, Storage},
+    storage::Storage,
 };
 
-struct RestoreArgs {
-    storage: LocalStorage,
+struct RestoreArgs<S> {
+    storage: S,
     max_concurrency: usize,
     bucket: String,
     output_path: PathBuf,
@@ -59,14 +59,15 @@ impl LocalBlock {
     }
 }
 
-pub async fn restore(
-    storage: LocalStorage,
+pub async fn restore<S: Storage + Sync + Send + 'static>(
+    storage: S,
     max_concurrency: usize,
     bucket: String,
     output_path: PathBuf,
 ) -> Result<()> {
     let archive = download_archive(&storage, &bucket).await?;
     let local_blocks = HashMap::new();
+
     let args = Arc::new(RestoreArgs {
         storage,
         max_concurrency,
@@ -75,25 +76,26 @@ pub async fn restore(
         archive,
     });
     let state = Arc::new(Mutex::new(RestoreState { local_blocks }));
+
     let (sender, receiver) = async_channel::bounded(args.max_concurrency);
 
     let downloader_args = args.clone();
     let downloader_state = state.clone();
     let downloader_task = spawn(async move {
         download_pending_files(
-            downloader_args.clone(),
-            downloader_state.clone(),
-            receiver.clone(),
+            downloader_args,
+            downloader_state,
+            receiver,
         )
         .await;
     });
 
-    restore_recursive(args.clone(), state.clone(), sender.clone()).await?;
+    restore_recursive(args, state, sender).await?;
     downloader_task.await?;
     Ok(())
 }
 
-async fn download_archive(storage: &LocalStorage, bucket: &str) -> Result<Archive> {
+async fn download_archive<S: Storage + Sync + Send + 'static>(storage: &S, bucket: &str) -> Result<Archive> {
     let latest_key = "archive:latest";
     let timestamp_bytes = storage.get(bucket, latest_key).await?;
     let timestamp = String::from_utf8(timestamp_bytes)?;
@@ -106,8 +108,8 @@ async fn download_archive(storage: &LocalStorage, bucket: &str) -> Result<Archiv
     Ok(archive)
 }
 
-async fn restore_recursive(
-    args: Arc<RestoreArgs>,
+async fn restore_recursive<S: Storage>(
+    args: Arc<RestoreArgs<S>>,
     state: Arc<Mutex<RestoreState>>,
     sender: Sender<PendingFile>,
 ) -> Result<()> {
@@ -119,8 +121,8 @@ async fn restore_recursive(
     Ok(())
 }
 
-async fn restore_from_node(
-    _args: Arc<RestoreArgs>,
+async fn restore_from_node<S: Storage>(
+    _args: Arc<RestoreArgs<S>>,
     _state: Arc<Mutex<RestoreState>>,
     sender: Sender<PendingFile>,
     path: &Path,
@@ -172,8 +174,8 @@ async fn restore_metadata(path: &Path, metadata: &Metadata, file_type: FileType)
     Ok(())
 }
 
-async fn download_pending_files(
-    args: Arc<RestoreArgs>,
+async fn download_pending_files<S: Storage + Sync + Send + 'static>(
+    args: Arc<RestoreArgs<S>>,
     state: Arc<Mutex<RestoreState>>,
     receiver: Receiver<PendingFile>,
 ) {
@@ -192,8 +194,8 @@ async fn download_pending_files(
     }
 }
 
-async fn download_pending_file(
-    args: Arc<RestoreArgs>,
+async fn download_pending_file<S: Storage>(
+    args: Arc<RestoreArgs<S>>,
     state: Arc<Mutex<RestoreState>>,
     pending_file: PendingFile,
 ) -> Result<()> {
@@ -206,6 +208,7 @@ async fn download_pending_file(
 
     let mut file = OpenOptions::new()
         .write(true)
+        .truncate(true)
         .create(true)
         .open(&pending_file.path)
         .await?;
@@ -221,8 +224,8 @@ async fn download_pending_file(
     Ok(())
 }
 
-async fn download_blocks(
-    args: Arc<RestoreArgs>,
+async fn download_blocks<S: Storage>(
+    args: Arc<RestoreArgs<S>>,
     state: Arc<Mutex<RestoreState>>,
     metadata: &Metadata,
     file: &mut File,
@@ -251,8 +254,8 @@ async fn download_blocks(
     Ok(())
 }
 
-async fn download_block(
-    args: Arc<RestoreArgs>,
+async fn download_block<S: Storage>(
+    args: Arc<RestoreArgs<S>>,
     state: Arc<Mutex<RestoreState>>,
     hash: &BlockHash,
 ) -> Result<(Vec<u8>, bool)> {
@@ -266,7 +269,7 @@ async fn download_block(
     }
 }
 
-async fn read_local_block(args: Arc<RestoreArgs>, local_block: LocalBlock) -> Result<Vec<u8>> {
+async fn read_local_block<S: Storage>(args: Arc<RestoreArgs<S>>, local_block: LocalBlock) -> Result<Vec<u8>> {
     let path = args
         .archive
         .path(local_block.inode)
@@ -281,7 +284,7 @@ async fn read_local_block(args: Arc<RestoreArgs>, local_block: LocalBlock) -> Re
     Ok(data)
 }
 
-async fn download_remote_block(args: Arc<RestoreArgs>, hash: &BlockHash) -> Result<Vec<u8>> {
+async fn download_remote_block<S: Storage>(args: Arc<RestoreArgs<S>>, hash: &BlockHash) -> Result<Vec<u8>> {
     let key = hash.key();
     let data = args.storage.get(&args.bucket, &key).await?;
     Ok(data)

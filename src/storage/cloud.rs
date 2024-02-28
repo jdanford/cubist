@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use aws_sdk_s3::{
     types::{CompletedMultipartUpload, CompletedPart},
     Client,
@@ -5,7 +6,7 @@ use aws_sdk_s3::{
 
 use crate::error::Result;
 
-use super::core::Storage;
+use super::inner::Storage;
 
 pub struct CloudStorage {
     client: aws_sdk_s3::Client,
@@ -19,6 +20,7 @@ impl CloudStorage {
     }
 }
 
+#[async_trait]
 impl Storage for CloudStorage {
     async fn exists(&self, bucket: &str, key: &str) -> Result<bool> {
         let head_result = self
@@ -56,7 +58,7 @@ impl Storage for CloudStorage {
 
     async fn put_streaming<I>(&self, bucket: &str, key: &str, chunks: I) -> Result<()>
     where
-        I: Iterator<Item = Vec<u8>>,
+        I: Iterator<Item = Vec<u8>> + Send,
     {
         let multipart_upload_res = self
             .client

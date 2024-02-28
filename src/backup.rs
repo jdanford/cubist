@@ -22,11 +22,11 @@ use crate::{
     error::Result,
     file::{read_metadata, Archive, FileHash, Node},
     hash,
-    storage::{LocalStorage, Storage},
+    storage::Storage,
 };
 
-struct BackupArgs {
-    storage: LocalStorage,
+struct BackupArgs<S> {
+    storage: S,
     compression_level: u32,
     target_block_size: u32,
     max_concurrency: usize,
@@ -43,8 +43,8 @@ struct PendingFile {
     archive_path: PathBuf,
 }
 
-pub async fn backup(
-    storage: LocalStorage,
+pub async fn backup<S: Storage + Sync + Send + 'static>(
+    storage: S,
     compression_level: u32,
     target_block_size: u32,
     max_concurrency: usize,
@@ -53,6 +53,7 @@ pub async fn backup(
 ) -> Result<()> {
     let time = Utc::now();
     let archive = Archive::new();
+
     let args = Arc::new(BackupArgs {
         storage,
         compression_level,
@@ -62,15 +63,16 @@ pub async fn backup(
         paths,
     });
     let state = Arc::new(Mutex::new(BackupState { archive }));
+
     let (sender, receiver) = async_channel::bounded(args.max_concurrency);
 
     let uploader_args = args.clone();
     let uploader_state = state.clone();
     let uploader_task = spawn(async move {
         upload_pending_files(
-            uploader_args.clone(),
-            uploader_state.clone(),
-            receiver.clone(),
+            uploader_args,
+            uploader_state,
+            receiver,
         )
         .await;
     });
@@ -80,12 +82,12 @@ pub async fn backup(
     }
 
     uploader_task.await?;
-    upload_archive(args.clone(), state.clone(), time).await?;
+    upload_archive(args, state, time).await?;
     Ok(())
 }
 
-async fn upload_archive(
-    args: Arc<BackupArgs>,
+async fn upload_archive<S: Storage>(
+    args: Arc<BackupArgs<S>>,
     state: Arc<Mutex<BackupState>>,
     time: DateTime<Utc>,
 ) -> Result<()> {
@@ -107,8 +109,8 @@ async fn upload_archive(
     Ok(())
 }
 
-async fn backup_recursive(
-    args: Arc<BackupArgs>,
+async fn backup_recursive<S: Storage>(
+    args: Arc<BackupArgs<S>>,
     state: Arc<Mutex<BackupState>>,
     sender: Sender<PendingFile>,
     path: &Path,
@@ -126,8 +128,8 @@ async fn backup_recursive(
     Ok(())
 }
 
-async fn backup_from_entry(
-    _args: Arc<BackupArgs>,
+async fn backup_from_entry<S: Storage>(
+    _args: Arc<BackupArgs<S>>,
     state: Arc<Mutex<BackupState>>,
     sender: Sender<PendingFile>,
     entry: DirEntry,
@@ -161,8 +163,8 @@ async fn backup_from_entry(
     Ok(())
 }
 
-async fn upload_pending_files(
-    args: Arc<BackupArgs>,
+async fn upload_pending_files<S: Storage + Sync + Send + 'static>(
+    args: Arc<BackupArgs<S>>,
     state: Arc<Mutex<BackupState>>,
     receiver: Receiver<PendingFile>,
 ) {
@@ -181,12 +183,15 @@ async fn upload_pending_files(
     }
 }
 
-async fn upload_pending_file(
-    args: Arc<BackupArgs>,
+async fn upload_pending_file<S: Storage>(
+    args: Arc<BackupArgs<S>>,
     state: Arc<Mutex<BackupState>>,
     pending_file: PendingFile,
 ) -> Result<()> {
-    info!("uploading `{}`", pending_file.archive_path.to_string_lossy());
+    info!(
+        "uploading `{}`",
+        pending_file.archive_path.to_string_lossy()
+    );
     let metadata = read_metadata(&pending_file.local_path).await?;
     let mut file = File::open(&pending_file.local_path).await?;
     let (file_hash, block_hashes) = upload_blocks(args.clone(), &mut file).await?;
@@ -205,8 +210,8 @@ async fn upload_pending_file(
     Ok(())
 }
 
-async fn upload_file(
-    args: Arc<BackupArgs>,
+async fn upload_file<S: Storage>(
+    args: Arc<BackupArgs<S>>,
     file_hash: FileHash,
     block_hashes: Vec<BlockHash>,
 ) -> Result<()> {
@@ -223,8 +228,8 @@ async fn upload_file(
     Ok(())
 }
 
-async fn upload_blocks(
-    args: Arc<BackupArgs>,
+async fn upload_blocks<S: Storage>(
+    args: Arc<BackupArgs<S>>,
     file: &mut File,
 ) -> Result<(FileHash, Vec<BlockHash>)> {
     let mut chunker = block::chunker(file, args.target_block_size);
@@ -244,7 +249,7 @@ async fn upload_blocks(
     Ok((file_hash, block_hashes))
 }
 
-async fn upload_block(args: Arc<BackupArgs>, data: &[u8]) -> Result<BlockHash> {
+async fn upload_block<S: Storage>(args: Arc<BackupArgs<S>>, data: &[u8]) -> Result<BlockHash> {
     let block_hash = block::hash(data).await?;
     let key = block_hash.key();
 
@@ -259,10 +264,10 @@ async fn upload_block(args: Arc<BackupArgs>, data: &[u8]) -> Result<BlockHash> {
 }
 
 fn concat_hashes(hashes: &[BlockHash]) -> Vec<u8> {
-    concat_arrays(hashes.iter().map(|hash| hash.as_bytes()).copied())
+    concat_arrays_exact(hashes.iter().map(|hash| hash.as_bytes()).copied())
 }
 
-fn concat_arrays<T: Clone, const N: usize, I>(arrays: I) -> Vec<T>
+fn concat_arrays_exact<T: Clone, const N: usize, I>(arrays: I) -> Vec<T>
 where
     I: ExactSizeIterator<Item = [T; N]>,
 {

@@ -1,5 +1,6 @@
 use std::{io, path::PathBuf, time::Duration};
 
+use async_trait::async_trait;
 use tokio::{
     fs::{self, OpenOptions},
     io::AsyncWriteExt,
@@ -8,7 +9,7 @@ use tokio::{
 
 use crate::error::Result;
 
-use super::Storage;
+use super::inner::Storage;
 
 pub struct LocalStorage {
     path: PathBuf,
@@ -45,6 +46,7 @@ impl LocalStorage {
     }
 }
 
+#[async_trait]
 impl Storage for LocalStorage {
     async fn exists(&self, bucket: &str, key: &str) -> Result<bool> {
         self.simulate_latency().await;
@@ -67,14 +69,13 @@ impl Storage for LocalStorage {
 
         let path = self.object_path(bucket, key);
         self.create_bucket_dir(bucket).await?;
-        // println!("write {:?}", path);
         fs::write(path, &data).await?;
         Ok(())
     }
 
     async fn put_streaming<I>(&self, bucket: &str, key: &str, chunks: I) -> Result<()>
     where
-        I: Iterator<Item = Vec<u8>>,
+        I: Iterator<Item = Vec<u8>> + Send,
     {
         self.simulate_latency().await;
 
@@ -82,6 +83,7 @@ impl Storage for LocalStorage {
         self.create_bucket_dir(bucket).await?;
         let mut file = OpenOptions::new()
             .write(true)
+            .truncate(true)
             .create(true)
             .open(path)
             .await?;

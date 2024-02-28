@@ -6,8 +6,7 @@ use cubist::{
     cli::{Cli, Command},
     error::Result,
     restore::restore,
-    // storage::CloudStorage,
-    storage::LocalStorage,
+    storage::{CloudStorage, LocalStorage},
 };
 
 #[tokio::main]
@@ -18,7 +17,7 @@ async fn main() -> Result<()> {
         .unwrap();
 
     let cli = Cli::parse();
-    // let storage = CloudStorage::from_env().await;
+    let storage = CloudStorage::from_env().await;
     let storage = LocalStorage::new(PathBuf::from("data"), Duration::from_millis(50));
     match cli.command {
         Command::Backup {
