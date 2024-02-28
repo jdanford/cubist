@@ -19,7 +19,7 @@ use tokio::{
 use crate::{
     block::{self, BlockHash},
     error::{Error, Result},
-    file::{try_exists, Archive, FileHash, Node},
+    file::{try_exists, Archive, FileHash, FileType, Metadata, Node},
     hash,
     storage::{LocalStorage, Storage},
 };
@@ -37,9 +37,9 @@ struct RestoreState {
 }
 
 struct PendingFile {
-    node: Node,
-    path: PathBuf,
+    metadata: Metadata,
     hash: FileHash,
+    path: PathBuf,
 }
 
 #[derive(Clone, Copy)]
@@ -98,7 +98,7 @@ async fn download_archive(storage: &LocalStorage, bucket: &str) -> Result<Archiv
     let timestamp_bytes = storage.get(bucket, latest_key).await?;
     let timestamp = String::from_utf8(timestamp_bytes)?;
 
-    let key = format!("archive:{}", timestamp);
+    let key = format!("archive:{timestamp}");
     let serialized_archive = storage.get(bucket, &key).await?;
 
     let reader = Cursor::new(serialized_archive);
@@ -131,33 +131,37 @@ async fn restore_from_node(
     }
 
     match node {
-        Node::File { hash, .. } => {
+        Node::File { metadata, hash } => {
             let pending_file = PendingFile {
-                node: node.clone(),
-                path: path.to_owned(),
+                metadata: metadata.clone(),
                 hash: *hash,
+                path: path.to_owned(),
             };
             sender.send(pending_file).await?;
         }
         Node::Symlink { path: src, .. } => {
             fs::symlink(src, path).await?;
-            restore_metadata(path, node).await?;
+            restore_metadata_from_node(path, node).await?;
         }
         Node::Directory { .. } => {
             fs::create_dir(path).await?;
-            restore_metadata(path, node).await?;
+            restore_metadata_from_node(path, node).await?;
         }
     }
 
     Ok(())
 }
 
-async fn restore_metadata(path: &Path, node: &Node) -> Result<()> {
-    let owner = node.metadata().owner;
-    let group = node.metadata().group;
-    let mode = node.metadata().mode;
+async fn restore_metadata_from_node(path: &Path, node: &Node) -> Result<()> {
+    restore_metadata(path, node.metadata(), node.file_type()).await
+}
 
-    if node.is_symlink() {
+async fn restore_metadata(path: &Path, metadata: &Metadata, file_type: FileType) -> Result<()> {
+    let owner = metadata.owner;
+    let group = metadata.group;
+    let mode = metadata.mode;
+
+    if file_type.is_symlink() {
         lchown(path, Some(owner), Some(group))?;
     } else {
         chown(path, Some(owner), Some(group))?;
@@ -205,15 +209,22 @@ async fn download_pending_file(
         .create(true)
         .open(&pending_file.path)
         .await?;
-    download_blocks(args, state, &pending_file.node, &mut file, &block_hashes).await?;
-    restore_metadata(&pending_file.path, &pending_file.node).await?;
+    download_blocks(
+        args,
+        state,
+        &pending_file.metadata,
+        &mut file,
+        &block_hashes,
+    )
+    .await?;
+    restore_metadata(&pending_file.path, &pending_file.metadata, FileType::File).await?;
     Ok(())
 }
 
 async fn download_blocks(
     args: Arc<RestoreArgs>,
     state: Arc<Mutex<RestoreState>>,
-    node: &Node,
+    metadata: &Metadata,
     file: &mut File,
     block_hashes: &[BlockHash],
 ) -> Result<()> {
@@ -225,7 +236,7 @@ async fn download_blocks(
         file.write_all(&data).await?;
 
         if is_new {
-            let local_block = LocalBlock::new(node.metadata().inode, offset, length);
+            let local_block = LocalBlock::new(metadata.inode, offset, length);
             state
                 .lock()
                 .unwrap()
@@ -233,7 +244,7 @@ async fn download_blocks(
                 .insert(hash.to_owned(), local_block);
         }
 
-        offset += length as u64;
+        offset += u64::from(length);
     }
 
     file.sync_all().await?;

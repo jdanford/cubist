@@ -4,6 +4,29 @@ use serde::{Deserialize, Serialize};
 
 use super::{metadata::Metadata, FileHash};
 
+#[derive(PartialEq, Eq)]
+pub enum FileType {
+    File,
+    Symlink,
+    Directory,
+}
+
+impl FileType {
+    #[allow(dead_code)]
+    pub fn is_file(&self) -> bool {
+        *self == FileType::File
+    }
+
+    pub fn is_symlink(&self) -> bool {
+        *self == FileType::Symlink
+    }
+
+    #[allow(dead_code)]
+    pub fn is_directory(&self) -> bool {
+        *self == FileType::Directory
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Node {
@@ -27,21 +50,17 @@ pub enum Node {
 impl Node {
     pub fn metadata(&self) -> &Metadata {
         match self {
-            Node::File { metadata, .. } => metadata,
-            Node::Symlink { metadata, .. } => metadata,
-            Node::Directory { metadata, .. } => metadata,
+            Node::File { metadata, .. }
+            | Node::Symlink { metadata, .. }
+            | Node::Directory { metadata, .. } => metadata,
         }
     }
 
-    // pub fn is_file(&self) -> bool {
-    //     matches!(self, Node::File { .. })
-    // }
-
-    pub fn is_symlink(&self) -> bool {
-        matches!(self, Node::Symlink { .. })
+    pub fn file_type(&self) -> FileType {
+        match self {
+            Node::File { .. } => FileType::File,
+            Node::Symlink { .. } => FileType::Symlink,
+            Node::Directory { .. } => FileType::Directory,
+        }
     }
-
-    // pub fn is_directory(&self) -> bool {
-    //     matches!(self, Node::Directory { .. })
-    // }
 }

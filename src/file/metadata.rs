@@ -15,15 +15,15 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    pub fn from_native(native: std::fs::Metadata) -> Self {
+    pub fn from_native(native: &std::fs::Metadata) -> Self {
         Metadata {
             inode: native.ino(),
             mode: native.mode(),
             group: native.gid(),
             owner: native.uid(),
-            accessed: native.accessed().ok().map(|time| time.into()),
-            created: native.created().ok().map(|time| time.into()),
-            modified: native.modified().ok().map(|time| time.into()),
+            accessed: native.accessed().ok().map(Into::into),
+            created: native.created().ok().map(Into::into),
+            modified: native.modified().ok().map(Into::into),
         }
     }
 }

@@ -17,7 +17,7 @@ pub type BlockHash = Hash<Block>;
 
 impl BlockHash {
     pub fn key(&self) -> String {
-        format!("block:{}", self)
+        format!("block:{self}")
     }
 }
 

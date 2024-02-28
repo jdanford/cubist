@@ -70,7 +70,7 @@ impl Storage for CloudStorage {
         let mut parts = Vec::new();
 
         for (index, chunk) in chunks.into_iter().enumerate() {
-            let part_number = (index as i32) + 1;
+            let part_number = i32::try_from(index).unwrap() + 1;
             let upload_part_res = self
                 .client
                 .upload_part()

@@ -8,8 +8,7 @@ use tokio::fs;
 
 use crate::{error::Result, hash::Hash};
 
-use self::metadata::Metadata;
-pub use self::{archive::Archive, node::Node};
+pub use self::{archive::Archive, metadata::Metadata, node::{FileType, Node}};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct File;
@@ -18,13 +17,13 @@ pub type FileHash = Hash<File>;
 
 impl FileHash {
     pub fn key(&self) -> String {
-        format!("file:{}", self)
+        format!("file:{self}")
     }
 }
 
 pub async fn read_metadata(path: &Path) -> Result<Metadata> {
     let native_metadata = fs::symlink_metadata(path).await?;
-    let metadata = Metadata::from_native(native_metadata);
+    let metadata = Metadata::from_native(&native_metadata);
     Ok(metadata)
 }
 

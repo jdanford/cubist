@@ -54,7 +54,7 @@ impl Archive {
         let mut current_path = PathBuf::new();
         let mut children = &mut self.root;
 
-        for key in keys.iter().cloned() {
+        for key in keys.iter().copied() {
             current_path.push(key);
 
             match children.get_mut(key) {
@@ -83,7 +83,7 @@ impl Archive {
     }
 
     pub fn path(&self, inode: u64) -> Option<&Path> {
-        self.paths.get(&inode).map(|path| path.as_path())
+        self.paths.get(&inode).map(PathBuf::as_path)
     }
 
     pub fn walk(&self) -> FileWalker<'_> {

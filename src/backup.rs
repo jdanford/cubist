@@ -97,7 +97,7 @@ async fn upload_archive(
     .await??;
 
     let timestamp = time.format("%Y-%m-%dT%H:%M:%S").to_string();
-    let key = format!("archive:{}", timestamp);
+    let key = format!("archive:{timestamp}");
     args.storage.put(&args.bucket, &key, data).await?;
 
     let latest_key = "archive:latest";
@@ -259,7 +259,7 @@ async fn upload_block(args: Arc<BackupArgs>, data: &[u8]) -> Result<BlockHash> {
 }
 
 fn concat_hashes(hashes: &[BlockHash]) -> Vec<u8> {
-    concat_arrays(hashes.iter().map(|hash| hash.as_bytes()).cloned())
+    concat_arrays(hashes.iter().map(|hash| hash.as_bytes()).copied())
 }
 
 fn concat_arrays<T: Clone, const N: usize, I>(arrays: I) -> Vec<T>
