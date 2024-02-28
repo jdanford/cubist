@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 
 const DEFAULT_COMPRESSION_LEVEL: u32 = 3;
 const DEFAULT_TARGET_BLOCK_SIZE: u32 = 1024 * 1024;
-const DEFAULT_MAX_CONCURRENCY: usize = 16;
+const DEFAULT_MAX_CONCURRENCY: usize = 64;
 const DEFAULT_BUCKET: &str = "cubist";
 
 #[derive(Parser, Debug)]

@@ -1,6 +1,7 @@
 use std::{io, path::PathBuf, time::Duration};
 
 use async_trait::async_trait;
+use rand_distr::{LogNormal, Distribution};
 use tokio::{
     fs::{self, OpenOptions},
     io::AsyncWriteExt,
@@ -42,7 +43,10 @@ impl LocalStorage {
     }
 
     async fn simulate_latency(&self) {
-        sleep(self.latency).await;
+        let log_normal = LogNormal::new(0.0, 0.5).unwrap();
+        let multiplier = log_normal.sample(&mut rand::thread_rng());
+        let latency = self.latency.mul_f64(multiplier);
+        sleep(latency).await;
     }
 }
 

@@ -17,8 +17,8 @@ async fn main() -> Result<()> {
         .unwrap();
 
     let cli = Cli::parse();
-    let storage = CloudStorage::from_env().await;
-    let storage = LocalStorage::new(PathBuf::from("data"), Duration::from_millis(50));
+    // let storage = CloudStorage::from_env().await;
+    let storage = LocalStorage::new(PathBuf::from("data"), Duration::from_millis(100));
     match cli.command {
         Command::Backup {
             compression_level,
