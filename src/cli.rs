@@ -18,13 +18,13 @@ pub struct Cli {
 #[derive(Subcommand, Debug)]
 pub enum Command {
     Backup {
-        #[arg(long, default_value_t = DEFAULT_COMPRESSION_LEVEL)]
+        #[arg(long, default_value_t = DEFAULT_COMPRESSION_LEVEL, value_name = "LEVEL")]
         compression_level: u32,
 
-        #[arg(long, default_value_t = DEFAULT_TARGET_BLOCK_SIZE)]
+        #[arg(long, default_value_t = DEFAULT_TARGET_BLOCK_SIZE, value_name = "SIZE")]
         target_block_size: u32,
 
-        #[arg(long, default_value_t = DEFAULT_MAX_CONCURRENCY)]
+        #[arg(long, default_value_t = DEFAULT_MAX_CONCURRENCY, value_name = "N")]
         max_concurrency: usize,
 
         #[arg(short, long, default_value = DEFAULT_BUCKET)]
@@ -34,7 +34,7 @@ pub enum Command {
         paths: Vec<PathBuf>,
     },
     Restore {
-        #[arg(long, default_value_t = DEFAULT_MAX_CONCURRENCY)]
+        #[arg(long, default_value_t = DEFAULT_MAX_CONCURRENCY, value_name = "N")]
         max_concurrency: usize,
 
         #[arg(short, long, default_value = DEFAULT_BUCKET)]

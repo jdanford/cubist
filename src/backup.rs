@@ -21,12 +21,13 @@ use crate::{
     block::{self, BlockHash},
     error::Result,
     file::{read_metadata, Archive, FileHash, Node},
-    hash,
     storage::Storage,
 };
 
-struct BackupArgs<S> {
-    storage: S,
+type BoxedStorage = Box<dyn Storage + Sync + Send + 'static>;
+
+struct BackupArgs {
+    storage: BoxedStorage,
     compression_level: u32,
     target_block_size: u32,
     max_concurrency: usize,
@@ -43,8 +44,8 @@ struct PendingFile {
     archive_path: PathBuf,
 }
 
-pub async fn backup<S: Storage + Sync + Send + 'static>(
-    storage: S,
+pub async fn backup(
+    storage: BoxedStorage,
     compression_level: u32,
     target_block_size: u32,
     max_concurrency: usize,
@@ -69,12 +70,7 @@ pub async fn backup<S: Storage + Sync + Send + 'static>(
     let uploader_args = args.clone();
     let uploader_state = state.clone();
     let uploader_task = spawn(async move {
-        upload_pending_files(
-            uploader_args,
-            uploader_state,
-            receiver,
-        )
-        .await;
+        upload_pending_files(uploader_args, uploader_state, receiver).await;
     });
 
     for path in &args.paths {
@@ -86,8 +82,8 @@ pub async fn backup<S: Storage + Sync + Send + 'static>(
     Ok(())
 }
 
-async fn upload_archive<S: Storage>(
-    args: Arc<BackupArgs<S>>,
+async fn upload_archive(
+    args: Arc<BackupArgs>,
     state: Arc<Mutex<BackupState>>,
     time: DateTime<Utc>,
 ) -> Result<()> {
@@ -109,8 +105,8 @@ async fn upload_archive<S: Storage>(
     Ok(())
 }
 
-async fn backup_recursive<S: Storage>(
-    args: Arc<BackupArgs<S>>,
+async fn backup_recursive(
+    args: Arc<BackupArgs>,
     state: Arc<Mutex<BackupState>>,
     sender: Sender<PendingFile>,
     path: &Path,
@@ -128,8 +124,8 @@ async fn backup_recursive<S: Storage>(
     Ok(())
 }
 
-async fn backup_from_entry<S: Storage>(
-    _args: Arc<BackupArgs<S>>,
+async fn backup_from_entry(
+    _args: Arc<BackupArgs>,
     state: Arc<Mutex<BackupState>>,
     sender: Sender<PendingFile>,
     entry: DirEntry,
@@ -163,8 +159,8 @@ async fn backup_from_entry<S: Storage>(
     Ok(())
 }
 
-async fn upload_pending_files<S: Storage + Sync + Send + 'static>(
-    args: Arc<BackupArgs<S>>,
+async fn upload_pending_files(
+    args: Arc<BackupArgs>,
     state: Arc<Mutex<BackupState>>,
     receiver: Receiver<PendingFile>,
 ) {
@@ -183,8 +179,8 @@ async fn upload_pending_files<S: Storage + Sync + Send + 'static>(
     }
 }
 
-async fn upload_pending_file<S: Storage>(
-    args: Arc<BackupArgs<S>>,
+async fn upload_pending_file(
+    args: Arc<BackupArgs>,
     state: Arc<Mutex<BackupState>>,
     pending_file: PendingFile,
 ) -> Result<()> {
@@ -210,26 +206,22 @@ async fn upload_pending_file<S: Storage>(
     Ok(())
 }
 
-async fn upload_file<S: Storage>(
-    args: Arc<BackupArgs<S>>,
+async fn upload_file(
+    args: Arc<BackupArgs>,
     file_hash: FileHash,
     block_hashes: Vec<BlockHash>,
 ) -> Result<()> {
     let key = file_hash.key();
     if !args.storage.exists(&args.bucket, &key).await? {
-        let chunk_size = args.target_block_size as usize;
-        let chunk_hash_count = chunk_size / hash::SIZE;
-        let chunks = block_hashes.chunks(chunk_hash_count).map(concat_hashes);
-        args.storage
-            .put_streaming(&args.bucket, &key, chunks)
-            .await?;
+        let data = concat_hashes(&block_hashes);
+        args.storage.put(&args.bucket, &key, data).await?;
     }
 
     Ok(())
 }
 
-async fn upload_blocks<S: Storage>(
-    args: Arc<BackupArgs<S>>,
+async fn upload_blocks(
+    args: Arc<BackupArgs>,
     file: &mut File,
 ) -> Result<(FileHash, Vec<BlockHash>)> {
     let mut chunker = block::chunker(file, args.target_block_size);
@@ -249,7 +241,7 @@ async fn upload_blocks<S: Storage>(
     Ok((file_hash, block_hashes))
 }
 
-async fn upload_block<S: Storage>(args: Arc<BackupArgs<S>>, data: &[u8]) -> Result<BlockHash> {
+async fn upload_block(args: Arc<BackupArgs>, data: &[u8]) -> Result<BlockHash> {
     let block_hash = block::hash(data).await?;
     let key = block_hash.key();
 

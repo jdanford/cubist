@@ -8,5 +8,6 @@ pub mod cli;
 pub mod error;
 mod file;
 mod hash;
+pub mod logger;
 pub mod restore;
 pub mod storage;

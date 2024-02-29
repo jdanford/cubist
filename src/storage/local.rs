@@ -1,16 +1,16 @@
 use std::{io, path::PathBuf, time::Duration};
 
 use async_trait::async_trait;
-use rand_distr::{LogNormal, Distribution};
+use rand_distr::{Distribution, LogNormal};
 use tokio::{
-    fs::{self, OpenOptions},
+    fs::{self, File, OpenOptions},
     io::AsyncWriteExt,
     time::sleep,
 };
 
 use crate::error::Result;
 
-use super::inner::Storage;
+use super::{cloud::MULTIPART_CHUNK_SIZE, core::Storage};
 
 pub struct LocalStorage {
     path: PathBuf,
@@ -48,6 +48,21 @@ impl LocalStorage {
         let latency = self.latency.mul_f64(multiplier);
         sleep(latency).await;
     }
+
+    async fn put_multipart(&self, file: &mut File, data: Vec<u8>) -> Result<()> {
+        let chunks = data.chunks(MULTIPART_CHUNK_SIZE);
+
+        self.simulate_latency().await;
+
+        for chunk in chunks {
+            self.simulate_latency().await;
+            file.write_all(chunk).await?;
+        }
+
+        self.simulate_latency().await;
+
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -69,20 +84,6 @@ impl Storage for LocalStorage {
     }
 
     async fn put(&self, bucket: &str, key: &str, data: Vec<u8>) -> Result<()> {
-        self.simulate_latency().await;
-
-        let path = self.object_path(bucket, key);
-        self.create_bucket_dir(bucket).await?;
-        fs::write(path, &data).await?;
-        Ok(())
-    }
-
-    async fn put_streaming<I>(&self, bucket: &str, key: &str, chunks: I) -> Result<()>
-    where
-        I: Iterator<Item = Vec<u8>> + Send,
-    {
-        self.simulate_latency().await;
-
         let path = self.object_path(bucket, key);
         self.create_bucket_dir(bucket).await?;
         let mut file = OpenOptions::new()
@@ -92,9 +93,10 @@ impl Storage for LocalStorage {
             .open(path)
             .await?;
 
-        for chunk in chunks {
-            self.simulate_latency().await;
-            file.write_all(&chunk).await?;
+        if data.len() >= MULTIPART_CHUNK_SIZE {
+            self.put_multipart(&mut file, data).await?;
+        } else {
+            file.write_all(&data).await?;
         }
 
         Ok(())

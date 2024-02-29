@@ -1,6 +1,7 @@
 use std::{path::PathBuf, time::Duration};
 
 use clap::Parser;
+use cubist::logger;
 use cubist::{
     backup::backup,
     cli::{Cli, Command},
@@ -11,14 +12,15 @@ use cubist::{
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    pretty_env_logger::formatted_builder()
+    env_logger::Builder::new()
+        .format(logger::format)
         .filter_level(log::LevelFilter::Info)
         .try_init()
         .unwrap();
 
     let cli = Cli::parse();
-    // let storage = CloudStorage::from_env().await;
-    let storage = LocalStorage::new(PathBuf::from("data"), Duration::from_millis(100));
+    // let storage = Box::new(CloudStorage::from_env().await);
+    let storage = Box::new(LocalStorage::new(PathBuf::from("data"), Duration::from_millis(100)));
     match cli.command {
         Command::Backup {
             compression_level,

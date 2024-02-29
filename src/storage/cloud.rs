@@ -4,9 +4,11 @@ use aws_sdk_s3::{
     Client,
 };
 
+pub const MULTIPART_CHUNK_SIZE: usize = 10 * 1024 * 1024;
+
 use crate::error::Result;
 
-use super::inner::Storage;
+use super::core::Storage;
 
 pub struct CloudStorage {
     client: aws_sdk_s3::Client,
@@ -17,6 +19,55 @@ impl CloudStorage {
         let s3_config = aws_config::load_from_env().await;
         let client = Client::new(&s3_config);
         CloudStorage { client }
+    }
+
+    async fn put_multipart(&self, bucket: &str, key: &str, data: Vec<u8>) -> Result<()> {
+        let multipart_upload_res = self
+            .client
+            .create_multipart_upload()
+            .bucket(bucket)
+            .key(key)
+            .send()
+            .await?;
+
+        let upload_id = multipart_upload_res.upload_id().unwrap();
+        let mut parts = Vec::new();
+
+        for (index, chunk) in data.chunks(MULTIPART_CHUNK_SIZE).enumerate() {
+            let part_number = i32::try_from(index).unwrap() + 1;
+            let body = chunk.to_owned().into();
+            let upload_part_res = self
+                .client
+                .upload_part()
+                .bucket(bucket)
+                .key(key)
+                .upload_id(upload_id)
+                .body(body)
+                .part_number(part_number)
+                .send()
+                .await?;
+
+            let part = CompletedPart::builder()
+                .e_tag(upload_part_res.e_tag.unwrap_or_default())
+                .part_number(part_number)
+                .build();
+            parts.push(part);
+        }
+
+        let completed_multipart_upload = CompletedMultipartUpload::builder()
+            .set_parts(Some(parts))
+            .build();
+
+        self.client
+            .complete_multipart_upload()
+            .bucket(bucket)
+            .key(key)
+            .multipart_upload(completed_multipart_upload)
+            .upload_id(upload_id)
+            .send()
+            .await?;
+
+        Ok(())
     }
 }
 
@@ -46,63 +97,17 @@ impl Storage for CloudStorage {
     }
 
     async fn put(&self, bucket: &str, key: &str, data: Vec<u8>) -> Result<()> {
-        self.client
-            .put_object()
-            .bucket(bucket)
-            .key(key)
-            .body(data.into())
-            .send()
-            .await?;
-        Ok(())
-    }
-
-    async fn put_streaming<I>(&self, bucket: &str, key: &str, chunks: I) -> Result<()>
-    where
-        I: Iterator<Item = Vec<u8>> + Send,
-    {
-        let multipart_upload_res = self
-            .client
-            .create_multipart_upload()
-            .bucket(bucket)
-            .key(key)
-            .send()
-            .await?;
-
-        let upload_id = multipart_upload_res.upload_id().unwrap();
-        let mut parts = Vec::new();
-
-        for (index, chunk) in chunks.into_iter().enumerate() {
-            let part_number = i32::try_from(index).unwrap() + 1;
-            let upload_part_res = self
-                .client
-                .upload_part()
+        if data.len() >= MULTIPART_CHUNK_SIZE {
+            self.put_multipart(bucket, key, data).await?;
+        } else {
+            self.client
+                .put_object()
                 .bucket(bucket)
                 .key(key)
-                .upload_id(upload_id)
-                .body(chunk.into())
-                .part_number(part_number)
+                .body(data.into())
                 .send()
                 .await?;
-
-            let part = CompletedPart::builder()
-                .e_tag(upload_part_res.e_tag.unwrap_or_default())
-                .part_number(part_number)
-                .build();
-            parts.push(part);
         }
-
-        let completed_multipart_upload = CompletedMultipartUpload::builder()
-            .set_parts(Some(parts))
-            .build();
-
-        self.client
-            .complete_multipart_upload()
-            .bucket(bucket)
-            .key(key)
-            .multipart_upload(completed_multipart_upload)
-            .upload_id(upload_id)
-            .send()
-            .await?;
 
         Ok(())
     }
