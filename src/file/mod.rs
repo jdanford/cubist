@@ -6,20 +6,13 @@ use std::{io, path::Path};
 
 use tokio::fs;
 
-use crate::{error::Result, hash::Hash};
+use crate::error::Result;
 
-pub use self::{archive::Archive, metadata::Metadata, node::{FileType, Node}};
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct File;
-
-pub type FileHash = Hash<File>;
-
-impl FileHash {
-    pub fn key(&self) -> String {
-        format!("file:{self}")
-    }
-}
+pub use self::{
+    archive::Archive,
+    metadata::Metadata,
+    node::{FileType, Node},
+};
 
 pub async fn read_metadata(path: &Path) -> Result<Metadata> {
     let native_metadata = fs::symlink_metadata(path).await?;

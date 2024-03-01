@@ -2,7 +2,9 @@ use std::{collections::BTreeMap, ffi::OsString, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use super::{metadata::Metadata, FileHash};
+use crate::hash::Hash;
+
+use super::metadata::Metadata;
 
 #[derive(PartialEq, Eq)]
 pub enum FileType {
@@ -33,7 +35,7 @@ pub enum Node {
     File {
         #[serde(flatten)]
         metadata: Metadata,
-        hash: FileHash,
+        hash: Hash,
     },
     Symlink {
         #[serde(flatten)]

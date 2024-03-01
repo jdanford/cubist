@@ -1,13 +1,14 @@
 use std::{path::PathBuf, time::Duration};
 
 use clap::Parser;
+use cubist::inspect::inspect;
 use cubist::logger;
 use cubist::{
     backup::backup,
     cli::{Cli, Command},
     error::Result,
     restore::restore,
-    storage::{CloudStorage, LocalStorage},
+    storage::LocalStorage,
 };
 
 #[tokio::main]
@@ -20,7 +21,10 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
     // let storage = Box::new(CloudStorage::from_env().await);
-    let storage = Box::new(LocalStorage::new(PathBuf::from("data"), Duration::from_millis(100)));
+    let storage = Box::new(LocalStorage::new(
+        PathBuf::from("data"),
+        Duration::from_millis(100),
+    ));
     match cli.command {
         Command::Backup {
             compression_level,
@@ -44,5 +48,6 @@ async fn main() -> Result<()> {
             bucket,
             path,
         } => restore(storage, max_concurrency, bucket, path).await,
+        Command::InspectBlock { bucket, hash } => inspect(storage, bucket, hash).await,
     }
 }

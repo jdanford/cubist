@@ -5,31 +5,20 @@ use tokio::{io::AsyncRead, task::yield_now};
 
 use crate::{
     error::{Error, Result},
-    hash::Hash,
+    hash::{Hash, Hasher},
 };
 
 pub const COPY_CHUNK_SIZE: usize = 8 * 1024;
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Block;
-
-pub type BlockHash = Hash<Block>;
-
-impl BlockHash {
-    pub fn key(&self) -> String {
-        format!("block:{self}")
-    }
-}
-
-pub async fn hash(data: &[u8]) -> Result<BlockHash> {
-    let mut hasher = blake3::Hasher::new();
+pub async fn hash(data: &[u8]) -> Result<Hash> {
+    let mut hasher = Hasher::new();
 
     for chunk in data.chunks(COPY_CHUNK_SIZE) {
         hasher.write_all(chunk)?;
         yield_now().await;
     }
 
-    let hash = hasher.finalize().into();
+    let hash = hasher.finalize();
     Ok(hash)
 }
 
@@ -51,13 +40,13 @@ pub async fn compress(data: &[u8], compression_level: u32) -> Result<Vec<u8>> {
 }
 
 pub async fn decompress_and_verify(
-    expected_hash: &BlockHash,
+    expected_hash: &Hash,
     compressed_data: &[u8],
 ) -> Result<Vec<u8>> {
     let reader = Cursor::new(compressed_data);
     let mut decoder = lz4::Decoder::new(reader)?;
 
-    let mut hasher = blake3::Hasher::new();
+    let mut hasher = Hasher::new();
     let mut data = Vec::new();
 
     let mut buffer = vec![0; COPY_CHUNK_SIZE];
@@ -74,7 +63,7 @@ pub async fn decompress_and_verify(
         yield_now().await;
     }
 
-    let actual_hash: BlockHash = hasher.finalize().into();
+    let actual_hash = hasher.finalize();
     if &actual_hash != expected_hash {
         return Err(Error::WrongBlockHash {
             actual: actual_hash,

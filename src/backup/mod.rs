@@ -1,3 +1,5 @@
+mod upload;
+
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
@@ -18,21 +20,22 @@ use tokio_stream::StreamExt;
 use walkdir::{DirEntry, WalkDir};
 
 use crate::{
-    block::{self, BlockHash},
+    block,
     error::Result,
-    file::{read_metadata, Archive, FileHash, Node},
-    storage::Storage,
+    file::{read_metadata, Archive, Node},
+    hash::{self, Hash},
+    storage::BoxedStorage,
 };
 
-type BoxedStorage = Box<dyn Storage + Sync + Send + 'static>;
+pub use self::upload::UploadTree;
 
-struct BackupArgs {
-    storage: BoxedStorage,
-    compression_level: u32,
-    target_block_size: u32,
-    max_concurrency: usize,
-    bucket: String,
-    paths: Vec<PathBuf>,
+pub struct BackupArgs {
+    pub storage: BoxedStorage,
+    pub compression_level: u32,
+    pub target_block_size: u32,
+    pub max_concurrency: usize,
+    pub bucket: String,
+    pub paths: Vec<PathBuf>,
 }
 
 struct BackupState {
@@ -88,8 +91,7 @@ async fn upload_archive(
     time: DateTime<Utc>,
 ) -> Result<()> {
     let data = spawn_blocking(move || {
-        let mut data = vec![];
-        ciborium::into_writer(&state.lock().unwrap().archive, &mut data)?;
+        let data = bincode::serialize(&state.lock().unwrap().archive)?;
         Result::Ok(data)
     })
     .await??;
@@ -190,13 +192,8 @@ async fn upload_pending_file(
     );
     let metadata = read_metadata(&pending_file.local_path).await?;
     let mut file = File::open(&pending_file.local_path).await?;
-    let (file_hash, block_hashes) = upload_blocks(args.clone(), &mut file).await?;
-    upload_file(args.clone(), file_hash, block_hashes).await?;
-
-    let node = Node::File {
-        metadata,
-        hash: file_hash,
-    };
+    let hash = upload_file(args.clone(), &mut file).await?;
+    let node = Node::File { metadata, hash };
 
     state
         .lock()
@@ -206,69 +203,18 @@ async fn upload_pending_file(
     Ok(())
 }
 
-async fn upload_file(
-    args: Arc<BackupArgs>,
-    file_hash: FileHash,
-    block_hashes: Vec<BlockHash>,
-) -> Result<()> {
-    let key = file_hash.key();
-    if !args.storage.exists(&args.bucket, &key).await? {
-        let data = concat_hashes(&block_hashes);
-        args.storage.put(&args.bucket, &key, data).await?;
-    }
-
-    Ok(())
-}
-
-async fn upload_blocks(
-    args: Arc<BackupArgs>,
-    file: &mut File,
-) -> Result<(FileHash, Vec<BlockHash>)> {
+async fn upload_file(args: Arc<BackupArgs>, file: &mut File) -> Result<Hash> {
     let mut chunker = block::chunker(file, args.target_block_size);
     let mut chunks = pin!(chunker.as_stream());
 
-    let mut hasher = blake3::Hasher::new();
-    let mut block_hashes = Vec::new();
+    let max_layer_size = args.target_block_size as usize / hash::SIZE;
+    let mut tree = UploadTree::new(args, max_layer_size);
 
     while let Some(chunk_result) = chunks.next().await {
         let chunk = chunk_result?;
-        let block_hash = upload_block(args.clone(), &chunk.data).await?;
-        hasher.update(block_hash.as_bytes());
-        block_hashes.push(block_hash);
+        tree.add(&chunk.data).await?;
     }
 
-    let file_hash = hasher.finalize().into();
-    Ok((file_hash, block_hashes))
-}
-
-async fn upload_block(args: Arc<BackupArgs>, data: &[u8]) -> Result<BlockHash> {
-    let block_hash = block::hash(data).await?;
-    let key = block_hash.key();
-
-    if !args.storage.exists(&args.bucket, &key).await? {
-        let compressed_data = block::compress(data, args.compression_level).await?;
-        args.storage
-            .put(&args.bucket, &key, compressed_data)
-            .await?;
-    }
-
-    Ok(block_hash)
-}
-
-fn concat_hashes(hashes: &[BlockHash]) -> Vec<u8> {
-    concat_arrays_exact(hashes.iter().map(|hash| hash.as_bytes()).copied())
-}
-
-fn concat_arrays_exact<T: Clone, const N: usize, I>(arrays: I) -> Vec<T>
-where
-    I: ExactSizeIterator<Item = [T; N]>,
-{
-    let len = arrays.len() * N;
-    let mut output = Vec::with_capacity(len);
-
-    for array in arrays {
-        output.extend_from_slice(&array);
-    }
-
-    output
+    let hash = tree.finalize().await?;
+    Ok(hash)
 }

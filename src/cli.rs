@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
+use crate::hash::Hash;
+
 const DEFAULT_COMPRESSION_LEVEL: u32 = 3;
 const DEFAULT_TARGET_BLOCK_SIZE: u32 = 1024 * 1024;
 const DEFAULT_MAX_CONCURRENCY: usize = 64;
@@ -40,7 +42,12 @@ pub enum Command {
         #[arg(short, long, default_value = DEFAULT_BUCKET)]
         bucket: String,
 
-        #[arg(required = true)]
         path: PathBuf,
+    },
+    InspectBlock {
+        #[arg(short, long, default_value = DEFAULT_BUCKET)]
+        bucket: String,
+
+        hash: Hash,
     },
 }
