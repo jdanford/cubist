@@ -1,7 +1,6 @@
 use std::{
     io::SeekFrom,
     ops::{Deref, DerefMut},
-    path::PathBuf,
     sync::{Arc, Mutex},
 };
 
@@ -14,16 +13,11 @@ use tokio::{
 use crate::{
     block,
     error::{Error, Result},
-    file::Metadata,
     hash::{self, Hash},
     restore::{LocalBlock, RestoreArgs, RestoreState},
 };
 
-pub struct PendingDownload {
-    pub metadata: Metadata,
-    pub hash: Option<Hash>,
-    pub path: PathBuf,
-}
+use super::PendingDownload;
 
 pub struct ActiveDownload {
     file: File,

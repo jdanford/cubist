@@ -8,7 +8,8 @@ use tokio::spawn;
 use crate::{cli, error::Result};
 
 use super::{
-    download_archive, download_pending_files, restore_recursive, RestoreArgs, RestoreState,
+    files::{download_archive, download_pending_files, restore_recursive},
+    RestoreArgs, RestoreState,
 };
 
 pub async fn main(args: cli::RestoreArgs) -> Result<()> {

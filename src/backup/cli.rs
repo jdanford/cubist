@@ -9,7 +9,10 @@ use crate::{
     error::Result,
 };
 
-use super::{backup_recursive, upload_archive, upload_pending_files, BackupArgs, BackupState};
+use super::{
+    files::{backup_recursive, upload_archive, upload_pending_files},
+    BackupArgs, BackupState,
+};
 
 pub async fn main(args: cli::BackupArgs) -> Result<()> {
     cli::init_logger(args.logger);
