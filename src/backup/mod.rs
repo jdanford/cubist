@@ -21,6 +21,7 @@ use crate::{
     backup::upload::upload_file,
     error::Result,
     file::{read_metadata, Archive, Node},
+    hash,
     storage::BoxedStorage,
 };
 
@@ -195,9 +196,8 @@ async fn upload_pending_file(
         .archive
         .insert(&pending_file.archive_path, node)?;
 
-    if let Some(hash) = hash {
-        info!("{hash} <- {}", pending_file.archive_path.display());
-    }
+    let hash_str = hash::format(&hash);
+    info!("{hash_str} <- {}", pending_file.local_path.display());
 
     Ok(())
 }

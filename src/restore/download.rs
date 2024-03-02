@@ -63,7 +63,7 @@ impl DerefMut for ActiveDownload {
 }
 
 #[async_recursion]
-pub async fn download_block(
+pub async fn download_blocks(
     args: Arc<RestoreArgs>,
     state: Arc<Mutex<RestoreState>>,
     file: &mut ActiveDownload,
@@ -89,17 +89,14 @@ pub async fn download_block(
         return Ok(());
     }
 
-    let hashes = data
-        .chunks_exact(hash::SIZE)
-        .map(|bytes| Hash::from_bytes(bytes.try_into().unwrap()));
-
+    let hashes = hash::split(data);
     for hash in hashes {
-        download_block(
+        download_blocks(
             args.clone(),
             state.clone(),
             file,
             hash,
-            expected_level.map(|level| level - 1),
+            Some(level - 1),
         )
         .await?;
     }

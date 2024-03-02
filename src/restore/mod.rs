@@ -1,20 +1,26 @@
 mod download;
 
 use std::{
-    collections::HashMap, fs::Permissions, io::Cursor, os::unix::fs::{chown, lchown, PermissionsExt}, path::{Path, PathBuf}, sync::{Arc, Mutex}
+    collections::HashMap,
+    fs::Permissions,
+    io::Cursor,
+    os::unix::fs::{chown, lchown, PermissionsExt},
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
 };
 
 use async_channel::{Receiver, Sender};
+use log::info;
 use tokio::{fs, spawn, sync::Semaphore, task::spawn_blocking};
 
 use crate::{
     error::{Error, Result},
     file::{try_exists, Archive, FileType, Metadata, Node},
-    hash::Hash,
+    hash::{self, Hash},
     storage::BoxedStorage,
 };
 
-use self::download::{download_block, ActiveDownload, PendingDownload};
+use self::download::{download_blocks, ActiveDownload, PendingDownload};
 
 pub struct RestoreArgs {
     pub storage: BoxedStorage,
@@ -162,11 +168,13 @@ async fn download_pending_file(
     let mut file = ActiveDownload::new(&pending_file).await?;
 
     if let Some(hash) = pending_file.hash {
-        download_block(args, state, &mut file, hash, None).await?;
+        download_blocks(args, state, &mut file, hash, None).await?;
         file.sync_all().await?;
     }
 
     restore_metadata(&pending_file.path, &pending_file.metadata, FileType::File).await?;
+    let hash_str = hash::format(&pending_file.hash);
+    info!("{hash_str} -> {}", pending_file.path.display());
     Ok(())
 }
 

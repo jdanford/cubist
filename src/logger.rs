@@ -12,8 +12,10 @@ pub fn format(f: &mut Formatter, record: &Record) -> io::Result<()> {
 
 fn level_prefix(level: Level) -> &'static str {
     match level {
-        Level::Warn =>  "warning: ",
-        Level::Error =>  "error: ",
-        _ =>  "",
+        Level::Trace => "trace: ",
+        Level::Debug => "debug: ",
+        Level::Info => "",
+        Level::Warn => "warning: ",
+        Level::Error => "error: ",
     }
 }

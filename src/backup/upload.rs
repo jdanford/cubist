@@ -91,7 +91,7 @@ async fn upload_branch_block<I>(args: Arc<BackupArgs>, level: u8, hashes: I) -> 
 where
     I: Iterator<Item = Hash>,
 {
-    let data = concat_hashes(hashes);
+    let data = hash::concat(hashes);
     let hash = block::hash(&data).await?;
     let key = block::key(&hash);
 
@@ -120,14 +120,4 @@ async fn upload_block(args: Arc<BackupArgs>, level: u8, key: &str, data: &[u8]) 
     bytes.write_all(data).await?;
     args.storage.put(key, bytes).await?;
     Ok(())
-}
-
-fn concat_hashes<I>(hashes: I) -> Vec<u8>
-where
-    I: Iterator<Item = Hash>,
-{
-    hashes
-        .into_iter()
-        .flat_map(|hash| *hash.as_bytes())
-        .collect()
 }

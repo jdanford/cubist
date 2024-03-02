@@ -9,9 +9,7 @@ pub async fn inspect(storage: BoxedStorage, hash: Hash) -> Result<()> {
     let hashes = if level == 0 {
         vec![]
     } else {
-        data.chunks_exact(hash::SIZE)
-            .map(|bytes| Hash::from_bytes(bytes.try_into().unwrap()))
-            .collect()
+        hash::split(data).collect()
     };
 
     println!("level: {level}");
