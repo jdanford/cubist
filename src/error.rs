@@ -81,11 +81,11 @@ pub enum Error {
         source: StripPrefixError,
     },
 
-    #[error("{source}")]
-    Serializer {
-        #[from]
-        source: bincode::Error,
-    },
+    #[error("{0}")]
+    Deserializer(String),
+
+    #[error("{0}")]
+    Serializer(String),
 
     #[error("{0}")]
     Sdk(String),
@@ -102,5 +102,17 @@ impl<E, R> From<SdkError<E, R>> for Error {
 impl<T> From<SendError<T>> for Error {
     fn from(error: SendError<T>) -> Self {
         Error::Channel(error.to_string())
+    }
+}
+
+impl<E: Debug> From<ciborium::de::Error<E>> for Error {
+    fn from(error: ciborium::de::Error<E>) -> Self {
+        Error::Deserializer(error.to_string())
+    }
+}
+
+impl<E: Debug> From<ciborium::ser::Error<E>> for Error {
+    fn from(error: ciborium::ser::Error<E>) -> Self {
+        Error::Serializer(error.to_string())
     }
 }

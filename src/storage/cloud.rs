@@ -7,34 +7,35 @@ use super::core::Storage;
 
 pub struct CloudStorage {
     client: aws_sdk_s3::Client,
+    bucket: String,
 }
 
 impl CloudStorage {
-    pub async fn from_env() -> CloudStorage {
+    pub async fn new(bucket: String) -> Self {
         let s3_config = aws_config::load_from_env().await;
         let client = Client::new(&s3_config);
-        CloudStorage { client }
+        CloudStorage { client, bucket }
     }
 }
 
 #[async_trait]
 impl Storage for CloudStorage {
-    async fn exists(&self, bucket: &str, key: &str) -> Result<bool> {
+    async fn exists(&self, key: &str) -> Result<bool> {
         let head_result = self
             .client
             .head_object()
-            .bucket(bucket)
+            .bucket(&self.bucket)
             .key(key)
             .send()
             .await;
         Ok(head_result.is_ok())
     }
 
-    async fn get(&self, bucket: &str, key: &str) -> Result<Vec<u8>> {
+    async fn get(&self, key: &str) -> Result<Vec<u8>> {
         let object = self
             .client
             .get_object()
-            .bucket(bucket)
+            .bucket(&self.bucket)
             .key(key)
             .send()
             .await?;
@@ -42,10 +43,10 @@ impl Storage for CloudStorage {
         Ok(data)
     }
 
-    async fn put(&self, bucket: &str, key: &str, data: Vec<u8>) -> Result<()> {
+    async fn put(&self, key: &str, data: Vec<u8>) -> Result<()> {
         self.client
             .put_object()
-            .bucket(bucket)
+            .bucket(&self.bucket)
             .key(key)
             .body(data.into())
             .send()

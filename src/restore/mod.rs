@@ -1,11 +1,7 @@
 mod download;
 
 use std::{
-    collections::HashMap,
-    fs::Permissions,
-    os::unix::fs::{chown, lchown, PermissionsExt},
-    path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    collections::HashMap, fs::Permissions, io::Cursor, os::unix::fs::{chown, lchown, PermissionsExt}, path::{Path, PathBuf}, sync::{Arc, Mutex}
 };
 
 use async_channel::{Receiver, Sender};
@@ -23,7 +19,6 @@ use self::download::{download_block, ActiveDownload, PendingDownload};
 pub struct RestoreArgs {
     pub storage: BoxedStorage,
     pub max_concurrency: usize,
-    pub bucket: String,
     pub output_path: PathBuf,
     pub archive: Archive,
 }
@@ -52,16 +47,14 @@ impl LocalBlock {
 pub async fn restore(
     storage: BoxedStorage,
     max_concurrency: usize,
-    bucket: String,
     output_path: PathBuf,
 ) -> Result<()> {
-    let archive = download_archive(&storage, &bucket).await?;
+    let archive = download_archive(&storage).await?;
     let local_blocks = HashMap::new();
 
     let args = Arc::new(RestoreArgs {
         storage,
         max_concurrency,
-        bucket,
         output_path,
         archive,
     });
@@ -80,14 +73,15 @@ pub async fn restore(
     Ok(())
 }
 
-async fn download_archive(storage: &BoxedStorage, bucket: &str) -> Result<Archive> {
+async fn download_archive(storage: &BoxedStorage) -> Result<Archive> {
     let latest_key = "archive:latest";
-    let timestamp_bytes = storage.get(bucket, latest_key).await?;
+    let timestamp_bytes = storage.get(latest_key).await?;
     let timestamp = String::from_utf8(timestamp_bytes)?;
 
     let key = format!("archive:{timestamp}");
-    let serialized_archive = storage.get(bucket, &key).await?;
-    let archive = spawn_blocking(move || bincode::deserialize(&serialized_archive)).await??;
+    let serialized_archive = storage.get(&key).await?;
+    let reader = Cursor::new(serialized_archive);
+    let archive = spawn_blocking(move || ciborium::from_reader(reader)).await??;
     Ok(archive)
 }
 
@@ -162,9 +156,13 @@ async fn download_pending_file(
     state: Arc<Mutex<RestoreState>>,
     pending_file: PendingDownload,
 ) -> Result<()> {
-    let mut file = ActiveDownload::open(&pending_file).await?;
-    download_block(args, state, &mut file, pending_file.hash, None).await?;
-    file.sync_all().await?;
+    let mut file = ActiveDownload::new(&pending_file).await?;
+
+    if let Some(hash) = pending_file.hash {
+        download_block(args, state, &mut file, hash, None).await?;
+        file.sync_all().await?;
+    }
+
     restore_metadata(&pending_file.path, &pending_file.metadata, FileType::File).await?;
     Ok(())
 }
@@ -174,17 +172,16 @@ async fn restore_metadata_from_node(path: &Path, node: &Node) -> Result<()> {
 }
 
 async fn restore_metadata(path: &Path, metadata: &Metadata, file_type: FileType) -> Result<()> {
-    let owner = metadata.owner;
-    let group = metadata.group;
-    let mode = metadata.mode;
+    let owner = Some(metadata.owner);
+    let group = Some(metadata.group);
+    let permissions = Permissions::from_mode(metadata.mode);
 
     if file_type.is_symlink() {
-        lchown(path, Some(owner), Some(group))?;
+        lchown(path, owner, group)?;
     } else {
-        chown(path, Some(owner), Some(group))?;
+        chown(path, owner, group)?;
     }
 
-    let permissions = Permissions::from_mode(mode);
     fs::set_permissions(path, permissions).await?;
     Ok(())
 }

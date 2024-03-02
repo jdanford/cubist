@@ -3,7 +3,6 @@ mod upload;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
-    pin::pin,
     sync::{Arc, Mutex},
 };
 
@@ -16,14 +15,12 @@ use tokio::{
     sync::Semaphore,
     task::spawn_blocking,
 };
-use tokio_stream::StreamExt;
 use walkdir::{DirEntry, WalkDir};
 
 use crate::{
-    block,
+    backup::upload::upload_file,
     error::Result,
     file::{read_metadata, Archive, Node},
-    hash::{self, Hash},
     storage::BoxedStorage,
 };
 
@@ -34,7 +31,6 @@ pub struct BackupArgs {
     pub compression_level: u32,
     pub target_block_size: u32,
     pub max_concurrency: usize,
-    pub bucket: String,
     pub paths: Vec<PathBuf>,
 }
 
@@ -52,7 +48,6 @@ pub async fn backup(
     compression_level: u32,
     target_block_size: u32,
     max_concurrency: usize,
-    bucket: String,
     paths: Vec<PathBuf>,
 ) -> Result<()> {
     let time = Utc::now();
@@ -63,7 +58,6 @@ pub async fn backup(
         compression_level,
         target_block_size,
         max_concurrency,
-        bucket,
         paths,
     });
     let state = Arc::new(Mutex::new(BackupState { archive }));
@@ -80,6 +74,7 @@ pub async fn backup(
         backup_recursive(args.clone(), state.clone(), sender.clone(), path).await?;
     }
 
+    sender.close();
     uploader_task.await?;
     upload_archive(args, state, time).await?;
     Ok(())
@@ -91,19 +86,19 @@ async fn upload_archive(
     time: DateTime<Utc>,
 ) -> Result<()> {
     let data = spawn_blocking(move || {
-        let data = bincode::serialize(&state.lock().unwrap().archive)?;
+        let archive = &state.lock().unwrap().archive;
+        let mut data = vec![];
+        ciborium::into_writer(archive, &mut data).unwrap();
         Result::Ok(data)
     })
     .await??;
 
     let timestamp = time.format("%Y-%m-%dT%H:%M:%S").to_string();
     let key = format!("archive:{timestamp}");
-    args.storage.put(&args.bucket, &key, data).await?;
+    args.storage.put(&key, data).await?;
 
     let latest_key = "archive:latest";
-    args.storage
-        .put(&args.bucket, latest_key, timestamp.into())
-        .await?;
+    args.storage.put(latest_key, timestamp.into()).await?;
     Ok(())
 }
 
@@ -135,8 +130,6 @@ async fn backup_from_entry(
 ) -> Result<()> {
     let local_path = entry.path();
     let archive_path = local_path.strip_prefix(base_path)?;
-    info!("backing up `{}`", archive_path.to_string_lossy());
-
     let file_type = entry.file_type();
     if file_type.is_file() {
         let pending_file = PendingFile {
@@ -148,14 +141,16 @@ async fn backup_from_entry(
         let metadata = read_metadata(local_path).await?;
         let path = fs::read_link(local_path).await?;
         let node = Node::Symlink { metadata, path };
-        state.lock().unwrap().archive.insert(archive_path, node)?;
+        let archive = &mut state.lock().unwrap().archive;
+        archive.insert(archive_path, node)?;
     } else if file_type.is_dir() {
         let metadata = read_metadata(local_path).await?;
         let children = BTreeMap::new();
         let node = Node::Directory { metadata, children };
-        state.lock().unwrap().archive.insert(archive_path, node)?;
+        let archive = &mut state.lock().unwrap().archive;
+        archive.insert(archive_path, node)?;
     } else {
-        warn!("skipping special file `{}`", local_path.to_string_lossy());
+        warn!("skipping special file `{}`", local_path.display());
     };
 
     Ok(())
@@ -186,10 +181,6 @@ async fn upload_pending_file(
     state: Arc<Mutex<BackupState>>,
     pending_file: PendingFile,
 ) -> Result<()> {
-    info!(
-        "uploading `{}`",
-        pending_file.archive_path.to_string_lossy()
-    );
     let metadata = read_metadata(&pending_file.local_path).await?;
     let mut file = File::open(&pending_file.local_path).await?;
     let hash = upload_file(args.clone(), &mut file).await?;
@@ -200,21 +191,10 @@ async fn upload_pending_file(
         .unwrap()
         .archive
         .insert(&pending_file.archive_path, node)?;
-    Ok(())
-}
 
-async fn upload_file(args: Arc<BackupArgs>, file: &mut File) -> Result<Hash> {
-    let mut chunker = block::chunker(file, args.target_block_size);
-    let mut chunks = pin!(chunker.as_stream());
-
-    let max_layer_size = args.target_block_size as usize / hash::SIZE;
-    let mut tree = UploadTree::new(args, max_layer_size);
-
-    while let Some(chunk_result) = chunks.next().await {
-        let chunk = chunk_result?;
-        tree.add(&chunk.data).await?;
+    if let Some(hash) = hash {
+        info!("{hash} <- {}", pending_file.archive_path.display());
     }
 
-    let hash = tree.finalize().await?;
-    Ok(hash)
+    Ok(())
 }

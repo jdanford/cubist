@@ -26,7 +26,7 @@ impl<'de> Deserialize<'de> for Archive {
     fn deserialize<D: Deserializer<'de>>(
         deserializer: D,
     ) -> std::result::Result<Archive, D::Error> {
-        let root = BTreeMap::deserialize(deserializer)?;
+        let root = Deserialize::deserialize(deserializer)?;
         Ok(Archive::from_root(root))
     }
 }

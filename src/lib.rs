@@ -5,14 +5,13 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::new_without_default)]
 
-pub mod cli;
-pub mod backup;
-pub mod restore;
-pub mod inspect;
-
 pub mod error;
 pub mod logger;
 pub mod storage;
+pub mod backup;
+pub mod restore;
+pub mod inspect;
+pub mod cli;
 
 mod file;
 mod block;

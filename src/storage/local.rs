@@ -14,28 +14,24 @@ use super::core::Storage;
 
 pub struct LocalStorage {
     path: PathBuf,
-    latency: Duration,
+    latency: Option<Duration>,
 }
 
 impl LocalStorage {
-    pub fn new<P: ToOwned<Owned = PathBuf>>(path: P, latency: Duration) -> Self {
+    pub fn new<P: ToOwned<Owned = PathBuf>>(path: P) -> Self {
         LocalStorage {
             path: path.to_owned(),
-            latency,
+            // latency: Some(Duration::from_millis(100)),
+            latency: None,
         }
     }
 
-    fn bucket_path(&self, bucket: &str) -> PathBuf {
-        self.path.join(bucket)
+    fn object_path(&self, key: &str) -> PathBuf {
+        self.path.join(key)
     }
 
-    fn object_path(&self, bucket: &str, key: &str) -> PathBuf {
-        self.bucket_path(bucket).join(key)
-    }
-
-    async fn create_bucket_dir(&self, bucket: &str) -> Result<()> {
-        let path = self.bucket_path(bucket);
-        match fs::create_dir(path).await {
+    async fn create_dir(&self) -> Result<()> {
+        match fs::create_dir(&self.path).await {
             Err(err) if err.kind() == io::ErrorKind::AlreadyExists => Ok(()),
             result => result,
         }?;
@@ -43,36 +39,39 @@ impl LocalStorage {
     }
 
     async fn simulate_latency(&self) {
-        let log_normal = LogNormal::new(0.0, 0.5).unwrap();
-        let multiplier = log_normal.sample(&mut rand::thread_rng());
-        let latency = self.latency.mul_f64(multiplier);
-        sleep(latency).await;
+        if let Some(duration) = self.latency {
+            let distribution = LogNormal::new(0.0, 0.5).unwrap();
+            let multiplier = distribution.sample(&mut rand::thread_rng());
+            let randomized_latency = duration.mul_f64(multiplier);
+            sleep(randomized_latency).await;
+        }
     }
 }
 
 #[async_trait]
 impl Storage for LocalStorage {
-    async fn exists(&self, bucket: &str, key: &str) -> Result<bool> {
+    async fn exists(&self, key: &str) -> Result<bool> {
         self.simulate_latency().await;
 
-        let path = self.object_path(bucket, key);
+        let path = self.object_path(key);
         let exists = fs::try_exists(path).await?;
         Ok(exists)
     }
 
-    async fn get(&self, bucket: &str, key: &str) -> Result<Vec<u8>> {
+    async fn get(&self, key: &str) -> Result<Vec<u8>> {
         self.simulate_latency().await;
 
-        let path = self.object_path(bucket, key);
+        let path = self.object_path(key);
         let data = fs::read(path).await?;
         Ok(data)
     }
 
-    async fn put(&self, bucket: &str, key: &str, data: Vec<u8>) -> Result<()> {
+    async fn put(&self, key: &str, data: Vec<u8>) -> Result<()> {
         self.simulate_latency().await;
 
-        let path = self.object_path(bucket, key);
-        self.create_bucket_dir(bucket).await?;
+        let path = self.object_path(key);
+        self.create_dir().await?;
+
         let mut file = OpenOptions::new()
             .write(true)
             .truncate(true)

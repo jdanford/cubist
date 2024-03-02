@@ -79,3 +79,7 @@ pub fn chunker<R: AsyncRead + Unpin>(reader: R, target_block_size: u32) -> Async
     let max_block_size = target_block_size * 4;
     AsyncStreamCDC::new(reader, min_block_size, target_block_size, max_block_size)
 }
+
+pub fn key(hash: &Hash) -> String {
+    format!("block:{hash}")
+}

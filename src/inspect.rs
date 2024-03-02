@@ -1,10 +1,10 @@
 use blake3::Hash;
 
-use crate::{error::Result, hash, storage::BoxedStorage};
+use crate::{block, error::Result, hash, storage::BoxedStorage};
 
-pub async fn inspect(storage: BoxedStorage, bucket: String, hash: Hash) -> Result<()> {
-    let key = hash.to_string();
-    let block = storage.get(&bucket, &key).await?;
+pub async fn inspect(storage: BoxedStorage, hash: Hash) -> Result<()> {
+    let key = block::key(&hash);
+    let block = storage.get(&key).await?;
     let (&level, data) = block.split_first().unwrap();
     let hashes = if level == 0 {
         vec![]

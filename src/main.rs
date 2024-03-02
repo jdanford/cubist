@@ -1,14 +1,11 @@
-use std::{path::PathBuf, time::Duration};
-
 use clap::Parser;
-use cubist::inspect::inspect;
-use cubist::logger;
 use cubist::{
     backup::backup,
-    cli::{Cli, Command},
+    cli::{create_storage, Cli, Command},
     error::Result,
+    inspect::inspect,
+    logger,
     restore::restore,
-    storage::LocalStorage,
 };
 
 #[tokio::main]
@@ -20,34 +17,35 @@ async fn main() -> Result<()> {
         .unwrap();
 
     let cli = Cli::parse();
-    // let storage = Box::new(CloudStorage::from_env().await);
-    let storage = Box::new(LocalStorage::new(
-        PathBuf::from("data"),
-        Duration::from_millis(100),
-    ));
     match cli.command {
         Command::Backup {
+            storage_args,
             compression_level,
             target_block_size,
             max_concurrency,
-            bucket,
             paths,
         } => {
+            let storage = create_storage(storage_args).await;
             backup(
                 storage,
                 compression_level,
                 target_block_size,
                 max_concurrency,
-                bucket,
                 paths,
             )
             .await
         }
         Command::Restore {
+            storage_args,
             max_concurrency,
-            bucket,
             path,
-        } => restore(storage, max_concurrency, bucket, path).await,
-        Command::InspectBlock { bucket, hash } => inspect(storage, bucket, hash).await,
+        } => {
+            let storage = create_storage(storage_args).await;
+            restore(storage, max_concurrency, path).await
+        }
+        Command::InspectBlock { storage_args, hash } => {
+            let storage = create_storage(storage_args).await;
+            inspect(storage, hash).await
+        }
     }
 }

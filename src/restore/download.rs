@@ -21,7 +21,7 @@ use crate::{
 
 pub struct PendingDownload {
     pub metadata: Metadata,
-    pub hash: Hash,
+    pub hash: Option<Hash>,
     pub path: PathBuf,
 }
 
@@ -32,7 +32,7 @@ pub struct ActiveDownload {
 }
 
 impl ActiveDownload {
-    pub async fn open(pending: &PendingDownload) -> Result<Self> {
+    pub async fn new(pending: &PendingDownload) -> Result<Self> {
         let file = OpenOptions::new()
             .write(true)
             .truncate(true)
@@ -77,8 +77,8 @@ pub async fn download_block(
         return Ok(());
     }
 
-    let key = format!("block:{hash}");
-    let block = args.storage.get(&args.bucket, &key).await?;
+    let key = block::key(&hash);
+    let block = args.storage.get(&key).await?;
     let (&level, data) = block.split_first().unwrap();
     assert_eq!(level, expected_level.unwrap_or(level));
 

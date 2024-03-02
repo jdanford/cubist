@@ -35,7 +35,7 @@ pub enum Node {
     File {
         #[serde(flatten)]
         metadata: Metadata,
-        hash: Hash,
+        hash: Option<Hash>,
     },
     Symlink {
         #[serde(flatten)]
