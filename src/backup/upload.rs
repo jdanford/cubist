@@ -93,7 +93,7 @@ where
 {
     let data = hash::concat(hashes);
     let hash = block::hash(&data).await?;
-    let key = block::key(&hash);
+    let key = block::storage_key(&hash);
 
     if !args.storage.exists(&key).await? {
         upload_block(args, level, &key, &data).await?;
@@ -104,7 +104,7 @@ where
 
 async fn upload_leaf_block(args: Arc<BackupArgs>, data: &[u8]) -> Result<Hash> {
     let hash = block::hash(data).await?;
-    let key = block::key(&hash);
+    let key = block::storage_key(&hash);
 
     if !args.storage.exists(&key).await? {
         let compressed_data = block::compress(data, args.compression_level).await?;

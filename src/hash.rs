@@ -9,10 +9,7 @@ pub fn concat<I>(hashes: I) -> Vec<u8>
 where
     I: Iterator<Item = Hash>,
 {
-    hashes
-        .into_iter()
-        .flat_map(|hash| *hash.as_bytes())
-        .collect()
+    hashes.flat_map(|hash| *hash.as_bytes()).collect()
 }
 
 pub fn split(bytes: &[u8]) -> impl Iterator<Item = Hash> + '_ {

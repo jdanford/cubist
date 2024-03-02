@@ -6,7 +6,6 @@ pub use self::main::main;
 use std::{
     collections::HashMap,
     fs::Permissions,
-    io::Cursor,
     os::unix::fs::{chown, lchown, PermissionsExt},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -17,10 +16,11 @@ use log::info;
 use tokio::{fs, spawn, sync::Semaphore, task::spawn_blocking};
 
 use crate::{
-    archive::Archive,
+    archive::{self, Archive},
     error::{Error, Result},
     file::{try_exists, FileType, Metadata, Node},
     hash::{self, Hash},
+    serde::deserialize,
     storage::BoxedStorage,
 };
 
@@ -55,14 +55,11 @@ impl LocalBlock {
 }
 
 async fn download_archive(storage: &BoxedStorage) -> Result<Archive> {
-    let latest_key = "archive:latest";
-    let timestamp_bytes = storage.get(latest_key).await?;
+    let timestamp_bytes = storage.get(archive::STORAGE_KEY_LATEST).await?;
     let timestamp = String::from_utf8(timestamp_bytes)?;
-
-    let key = format!("archive:{timestamp}");
-    let serialized_archive = storage.get(&key).await?;
-    let reader = Cursor::new(serialized_archive);
-    let archive = spawn_blocking(move || ciborium::from_reader(reader)).await??;
+    let key = archive::storage_key(&timestamp);
+    let data = storage.get(&key).await?;
+    let archive = spawn_blocking(move || deserialize(data)).await??;
     Ok(archive)
 }
 

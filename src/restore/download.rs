@@ -77,7 +77,7 @@ pub async fn download_blocks(
         return Ok(());
     }
 
-    let key = block::key(&hash);
+    let key = block::storage_key(&hash);
     let block = args.storage.get(&key).await?;
     let (&level, data) = block.split_first().unwrap();
     assert_eq!(level, expected_level.unwrap_or(level));

@@ -119,14 +119,14 @@ impl<'a> Iterator for FileWalker<'a> {
                     self.layers.push(children.iter());
                 }
 
-                return Option::Some((node_path, node));
+                return Some((node_path, node));
             }
 
             self.path.pop();
             self.layers.pop();
         }
 
-        Option::None
+        None
     }
 }
 
@@ -140,9 +140,15 @@ fn path_keys(path: &Path) -> Result<(Vec<&OsStr>, &OsStr)> {
 }
 
 fn get_normal_component(component: Component) -> Option<&OsStr> {
-    if let Component::Normal(s) = component {
-        Option::Some(s)
+    if let Component::Normal(str) = component {
+        Some(str)
     } else {
-        Option::None
+        None
     }
 }
+
+pub fn storage_key(timestamp: &str) -> String {
+    format!("archive:{timestamp}")
+}
+
+pub const STORAGE_KEY_LATEST: &str = "archive:latest";

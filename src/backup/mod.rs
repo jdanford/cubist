@@ -21,11 +21,12 @@ use tokio::{
 use walkdir::{DirEntry, WalkDir};
 
 use crate::{
-    archive::Archive,
+    archive::{self, Archive},
     backup::upload::upload_file,
     error::Result,
     file::{read_metadata, Node},
     hash,
+    serde::serialize,
     storage::BoxedStorage,
 };
 
@@ -53,20 +54,13 @@ async fn upload_archive(
     state: Arc<Mutex<BackupState>>,
     time: DateTime<Utc>,
 ) -> Result<()> {
-    let data = spawn_blocking(move || {
-        let archive = &state.lock().unwrap().archive;
-        let mut data = vec![];
-        ciborium::into_writer(archive, &mut data).unwrap();
-        Result::Ok(data)
-    })
-    .await??;
-
     let timestamp = time.format("%Y%m%d%H%M%S").to_string();
-    let key = format!("archive:{timestamp}");
+    let key = archive::storage_key(&timestamp);
+    let data = spawn_blocking(move || serialize(&state.lock().unwrap().archive)).await?;
     args.storage.put(&key, data).await?;
-
-    let latest_key = "archive:latest";
-    args.storage.put(latest_key, timestamp.into()).await?;
+    args.storage
+        .put(archive::STORAGE_KEY_LATEST, timestamp.into())
+        .await?;
     Ok(())
 }
 

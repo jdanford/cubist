@@ -9,7 +9,7 @@ pub async fn main(args: cli::InspectArgs) -> Result<()> {
     init_logger(args.logger);
 
     let storage = create_storage(args.storage).await;
-    let key = block::key(&args.hash);
+    let key = block::storage_key(&args.hash);
     let block = storage.get(&key).await?;
     let (&level, data) = block.split_first().unwrap();
     let hashes = if level == 0 {

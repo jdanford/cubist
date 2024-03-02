@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{ArgAction, Args, Parser, Subcommand};
 
 use crate::{
     hash::Hash,
@@ -21,18 +21,18 @@ pub struct Cli {
 }
 
 #[derive(Args, Debug)]
+pub struct LoggerArgs {
+    #[arg(short, long, action = ArgAction::Count)]
+    verbose: u8,
+}
+
+#[derive(Args, Debug)]
 pub struct StorageArgs {
     #[arg(long)]
     pub bucket: Option<String>,
 
     #[arg(long)]
     pub local: Option<PathBuf>,
-}
-
-#[derive(Args, Debug)]
-pub struct LoggerArgs {
-    #[arg(short, long, action = clap::ArgAction::Count)]
-    verbose: u8,
 }
 
 #[derive(Args, Debug)]
@@ -50,10 +50,10 @@ pub struct BackupArgs {
     pub paths: Vec<PathBuf>,
 
     #[command(flatten)]
-    pub storage: StorageArgs,
+    pub logger: LoggerArgs,
 
     #[command(flatten)]
-    pub logger: LoggerArgs,
+    pub storage: StorageArgs,
 }
 
 #[derive(Args, Debug)]
@@ -113,6 +113,5 @@ pub fn init_logger(args: LoggerArgs) {
     env_logger::Builder::new()
         .format(logger::format)
         .filter_level(level)
-        .try_init()
-        .unwrap();
+        .init();
 }
