@@ -149,6 +149,9 @@ async fn download_pending_files(
             drop(permit);
         });
     }
+
+    let permit_count = u32::try_from(args.max_concurrency).unwrap();
+    let _ = semaphore.acquire_many(permit_count).await.unwrap();
 }
 
 async fn download_pending_file(

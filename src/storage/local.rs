@@ -21,8 +21,7 @@ impl LocalStorage {
     pub fn new<P: ToOwned<Owned = PathBuf>>(path: P) -> Self {
         LocalStorage {
             path: path.to_owned(),
-            // latency: Some(Duration::from_millis(100)),
-            latency: None,
+            latency: Some(Duration::from_millis(100)),
         }
     }
 

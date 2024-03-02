@@ -93,7 +93,7 @@ async fn upload_archive(
     })
     .await??;
 
-    let timestamp = time.format("%Y-%m-%dT%H:%M:%S").to_string();
+    let timestamp = time.format("%Y%m%d%H%M%S").to_string();
     let key = format!("archive:{timestamp}");
     args.storage.put(&key, data).await?;
 
@@ -174,6 +174,9 @@ async fn upload_pending_files(
             drop(permit);
         });
     }
+
+    let permit_count = u32::try_from(args.max_concurrency).unwrap();
+    let _ = semaphore.acquire_many(permit_count).await.unwrap();
 }
 
 async fn upload_pending_file(
