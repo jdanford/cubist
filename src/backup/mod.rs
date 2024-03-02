@@ -1,5 +1,5 @@
-mod upload;
 mod main;
+mod upload;
 
 pub use self::main::main;
 
@@ -21,9 +21,10 @@ use tokio::{
 use walkdir::{DirEntry, WalkDir};
 
 use crate::{
+    archive::Archive,
     backup::upload::upload_file,
     error::Result,
-    file::{read_metadata, Archive, Node},
+    file::{read_metadata, Node},
     hash,
     storage::BoxedStorage,
 };

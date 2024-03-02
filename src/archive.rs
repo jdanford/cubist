@@ -6,9 +6,10 @@ use std::{
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::error::{Error, Result};
-
-use super::Node;
+use crate::{
+    error::{Error, Result},
+    file::Node,
+};
 
 #[derive(Debug)]
 pub struct Archive {

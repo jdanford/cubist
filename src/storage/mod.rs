@@ -1,7 +1,7 @@
 mod cloud;
-mod local;
 mod core;
+mod local;
 
-pub use {cloud::CloudStorage, local::LocalStorage, core::Storage};
+pub use {cloud::CloudStorage, core::Storage, local::LocalStorage};
 
 pub type BoxedStorage = Box<dyn Storage + Sync + Send + 'static>;

@@ -91,14 +91,7 @@ pub async fn download_blocks(
 
     let hashes = hash::split(data);
     for hash in hashes {
-        download_blocks(
-            args.clone(),
-            state.clone(),
-            file,
-            hash,
-            Some(level - 1),
-        )
-        .await?;
+        download_blocks(args.clone(), state.clone(), file, hash, Some(level - 1)).await?;
     }
 
     Ok(())

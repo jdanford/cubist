@@ -1,4 +1,3 @@
-mod archive;
 mod metadata;
 mod node;
 
@@ -9,7 +8,6 @@ use tokio::fs;
 use crate::error::Result;
 
 pub use self::{
-    archive::Archive,
     metadata::Metadata,
     node::{FileType, Node},
 };

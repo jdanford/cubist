@@ -4,20 +4,19 @@ use chrono::Utc;
 use tokio::spawn;
 
 use crate::{
+    archive::Archive,
     cli::{self},
     error::Result,
-    file::Archive,
 };
 
 use super::{backup_recursive, upload_archive, upload_pending_files, BackupArgs, BackupState};
 
 pub async fn main(args: cli::BackupArgs) -> Result<()> {
     cli::init_logger(args.logger);
+    let storage = cli::create_storage(args.storage).await;
 
     let time = Utc::now();
     let archive = Archive::new();
-
-    let storage = cli::create_storage(args.storage).await;
     let args = Arc::new(BackupArgs {
         storage,
         compression_level: args.compression_level,
@@ -26,7 +25,6 @@ pub async fn main(args: cli::BackupArgs) -> Result<()> {
         paths: args.paths,
     });
     let state = Arc::new(Mutex::new(BackupState { archive }));
-
     let (sender, receiver) = async_channel::bounded(args.max_concurrency);
 
     let uploader_args = args.clone();
@@ -41,6 +39,7 @@ pub async fn main(args: cli::BackupArgs) -> Result<()> {
 
     sender.close();
     uploader_task.await?;
+
     upload_archive(args, state, time).await?;
     Ok(())
 }

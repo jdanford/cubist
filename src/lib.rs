@@ -4,7 +4,7 @@
     clippy::missing_panics_doc,
     clippy::module_name_repetitions,
     clippy::must_use_candidate,
-    clippy::new_without_default,
+    clippy::new_without_default
 )]
 
 pub mod backup;
@@ -15,6 +15,7 @@ pub mod logger;
 pub mod restore;
 pub mod storage;
 
+mod archive;
 mod block;
 mod file;
 mod hash;

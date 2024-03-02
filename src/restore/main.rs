@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::{Arc, Mutex}};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use tokio::spawn;
 
@@ -10,11 +13,10 @@ use super::{
 
 pub async fn main(args: cli::RestoreArgs) -> Result<()> {
     cli::init_logger(args.logger);
-
     let storage = cli::create_storage(args.storage).await;
+
     let archive = download_archive(&storage).await?;
     let local_blocks = HashMap::new();
-
     let args = Arc::new(RestoreArgs {
         storage,
         max_concurrency: args.max_concurrency,
@@ -22,7 +24,6 @@ pub async fn main(args: cli::RestoreArgs) -> Result<()> {
         archive,
     });
     let state = Arc::new(Mutex::new(RestoreState { local_blocks }));
-
     let (sender, receiver) = async_channel::bounded(args.max_concurrency);
 
     let downloader_args = args.clone();
@@ -31,7 +32,9 @@ pub async fn main(args: cli::RestoreArgs) -> Result<()> {
         download_pending_files(downloader_args, downloader_state, receiver).await;
     });
 
-    restore_recursive(args, state, sender).await?;
+    restore_recursive(args, state, sender.clone()).await?;
+
+    sender.close();
     downloader_task.await?;
     Ok(())
 }

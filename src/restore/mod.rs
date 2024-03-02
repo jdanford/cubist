@@ -17,8 +17,9 @@ use log::info;
 use tokio::{fs, spawn, sync::Semaphore, task::spawn_blocking};
 
 use crate::{
+    archive::Archive,
     error::{Error, Result},
-    file::{try_exists, Archive, FileType, Metadata, Node},
+    file::{try_exists, FileType, Metadata, Node},
     hash::{self, Hash},
     storage::BoxedStorage,
 };

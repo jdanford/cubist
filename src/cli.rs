@@ -64,10 +64,10 @@ pub struct RestoreArgs {
     pub path: PathBuf,
 
     #[command(flatten)]
-    pub storage: StorageArgs,
+    pub logger: LoggerArgs,
 
     #[command(flatten)]
-    pub logger: LoggerArgs,
+    pub storage: StorageArgs,
 }
 
 #[derive(Args, Debug)]
@@ -75,10 +75,10 @@ pub struct InspectArgs {
     pub hash: Hash,
 
     #[command(flatten)]
-    pub storage: StorageArgs,
+    pub logger: LoggerArgs,
 
     #[command(flatten)]
-    pub logger: LoggerArgs,
+    pub storage: StorageArgs,
 }
 
 #[derive(Subcommand, Debug)]
