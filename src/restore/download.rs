@@ -32,17 +32,17 @@ pub struct ActiveDownload {
 }
 
 impl ActiveDownload {
-    pub async fn new(pending: &PendingDownload) -> Result<Self> {
+    pub async fn new(pending_file: &PendingDownload) -> Result<Self> {
         let file = OpenOptions::new()
             .write(true)
             .truncate(true)
             .create(true)
-            .open(&pending.path)
+            .open(&pending_file.path)
             .await?;
 
         Ok(ActiveDownload {
             file,
-            inode: pending.metadata.inode,
+            inode: pending_file.metadata.inode,
             offset: 0,
         })
     }

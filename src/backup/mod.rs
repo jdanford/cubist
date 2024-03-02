@@ -1,4 +1,7 @@
 mod upload;
+mod main;
+
+pub use self::main::main;
 
 use std::{
     collections::BTreeMap,
@@ -39,46 +42,9 @@ struct BackupState {
     archive: Archive,
 }
 
-struct PendingFile {
+struct PendingUpload {
     local_path: PathBuf,
     archive_path: PathBuf,
-}
-
-pub async fn backup(
-    storage: BoxedStorage,
-    compression_level: u32,
-    target_block_size: u32,
-    max_concurrency: usize,
-    paths: Vec<PathBuf>,
-) -> Result<()> {
-    let time = Utc::now();
-    let archive = Archive::new();
-
-    let args = Arc::new(BackupArgs {
-        storage,
-        compression_level,
-        target_block_size,
-        max_concurrency,
-        paths,
-    });
-    let state = Arc::new(Mutex::new(BackupState { archive }));
-
-    let (sender, receiver) = async_channel::bounded(args.max_concurrency);
-
-    let uploader_args = args.clone();
-    let uploader_state = state.clone();
-    let uploader_task = spawn(async move {
-        upload_pending_files(uploader_args, uploader_state, receiver).await;
-    });
-
-    for path in &args.paths {
-        backup_recursive(args.clone(), state.clone(), sender.clone(), path).await?;
-    }
-
-    sender.close();
-    uploader_task.await?;
-    upload_archive(args, state, time).await?;
-    Ok(())
 }
 
 async fn upload_archive(
@@ -106,7 +72,7 @@ async fn upload_archive(
 async fn backup_recursive(
     args: Arc<BackupArgs>,
     state: Arc<Mutex<BackupState>>,
-    sender: Sender<PendingFile>,
+    sender: Sender<PendingUpload>,
     path: &Path,
 ) -> Result<()> {
     let walker = WalkDir::new(path);
@@ -125,7 +91,7 @@ async fn backup_recursive(
 async fn backup_from_entry(
     _args: Arc<BackupArgs>,
     state: Arc<Mutex<BackupState>>,
-    sender: Sender<PendingFile>,
+    sender: Sender<PendingUpload>,
     entry: DirEntry,
     base_path: &Path,
 ) -> Result<()> {
@@ -133,7 +99,7 @@ async fn backup_from_entry(
     let archive_path = local_path.strip_prefix(base_path)?;
     let file_type = entry.file_type();
     if file_type.is_file() {
-        let pending_file = PendingFile {
+        let pending_file = PendingUpload {
             local_path: local_path.to_owned(),
             archive_path: archive_path.to_owned(),
         };
@@ -160,7 +126,7 @@ async fn backup_from_entry(
 async fn upload_pending_files(
     args: Arc<BackupArgs>,
     state: Arc<Mutex<BackupState>>,
-    receiver: Receiver<PendingFile>,
+    receiver: Receiver<PendingUpload>,
 ) {
     let semaphore = Arc::new(Semaphore::new(args.max_concurrency));
     while let Ok(pending_file) = receiver.recv().await {
@@ -183,7 +149,7 @@ async fn upload_pending_files(
 async fn upload_pending_file(
     args: Arc<BackupArgs>,
     state: Arc<Mutex<BackupState>>,
-    pending_file: PendingFile,
+    pending_file: PendingUpload,
 ) -> Result<()> {
     let metadata = read_metadata(&pending_file.local_path).await?;
     let mut file = File::open(&pending_file.local_path).await?;

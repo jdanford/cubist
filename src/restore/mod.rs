@@ -1,4 +1,7 @@
 mod download;
+mod main;
+
+pub use self::main::main;
 
 use std::{
     collections::HashMap,
@@ -48,35 +51,6 @@ impl LocalBlock {
             length,
         }
     }
-}
-
-pub async fn restore(
-    storage: BoxedStorage,
-    max_concurrency: usize,
-    output_path: PathBuf,
-) -> Result<()> {
-    let archive = download_archive(&storage).await?;
-    let local_blocks = HashMap::new();
-
-    let args = Arc::new(RestoreArgs {
-        storage,
-        max_concurrency,
-        output_path,
-        archive,
-    });
-    let state = Arc::new(Mutex::new(RestoreState { local_blocks }));
-
-    let (sender, receiver) = async_channel::bounded(args.max_concurrency);
-
-    let downloader_args = args.clone();
-    let downloader_state = state.clone();
-    let downloader_task = spawn(async move {
-        download_pending_files(downloader_args, downloader_state, receiver).await;
-    });
-
-    restore_recursive(args, state, sender).await?;
-    downloader_task.await?;
-    Ok(())
 }
 
 async fn download_archive(storage: &BoxedStorage) -> Result<Archive> {

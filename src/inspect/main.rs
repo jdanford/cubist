@@ -1,9 +1,15 @@
-use blake3::Hash;
+use crate::{
+    block,
+    cli::{self, create_storage, init_logger},
+    error::Result,
+    hash,
+};
 
-use crate::{block, error::Result, hash, storage::BoxedStorage};
+pub async fn main(args: cli::InspectArgs) -> Result<()> {
+    init_logger(args.logger);
 
-pub async fn inspect(storage: BoxedStorage, hash: Hash) -> Result<()> {
-    let key = block::key(&hash);
+    let storage = create_storage(args.storage).await;
+    let key = block::key(&args.hash);
     let block = storage.get(&key).await?;
     let (&level, data) = block.split_first().unwrap();
     let hashes = if level == 0 {
