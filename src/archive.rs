@@ -17,21 +17,6 @@ pub struct Archive {
     paths: HashMap<u64, PathBuf>,
 }
 
-impl Serialize for Archive {
-    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
-        Serialize::serialize(&self.root, serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for Archive {
-    fn deserialize<D: Deserializer<'de>>(
-        deserializer: D,
-    ) -> std::result::Result<Archive, D::Error> {
-        let root = Deserialize::deserialize(deserializer)?;
-        Ok(Archive::from_root(root))
-    }
-}
-
 impl Archive {
     pub fn new() -> Self {
         Archive {
@@ -51,7 +36,6 @@ impl Archive {
 
     pub fn insert(&mut self, path: &Path, node: Node) -> Result<()> {
         let (keys, name) = path_keys(path)?;
-
         let mut current_path = PathBuf::new();
         let mut children = &mut self.root;
 
@@ -89,6 +73,20 @@ impl Archive {
 
     pub fn walk(&self) -> FileWalker<'_> {
         FileWalker::from_root(&self.root)
+    }
+}
+
+impl Serialize for Archive {
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        Serialize::serialize(&self.root, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Archive {
+    fn deserialize<D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<Archive, D::Error> {
+        Deserialize::deserialize(deserializer).map(Archive::from_root)
     }
 }
 
@@ -140,15 +138,9 @@ fn path_keys(path: &Path) -> Result<(Vec<&OsStr>, &OsStr)> {
 }
 
 fn get_normal_component(component: Component) -> Option<&OsStr> {
-    if let Component::Normal(str) = component {
-        Some(str)
+    if let Component::Normal(s) = component {
+        Some(s)
     } else {
         None
     }
 }
-
-pub fn storage_key(timestamp: &str) -> String {
-    format!("archive:{timestamp}")
-}
-
-pub const STORAGE_KEY_LATEST: &str = "archive:latest";

@@ -39,6 +39,12 @@ pub enum Error {
     #[error("block has hash `{actual}`, expected `{expected}`")]
     WrongBlockHash { actual: Hash, expected: Hash },
 
+    #[error("block has level `{actual}`, expected `{expected}`")]
+    WrongBlockLevel { actual: u8, expected: u8 },
+
+    #[error("block is not long enough")]
+    BlockNotLongEnough,
+
     #[error("{source}")]
     Io {
         #[from]
@@ -82,16 +88,16 @@ pub enum Error {
     },
 
     #[error("{0}")]
-    Deserializer(String),
-
-    #[error("{0}")]
-    Serializer(String),
-
-    #[error("{0}")]
     Sdk(String),
 
     #[error("{0}")]
     Channel(String),
+
+    #[error("{0}")]
+    Deserializer(String),
+
+    #[error("{0}")]
+    Serializer(String),
 }
 
 impl<E, R> From<SdkError<E, R>> for Error {

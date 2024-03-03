@@ -11,13 +11,13 @@ use tokio::{
 };
 
 use crate::{
-    block,
+    block::{self, Block},
     error::{Error, Result},
-    hash::{self, Hash},
+    hash::Hash,
     restore::{LocalBlock, RestoreArgs, RestoreState},
 };
 
-use super::PendingDownload;
+use super::files::PendingDownload;
 
 pub struct ActiveDownload {
     file: File,
@@ -66,26 +66,27 @@ pub async fn download_blocks(
 ) -> Result<()> {
     let maybe_block = state.lock().unwrap().local_blocks.get(&hash).copied();
     if let Some(local_block) = maybe_block {
+        block::assert_level(0, expected_level)?;
         let data = read_local_block(args, local_block).await?;
         write_leaf_block(file, &data).await?;
         return Ok(());
     }
 
-    let key = block::storage_key(&hash);
-    let block = args.storage.get(&key).await?;
-    let (&level, data) = block.split_first().unwrap();
-    assert_eq!(level, expected_level.unwrap_or(level));
-
-    if level == 0 {
-        let data = block::decompress_and_verify(&hash, data).await?;
-        let local_block = write_leaf_block(file, &data).await?;
-        state.lock().unwrap().local_blocks.insert(hash, local_block);
-        return Ok(());
-    }
-
-    let hashes = hash::split(data);
-    for hash in hashes {
-        download_blocks(args.clone(), state.clone(), file, hash, Some(level - 1)).await?;
+    let key = Block::storage_key_for_hash(&hash);
+    let bytes = args.storage.get(&key).await?;
+    let block = Block::decode(hash, expected_level, &bytes).await?;
+    match block {
+        Block::Leaf { data, .. } => {
+            let local_block = write_leaf_block(file, &data).await?;
+            state.lock().unwrap().local_blocks.insert(hash, local_block);
+        }
+        Block::Branch {
+            level, children, ..
+        } => {
+            for hash in children {
+                download_blocks(args.clone(), state.clone(), file, hash, Some(level - 1)).await?;
+            }
+        }
     }
 
     Ok(())

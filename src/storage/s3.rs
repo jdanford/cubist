@@ -5,21 +5,21 @@ use crate::error::Result;
 
 use super::core::Storage;
 
-pub struct CloudStorage {
+pub struct S3Storage {
     client: aws_sdk_s3::Client,
     bucket: String,
 }
 
-impl CloudStorage {
+impl S3Storage {
     pub async fn new(bucket: String) -> Self {
         let s3_config = aws_config::load_from_env().await;
         let client = Client::new(&s3_config);
-        CloudStorage { client, bucket }
+        S3Storage { client, bucket }
     }
 }
 
 #[async_trait]
-impl Storage for CloudStorage {
+impl Storage for S3Storage {
     async fn exists(&self, key: &str) -> Result<bool> {
         let head_result = self
             .client

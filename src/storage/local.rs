@@ -18,11 +18,8 @@ pub struct LocalStorage {
 }
 
 impl LocalStorage {
-    pub fn new<P: ToOwned<Owned = PathBuf>>(path: P) -> Self {
-        LocalStorage {
-            path: path.to_owned(),
-            latency: Some(Duration::from_millis(100)),
-        }
+    pub fn new(path: PathBuf, latency: Option<Duration>) -> Self {
+        LocalStorage { path, latency }
     }
 
     fn object_path(&self, key: &str) -> PathBuf {
@@ -78,7 +75,6 @@ impl Storage for LocalStorage {
             .open(path)
             .await?;
         file.write_all(&data).await?;
-
         Ok(())
     }
 }

@@ -10,7 +10,6 @@
 pub mod backup;
 pub mod cli;
 pub mod error;
-pub mod inspect;
 pub mod logger;
 pub mod restore;
 pub mod storage;

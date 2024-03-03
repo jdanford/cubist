@@ -1,6 +1,6 @@
 use std::{
     collections::BTreeMap,
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
@@ -16,15 +16,20 @@ use tokio::{
 use walkdir::{DirEntry, WalkDir};
 
 use crate::{
-    archive::{self},
     backup::blocks::upload_file,
     error::Result,
     file::{read_metadata, Node},
     hash,
     serde::serialize,
+    storage::{self, archive_key},
 };
 
-use super::{BackupArgs, BackupState, PendingUpload};
+use super::{BackupArgs, BackupState};
+
+pub struct PendingUpload {
+    local_path: PathBuf,
+    archive_path: PathBuf,
+}
 
 pub async fn upload_archive(
     args: Arc<BackupArgs>,
@@ -32,11 +37,11 @@ pub async fn upload_archive(
     time: DateTime<Utc>,
 ) -> Result<()> {
     let timestamp = time.format("%Y%m%d%H%M%S").to_string();
-    let key = archive::storage_key(&timestamp);
+    let key = archive_key(&timestamp);
     let data = spawn_blocking(move || serialize(&state.lock().unwrap().archive)).await?;
     args.storage.put(&key, data).await?;
     args.storage
-        .put(archive::STORAGE_KEY_LATEST, timestamp.into())
+        .put(storage::ARCHIVE_KEY_LATEST, timestamp.into())
         .await?;
     Ok(())
 }
@@ -136,6 +141,5 @@ async fn upload_pending_file(
 
     let hash_str = hash::format(&hash);
     info!("{hash_str} <- {}", pending_file.local_path.display());
-
     Ok(())
 }

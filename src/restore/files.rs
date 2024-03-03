@@ -1,5 +1,5 @@
 use std::{
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
@@ -8,16 +8,22 @@ use log::info;
 use tokio::{fs, spawn, sync::Semaphore, task::spawn_blocking};
 
 use crate::{
-    archive::{self, Archive},
+    archive::Archive,
     error::{Error, Result},
-    file::{restore_metadata, restore_metadata_from_node, try_exists, FileType, Node},
-    hash,
+    file::{restore_metadata, restore_metadata_from_node, try_exists, FileType, Metadata, Node},
+    hash::{self, Hash},
     restore::blocks::{download_blocks, ActiveDownload},
     serde::deserialize,
-    storage::BoxedStorage,
+    storage::{archive_key, BoxedStorage, ARCHIVE_KEY_LATEST},
 };
 
-use super::{PendingDownload, RestoreArgs, RestoreState};
+use super::{RestoreArgs, RestoreState};
+
+pub struct PendingDownload {
+    pub metadata: Metadata,
+    pub hash: Option<Hash>,
+    pub path: PathBuf,
+}
 
 #[derive(Clone, Copy)]
 pub struct LocalBlock {
@@ -37,9 +43,9 @@ impl LocalBlock {
 }
 
 pub async fn download_archive(storage: &BoxedStorage) -> Result<Archive> {
-    let timestamp_bytes = storage.get(archive::STORAGE_KEY_LATEST).await?;
+    let timestamp_bytes = storage.get(ARCHIVE_KEY_LATEST).await?;
     let timestamp = String::from_utf8(timestamp_bytes)?;
-    let key = archive::storage_key(&timestamp);
+    let key = archive_key(&timestamp);
     let data = storage.get(&key).await?;
     let archive = spawn_blocking(move || deserialize(data)).await??;
     Ok(archive)
