@@ -7,7 +7,7 @@ use crate::{
     storage::{BoxedStorage, LocalStorage, S3Storage},
 };
 
-const DEFAULT_COMPRESSION_LEVEL: u32 = 3;
+const DEFAULT_COMPRESSION_LEVEL: u8 = 3;
 const DEFAULT_TARGET_BLOCK_SIZE: u32 = 1024 * 1024;
 const DEFAULT_MAX_CONCURRENCY: usize = 64;
 
@@ -30,7 +30,7 @@ pub struct BackupArgs {
     pub paths: Vec<PathBuf>,
 
     #[arg(long, default_value_t = DEFAULT_COMPRESSION_LEVEL, value_name = "LEVEL")]
-    pub compression_level: u32,
+    pub compression_level: u8,
 
     #[arg(long, default_value_t = DEFAULT_TARGET_BLOCK_SIZE, value_name = "SIZE")]
     pub target_block_size: u32,

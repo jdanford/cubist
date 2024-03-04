@@ -18,7 +18,7 @@ use self::files::{backup_recursive, upload_archive, upload_pending_files};
 
 pub struct BackupArgs {
     pub storage: BoxedStorage,
-    pub compression_level: u32,
+    pub compression_level: u8,
     pub target_block_size: u32,
     pub max_concurrency: usize,
     pub paths: Vec<PathBuf>,

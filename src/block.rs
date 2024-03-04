@@ -1,5 +1,3 @@
-use std::io::Cursor;
-
 use fastcdc::v2020::AsyncStreamCDC;
 use tokio::{
     io::{AsyncRead, AsyncWriteExt},
@@ -59,7 +57,7 @@ impl Block {
         storage::block_key(self.hash())
     }
 
-    pub async fn encode(self, compression_level: u32) -> Result<Vec<u8>> {
+    pub async fn encode(self, compression_level: u8) -> Result<Vec<u8>> {
         let (level, bytes) = self.into_raw(compression_level).await?;
         let mut buf = vec![];
         buf.write_u8(level).await?;
@@ -79,7 +77,7 @@ impl Block {
         Block::from_raw(&expected_hash, level, bytes.to_owned()).await
     }
 
-    async fn into_raw(self, compression_level: u32) -> Result<(u8, Vec<u8>)> {
+    async fn into_raw(self, compression_level: u8) -> Result<(u8, Vec<u8>)> {
         match self {
             Block::Leaf { data, .. } => {
                 let bytes = spawn_blocking(move || compress(&data, compression_level)).await??;
@@ -137,26 +135,13 @@ impl Block {
     }
 }
 
-fn compress(data: &[u8], compression_level: u32) -> Result<Vec<u8>> {
-    let mut reader = Cursor::new(data);
-    let buffer = Vec::with_capacity(data.len() / 2);
-    let mut encoder = lz4::EncoderBuilder::new()
-        .checksum(lz4::ContentChecksum::NoChecksum)
-        .level(compression_level)
-        .build(buffer)?;
-
-    std::io::copy(&mut reader, &mut encoder)?;
-    let (compressed_data, result) = encoder.finish();
-    result?;
+fn compress(data: &[u8], level: u8) -> Result<Vec<u8>> {
+    let compressed_data = zstd::encode_all(data, level.into())?;
     Ok(compressed_data)
 }
 
 fn decompress(compressed_data: &[u8]) -> Result<Vec<u8>> {
-    let reader = Cursor::new(compressed_data);
-    let mut decoder = lz4::Decoder::new(reader)?;
-    let mut data = vec![];
-
-    std::io::copy(&mut decoder, &mut data)?;
+    let data = zstd::decode_all(compressed_data)?;
     Ok(data)
 }
 
