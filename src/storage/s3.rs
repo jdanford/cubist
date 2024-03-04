@@ -39,16 +39,16 @@ impl Storage for S3Storage {
             .key(key)
             .send()
             .await?;
-        let data = object.body.collect().await?.to_vec();
-        Ok(data)
+        let bytes = object.body.collect().await?.to_vec();
+        Ok(bytes)
     }
 
-    async fn put(&self, key: &str, data: Vec<u8>) -> Result<()> {
+    async fn put(&self, key: &str, bytes: Vec<u8>) -> Result<()> {
         self.client
             .put_object()
             .bucket(&self.bucket)
             .key(key)
-            .body(data.into())
+            .body(bytes.into())
             .send()
             .await?;
         Ok(())

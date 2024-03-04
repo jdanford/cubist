@@ -16,8 +16,6 @@ use crate::{
 
 use self::files::{backup_recursive, upload_archive, upload_pending_files};
 
-pub use self::blocks::UploadTree;
-
 pub struct BackupArgs {
     pub storage: BoxedStorage,
     pub compression_level: u32,

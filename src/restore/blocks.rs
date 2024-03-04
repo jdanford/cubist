@@ -15,6 +15,7 @@ use crate::{
     error::{Error, Result},
     hash::Hash,
     restore::{LocalBlock, RestoreArgs, RestoreState},
+    storage,
 };
 
 use super::files::PendingDownload;
@@ -62,22 +63,24 @@ pub async fn download_blocks(
     state: Arc<Mutex<RestoreState>>,
     file: &mut ActiveDownload,
     hash: Hash,
-    expected_level: Option<u8>,
+    level: Option<u8>,
 ) -> Result<()> {
+    // copied to avoid holding mutex lock
     let maybe_block = state.lock().unwrap().local_blocks.get(&hash).copied();
+
     if let Some(local_block) = maybe_block {
-        block::assert_level(0, expected_level)?;
+        block::assert_level(0, level)?;
         let data = read_local_block(args, local_block).await?;
-        write_leaf_block(file, &data).await?;
+        write_local_block(file, &data).await?;
         return Ok(());
     }
 
-    let key = Block::storage_key_for_hash(&hash);
+    let key = storage::block_key(&hash);
     let bytes = args.storage.get(&key).await?;
-    let block = Block::decode(hash, expected_level, &bytes).await?;
+    let block = Block::decode(hash, level, &bytes).await?;
     match block {
         Block::Leaf { data, .. } => {
-            let local_block = write_leaf_block(file, &data).await?;
+            let local_block = write_local_block(file, &data).await?;
             state.lock().unwrap().local_blocks.insert(hash, local_block);
         }
         Block::Branch {
@@ -92,12 +95,15 @@ pub async fn download_blocks(
     Ok(())
 }
 
-async fn write_leaf_block(file: &mut ActiveDownload, data: &[u8]) -> Result<LocalBlock> {
-    let length = data.len().try_into().expect("catastrophically large block");
-    let local_block = LocalBlock::new(file.inode, file.offset, length);
+async fn write_local_block(file: &mut ActiveDownload, data: &[u8]) -> Result<LocalBlock> {
+    let length = data.len();
+    let safe_length = length
+        .try_into()
+        .map_err(|_| Error::InvalidBlockSize(length))?;
+    let local_block = LocalBlock::new(file.inode, file.offset, safe_length);
 
     file.write_all(data).await?;
-    file.offset += u64::from(length);
+    file.offset += length as u64;
 
     Ok(local_block)
 }
@@ -106,7 +112,7 @@ async fn read_local_block(args: Arc<RestoreArgs>, local_block: LocalBlock) -> Re
     let path = args
         .archive
         .path(local_block.inode)
-        .ok_or(Error::NoPathForInode(local_block.inode))?;
+        .ok_or(Error::InodeDoesNotExist(local_block.inode))?;
     let mut block_file = File::open(path).await?;
     let seek_pos = SeekFrom::Start(local_block.offset);
     let read_length = local_block.length as usize;
@@ -114,5 +120,6 @@ async fn read_local_block(args: Arc<RestoreArgs>, local_block: LocalBlock) -> Re
 
     block_file.seek(seek_pos).await?;
     block_file.read_exact(&mut data).await?;
+
     Ok(data)
 }

@@ -21,7 +21,7 @@ use crate::{
     file::{read_metadata, Node},
     hash,
     serde::serialize,
-    storage::{self, archive_key},
+    storage,
 };
 
 use super::{BackupArgs, BackupState};
@@ -37,9 +37,9 @@ pub async fn upload_archive(
     time: DateTime<Utc>,
 ) -> Result<()> {
     let timestamp = time.format("%Y%m%d%H%M%S").to_string();
-    let key = archive_key(&timestamp);
-    let data = spawn_blocking(move || serialize(&state.lock().unwrap().archive)).await?;
-    args.storage.put(&key, data).await?;
+    let key = storage::archive_key(&timestamp);
+    let bytes = spawn_blocking(move || serialize(&state.lock().unwrap().archive)).await?;
+    args.storage.put(&key, bytes).await?;
     args.storage
         .put(storage::ARCHIVE_KEY_LATEST, timestamp.into())
         .await?;

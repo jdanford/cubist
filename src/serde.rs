@@ -5,9 +5,9 @@ use serde::{de::DeserializeOwned, Serialize};
 use crate::error::Result;
 
 pub fn serialize<T: Serialize>(value: &T) -> Vec<u8> {
-    let mut data = vec![];
-    ciborium::into_writer(value, &mut data).unwrap();
-    data
+    let mut bytes = vec![];
+    ciborium::into_writer(value, &mut bytes).unwrap();
+    bytes
 }
 
 pub fn deserialize<T: DeserializeOwned>(bytes: Vec<u8>) -> Result<T> {

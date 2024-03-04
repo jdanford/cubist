@@ -3,7 +3,20 @@ pub const SIZE: usize = blake3::OUT_LEN;
 const PLACEHOLDER: &str = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
 
 pub type Hash = blake3::Hash;
-pub type Hasher = blake3::Hasher;
+
+pub fn leaf(data: &[u8]) -> Hash {
+    blake3::hash(data)
+}
+
+pub fn branch(children: &[Hash]) -> Hash {
+    let mut hasher = blake3::Hasher::new();
+
+    for hash in children {
+        hasher.update(hash.as_bytes());
+    }
+
+    hasher.finalize()
+}
 
 pub fn concat<I>(hashes: I) -> Vec<u8>
 where

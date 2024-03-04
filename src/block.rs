@@ -8,7 +8,7 @@ use tokio::{
 
 use crate::{
     error::{Error, Result},
-    hash::{self, Hash, Hasher},
+    hash::{self, Hash},
     storage,
 };
 
@@ -37,7 +37,7 @@ impl Block {
 
     pub async fn branch(level: u8, children: Vec<Hash>) -> Result<Self> {
         let (children, hash) = spawn_blocking(move || {
-            let hash = hash_children(&children);
+            let hash = hash::branch(&children);
             (children, hash)
         })
         .await?;
@@ -60,8 +60,11 @@ impl Block {
     }
 
     pub async fn encode(self, compression_level: u32) -> Result<Vec<u8>> {
-        let raw_block = self.into_raw(compression_level).await?;
-        raw_block.encode().await
+        let (level, bytes) = self.into_raw(compression_level).await?;
+        let mut buf = vec![];
+        buf.write_u8(level).await?;
+        buf.write_all(&bytes).await?;
+        Ok(buf)
     }
 
     pub async fn decode(
@@ -69,82 +72,65 @@ impl Block {
         expected_level: Option<u8>,
         bytes: &[u8],
     ) -> Result<Self> {
-        let raw_block = RawBlock::decode(expected_level, bytes)?;
-        Block::from_raw(raw_block, &expected_hash).await
+        let (&level, bytes) = bytes.split_first().ok_or(Error::InvalidBlockSize(0))?;
+        assert_level(level, expected_level)?;
+        Block::from_raw(&expected_hash, level, bytes.to_owned()).await
     }
 
-    async fn into_raw(self, compression_level: u32) -> Result<RawBlock> {
+    async fn into_raw(self, compression_level: u32) -> Result<(u8, Vec<u8>)> {
         match self {
             Block::Leaf { data, .. } => {
                 let bytes = spawn_blocking(move || compress(&data, compression_level)).await??;
-                Ok(RawBlock { level: 0, bytes })
+                Ok((0, bytes))
             }
             Block::Branch {
                 level, children, ..
             } => {
                 let bytes = hash::concat(children);
-                Ok(RawBlock { level, bytes })
+                Ok((level, bytes))
             }
         }
     }
 
-    async fn from_raw(raw_block: RawBlock, expected_hash: &Hash) -> Result<Self> {
-        let RawBlock { level, bytes } = raw_block;
-        if level == 0 {
-            let data = spawn_blocking(move || decompress(&bytes)).await??;
-            let (data, hash) = spawn_blocking(move || {
-                let hash = blake3::hash(&data);
-                (data, hash)
-            })
-            .await?;
-
-            assert_hash(&hash, expected_hash)?;
-            Ok(Block::Leaf { hash, data })
+    async fn from_raw(expected_hash: &Hash, level: u8, bytes: Vec<u8>) -> Result<Self> {
+        let block = if level == 0 {
+            Block::leaf_from_raw(bytes).await?
         } else {
-            if bytes.len() % hash::SIZE != 0 {
-                return Err(Error::BlockNotLongEnough);
-            }
+            Block::branch_from_raw(level, bytes).await?
+        };
 
-            let children = hash::split(&bytes).collect::<Vec<_>>();
-            let (children, hash) = spawn_blocking(move || {
-                let hash = hash_children(&children);
-                (children, hash)
-            })
-            .await?;
+        assert_hash(block.hash(), expected_hash)?;
+        Ok(block)
+    }
 
-            assert_hash(&hash, expected_hash)?;
-            Ok(Block::Branch {
-                hash,
-                level,
-                children,
-            })
+    async fn leaf_from_raw(bytes: Vec<u8>) -> Result<Self> {
+        let data = spawn_blocking(move || decompress(&bytes)).await??;
+        let (data, hash) = spawn_blocking(move || {
+            let hash = hash::leaf(&data);
+            (data, hash)
+        })
+        .await?;
+
+        Ok(Block::Leaf { hash, data })
+    }
+
+    async fn branch_from_raw(level: u8, bytes: Vec<u8>) -> Result<Self> {
+        let size = bytes.len();
+        if size % hash::SIZE != 0 {
+            return Err(Error::InvalidBlockSize(size));
         }
-    }
 
-    pub fn storage_key_for_hash(hash: &Hash) -> String {
-        format!("block:{hash}")
-    }
-}
+        let children = hash::split(&bytes).collect::<Vec<_>>();
+        let (children, hash) = spawn_blocking(move || {
+            let hash = hash::branch(&children);
+            (children, hash)
+        })
+        .await?;
 
-struct RawBlock {
-    level: u8,
-    bytes: Vec<u8>,
-}
-
-impl RawBlock {
-    pub async fn encode(&self) -> Result<Vec<u8>> {
-        let mut bytes = vec![];
-        bytes.write_u8(self.level).await?;
-        bytes.write_all(&self.bytes).await?;
-        Ok(bytes)
-    }
-
-    pub fn decode(expected_level: Option<u8>, bytes: &[u8]) -> Result<Self> {
-        let (&level, bytes) = bytes.split_first().ok_or(Error::BlockNotLongEnough)?;
-        assert_level(level, expected_level)?;
-        Ok(RawBlock {
+        Ok(Block::Branch {
+            hash,
             level,
-            bytes: bytes.to_owned(),
+            children,
         })
     }
 }
@@ -160,7 +146,6 @@ fn compress(data: &[u8], compression_level: u32) -> Result<Vec<u8>> {
     std::io::copy(&mut reader, &mut encoder)?;
     let (compressed_data, result) = encoder.finish();
     result?;
-
     Ok(compressed_data)
 }
 
@@ -198,13 +183,4 @@ fn assert_hash(actual: &Hash, expected: &Hash) -> Result<()> {
     }
 
     Ok(())
-}
-
-fn hash_children(children: &[Hash]) -> Hash {
-    let mut hasher = Hasher::new();
-    for hash in children {
-        hasher.update(hash.as_bytes());
-    }
-
-    hasher.finalize()
 }

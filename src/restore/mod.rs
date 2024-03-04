@@ -20,8 +20,8 @@ pub struct RestoreArgs {
     pub archive: Archive,
 }
 
-pub struct RestoreState {
-    pub local_blocks: HashMap<Hash, LocalBlock>,
+struct RestoreState {
+    local_blocks: HashMap<Hash, LocalBlock>,
 }
 
 pub async fn main(args: cli::RestoreArgs) -> Result<()> {

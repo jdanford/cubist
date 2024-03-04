@@ -21,8 +21,8 @@ pub enum Error {
     #[error("directory `{0}` does not exist")]
     DirectoryDoesNotExist(PathBuf),
 
-    #[error("no path for inode {0}")]
-    NoPathForInode(u64),
+    #[error("inode {0} does not exist")]
+    InodeDoesNotExist(u64),
 
     #[error("`{0}` is already in archive")]
     PathAlreadyArchived(PathBuf),
@@ -30,7 +30,7 @@ pub enum Error {
     #[error("`{0}` already exists")]
     FileAlreadyExists(PathBuf),
 
-    #[error("empty path")]
+    #[error("path is empty")]
     EmptyPath,
 
     #[error("invalid timestamp `{0}`")]
@@ -42,8 +42,11 @@ pub enum Error {
     #[error("block has level `{actual}`, expected `{expected}`")]
     WrongBlockLevel { actual: u8, expected: u8 },
 
-    #[error("block is not long enough")]
-    BlockNotLongEnough,
+    #[error("block has invalid size {0}")]
+    InvalidBlockSize(usize),
+
+    #[error("too many block levels")]
+    TooManyBlockLevels,
 
     #[error("{source}")]
     Io {

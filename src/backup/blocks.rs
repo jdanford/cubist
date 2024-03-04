@@ -6,7 +6,7 @@ use tokio_stream::StreamExt;
 use crate::{
     backup::BackupArgs,
     block::{self, Block},
-    error::Result,
+    error::{Error, Result},
     hash::{self, Hash},
 };
 
@@ -50,11 +50,13 @@ impl UploadTree {
         }
 
         let bottom_layer = self.layers.first_mut().unwrap();
-        let hash = bottom_layer.pop().unwrap();
+        let hash = bottom_layer
+            .pop()
+            .expect("bottom layer should not be empty");
         self.add_inner(hash, true).await?;
 
         let top_layer = self.layers.last().unwrap();
-        let hash = *top_layer.first().unwrap();
+        let hash = *top_layer.first().expect("top layer should not be empty");
         Ok(Some(hash))
     }
 
@@ -68,7 +70,7 @@ impl UploadTree {
                 break;
             }
 
-            let layer = self.layers.get_mut(i).unwrap();
+            let layer = self.layers.get_mut(i).expect("layer should exist");
             layer.push(hash);
             let len = layer.len();
 
@@ -76,7 +78,7 @@ impl UploadTree {
                 break;
             }
 
-            let level = (i + 1).try_into().unwrap();
+            let level = (i + 1).try_into().map_err(|_| Error::TooManyBlockLevels)?;
             let range = if finalize { ..len } else { ..(len - 1) };
             let children = layer.drain(range).collect();
             let block = Block::branch(level, children).await?;

@@ -14,7 +14,7 @@ use crate::{
     hash::{self, Hash},
     restore::blocks::{download_blocks, ActiveDownload},
     serde::deserialize,
-    storage::{archive_key, BoxedStorage, ARCHIVE_KEY_LATEST},
+    storage::{self, BoxedStorage, ARCHIVE_KEY_LATEST},
 };
 
 use super::{RestoreArgs, RestoreState};
@@ -45,9 +45,9 @@ impl LocalBlock {
 pub async fn download_archive(storage: &BoxedStorage) -> Result<Archive> {
     let timestamp_bytes = storage.get(ARCHIVE_KEY_LATEST).await?;
     let timestamp = String::from_utf8(timestamp_bytes)?;
-    let key = archive_key(&timestamp);
-    let data = storage.get(&key).await?;
-    let archive = spawn_blocking(move || deserialize(data)).await??;
+    let key = storage::archive_key(&timestamp);
+    let bytes = storage.get(&key).await?;
+    let archive = spawn_blocking(move || deserialize(bytes)).await??;
     Ok(archive)
 }
 

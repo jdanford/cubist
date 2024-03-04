@@ -58,11 +58,11 @@ impl Storage for LocalStorage {
         self.simulate_latency().await;
 
         let path = self.object_path(key);
-        let data = fs::read(path).await?;
-        Ok(data)
+        let bytes = fs::read(path).await?;
+        Ok(bytes)
     }
 
-    async fn put(&self, key: &str, data: Vec<u8>) -> Result<()> {
+    async fn put(&self, key: &str, bytes: Vec<u8>) -> Result<()> {
         self.simulate_latency().await;
 
         let path = self.object_path(key);
@@ -74,7 +74,7 @@ impl Storage for LocalStorage {
             .create(true)
             .open(path)
             .await?;
-        file.write_all(&data).await?;
+        file.write_all(&bytes).await?;
         Ok(())
     }
 }

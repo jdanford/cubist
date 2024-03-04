@@ -12,7 +12,7 @@ pub type BoxedStorage = Box<dyn Storage + Sync + Send + 'static>;
 pub const ARCHIVE_KEY_LATEST: &str = "archive:latest";
 
 pub fn archive_key(timestamp: &str) -> String {
-    format!("block:{timestamp}")
+    format!("archive:{timestamp}")
 }
 
 pub fn block_key(hash: &Hash) -> String {

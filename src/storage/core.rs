@@ -6,5 +6,5 @@ use crate::error::Result;
 pub trait Storage {
     async fn exists(&self, key: &str) -> Result<bool>;
     async fn get(&self, key: &str) -> Result<Vec<u8>>;
-    async fn put(&self, key: &str, data: Vec<u8>) -> Result<()>;
+    async fn put(&self, key: &str, bytes: Vec<u8>) -> Result<()>;
 }

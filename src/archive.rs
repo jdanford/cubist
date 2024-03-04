@@ -39,9 +39,8 @@ impl Archive {
         let mut current_path = PathBuf::new();
         let mut children = &mut self.root;
 
-        for key in keys.iter().copied() {
+        for key in keys {
             current_path.push(key);
-
             match children.get_mut(key) {
                 Some(Node::Directory {
                     children: grandchildren,
