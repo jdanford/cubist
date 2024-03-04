@@ -34,8 +34,8 @@ impl Archive {
         Archive { root, paths }
     }
 
-    pub fn insert(&mut self, path: &Path, node: Node) -> Result<()> {
-        let (keys, name) = path_keys(path)?;
+    pub fn insert(&mut self, path: PathBuf, node: Node) -> Result<()> {
+        let (keys, name) = path_keys(&path)?;
         let mut current_path = PathBuf::new();
         let mut children = &mut self.root;
 
@@ -58,11 +58,12 @@ impl Archive {
         }
 
         if children.contains_key(name) {
-            return Err(Error::PathAlreadyArchived(path.to_owned()));
+            return Err(Error::PathAlreadyArchived(path));
         }
 
-        self.paths.insert(node.metadata().inode, path.to_owned());
-        children.insert(name.to_owned(), node);
+        let name = name.to_owned();
+        self.paths.insert(node.metadata().inode, path);
+        children.insert(name, node);
         Ok(())
     }
 

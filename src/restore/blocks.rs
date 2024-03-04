@@ -14,11 +14,28 @@ use crate::{
     block::{self, Block},
     error::{Error, Result},
     hash::Hash,
-    restore::{LocalBlock, RestoreArgs, RestoreState},
+    restore::{RestoreArgs, RestoreState},
     storage,
 };
 
 use super::files::PendingDownload;
+
+#[derive(Clone, Copy)]
+pub struct LocalBlock {
+    pub inode: u64,
+    pub offset: u64,
+    pub length: u32,
+}
+
+impl LocalBlock {
+    pub fn new(inode: u64, offset: u64, length: u32) -> Self {
+        LocalBlock {
+            inode,
+            offset,
+            length,
+        }
+    }
+}
 
 pub struct ActiveDownload {
     file: File,
@@ -67,7 +84,6 @@ pub async fn download_blocks(
 ) -> Result<()> {
     // copied to avoid holding mutex lock
     let maybe_block = state.lock().unwrap().local_blocks.get(&hash).copied();
-
     if let Some(local_block) = maybe_block {
         block::assert_level(0, level)?;
         let data = read_local_block(args, local_block).await?;
@@ -112,7 +128,7 @@ async fn read_local_block(args: Arc<RestoreArgs>, local_block: LocalBlock) -> Re
     let path = args
         .archive
         .path(local_block.inode)
-        .ok_or(Error::InodeDoesNotExist(local_block.inode))?;
+        .ok_or_else(|| Error::InodeDoesNotExist(local_block.inode))?;
     let mut block_file = File::open(path).await?;
     let seek_pos = SeekFrom::Start(local_block.offset);
     let read_length = local_block.length as usize;

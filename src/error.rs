@@ -24,17 +24,17 @@ pub enum Error {
     #[error("inode {0} does not exist")]
     InodeDoesNotExist(u64),
 
+    #[error("key `{0}` is invalid")]
+    InvalidKey(String),
+
+    #[error("path is empty")]
+    EmptyPath,
+
     #[error("`{0}` is already in archive")]
     PathAlreadyArchived(PathBuf),
 
     #[error("`{0}` already exists")]
     FileAlreadyExists(PathBuf),
-
-    #[error("path is empty")]
-    EmptyPath,
-
-    #[error("invalid timestamp `{0}`")]
-    InvalidTimestamp(i64),
 
     #[error("block has hash `{actual}`, expected `{expected}`")]
     WrongBlockHash { actual: Hash, expected: Hash },

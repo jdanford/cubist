@@ -16,7 +16,6 @@ use tokio::{
 use walkdir::{DirEntry, WalkDir};
 
 use crate::{
-    backup::blocks::upload_file,
     error::Result,
     file::{read_metadata, Node},
     hash,
@@ -24,7 +23,7 @@ use crate::{
     storage,
 };
 
-use super::{BackupArgs, BackupState};
+use super::{blocks::upload_file, BackupArgs, BackupState};
 
 pub struct PendingUpload {
     local_path: PathBuf,
@@ -86,13 +85,13 @@ async fn backup_from_entry(
         let path = fs::read_link(local_path).await?;
         let node = Node::Symlink { metadata, path };
         let archive = &mut state.lock().unwrap().archive;
-        archive.insert(archive_path, node)?;
+        archive.insert(archive_path.to_owned(), node)?;
     } else if file_type.is_dir() {
         let metadata = read_metadata(local_path).await?;
         let children = BTreeMap::new();
         let node = Node::Directory { metadata, children };
         let archive = &mut state.lock().unwrap().archive;
-        archive.insert(archive_path, node)?;
+        archive.insert(archive_path.to_owned(), node)?;
     } else {
         warn!("skipping special file `{}`", local_path.display());
     };
@@ -137,7 +136,7 @@ async fn upload_pending_file(
         .lock()
         .unwrap()
         .archive
-        .insert(&pending_file.archive_path, node)?;
+        .insert(pending_file.archive_path, node)?;
 
     let hash_str = hash::format(&hash);
     info!("{hash_str} <- {}", pending_file.local_path.display());

@@ -11,7 +11,10 @@ use tokio::spawn;
 
 use crate::{archive::Archive, cli, error::Result, hash::Hash, storage::BoxedStorage};
 
-use self::files::{download_archive, download_pending_files, restore_recursive, LocalBlock};
+use self::{
+    blocks::LocalBlock,
+    files::{download_archive, download_pending_files, restore_recursive},
+};
 
 pub struct RestoreArgs {
     pub storage: BoxedStorage,

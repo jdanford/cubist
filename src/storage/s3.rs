@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use aws_sdk_s3::Client;
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 
 use super::core::Storage;
 
@@ -29,6 +29,30 @@ impl Storage for S3Storage {
             .send()
             .await;
         Ok(head_result.is_ok())
+    }
+
+    async fn keys(&self, prefix: Option<&str>) -> Result<Vec<String>> {
+        let prefix_owned = prefix.map(ToOwned::to_owned);
+        let mut stream = self
+            .client
+            .list_objects_v2()
+            .bucket(&self.bucket)
+            .set_prefix(prefix_owned)
+            .into_paginator()
+            .send();
+
+        let mut keys = vec![];
+        while let Some(result) = stream.next().await {
+            let page = result?;
+            for object in page.contents() {
+                let key = object
+                    .key()
+                    .ok_or_else(|| Error::InvalidKey(String::new()))?;
+                keys.push(key.to_owned());
+            }
+        }
+
+        Ok(keys)
     }
 
     async fn get(&self, key: &str) -> Result<Vec<u8>> {

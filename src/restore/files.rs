@@ -12,34 +12,19 @@ use crate::{
     error::{Error, Result},
     file::{restore_metadata, restore_metadata_from_node, try_exists, FileType, Metadata, Node},
     hash::{self, Hash},
-    restore::blocks::{download_blocks, ActiveDownload},
     serde::deserialize,
     storage::{self, BoxedStorage, ARCHIVE_KEY_LATEST},
 };
 
-use super::{RestoreArgs, RestoreState};
+use super::{
+    blocks::{download_blocks, ActiveDownload},
+    RestoreArgs, RestoreState,
+};
 
 pub struct PendingDownload {
     pub metadata: Metadata,
     pub hash: Option<Hash>,
     pub path: PathBuf,
-}
-
-#[derive(Clone, Copy)]
-pub struct LocalBlock {
-    pub inode: u64,
-    pub offset: u64,
-    pub length: u32,
-}
-
-impl LocalBlock {
-    pub fn new(inode: u64, offset: u64, length: u32) -> Self {
-        LocalBlock {
-            inode,
-            offset,
-            length,
-        }
-    }
 }
 
 pub async fn download_archive(storage: &BoxedStorage) -> Result<Archive> {

@@ -8,7 +8,7 @@ use tokio::{
     time::sleep,
 };
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 
 use super::core::Storage;
 
@@ -52,6 +52,23 @@ impl Storage for LocalStorage {
         let path = self.object_path(key);
         let exists = fs::try_exists(path).await?;
         Ok(exists)
+    }
+
+    async fn keys(&self, prefix: Option<&str>) -> Result<Vec<String>> {
+        let mut read_dir = fs::read_dir(&self.path).await?;
+        let mut keys = vec![];
+
+        while let Some(entry) = read_dir.next_entry().await? {
+            let name = entry.file_name();
+            let key = name
+                .to_str()
+                .ok_or_else(|| Error::InvalidKey(name.to_string_lossy().into_owned()))?;
+            if key.starts_with(prefix.unwrap_or("")) {
+                keys.push(key.to_owned());
+            }
+        }
+
+        Ok(keys)
     }
 
     async fn get(&self, key: &str) -> Result<Vec<u8>> {
