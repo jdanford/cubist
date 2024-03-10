@@ -1,46 +1,35 @@
-use std::{pin::pin, sync::Arc};
-
-use tokio::fs::File;
-use tokio_stream::StreamExt;
+use std::sync::{Arc, Mutex};
 
 use crate::{
-    backup::BackupArgs,
-    block::{self, Block},
+    block::Block,
     error::{Error, Result},
     hash::{self, Hash},
 };
 
-pub async fn upload_file(args: Arc<BackupArgs>, file: &mut File) -> Result<Option<Hash>> {
-    let mut chunker = block::chunker(file, args.target_block_size);
-    let mut chunks = pin!(chunker.as_stream());
-    let mut tree = UploadTree::new(args);
-
-    while let Some(chunk_result) = chunks.next().await {
-        let chunk = chunk_result?;
-        tree.add_leaf(chunk.data).await?;
-    }
-
-    let hash = tree.finalize().await?;
-    Ok(hash)
-}
+use super::{Args, State};
 
 pub struct UploadTree {
-    args: Arc<BackupArgs>,
+    args: Arc<Args>,
+    state: Arc<Mutex<State>>,
     layers: Vec<Vec<Hash>>,
 }
 
 impl UploadTree {
-    pub fn new(args: Arc<BackupArgs>) -> Self {
+    pub fn new(args: Arc<Args>, state: Arc<Mutex<State>>) -> Self {
         UploadTree {
             args,
+            state,
             layers: vec![],
         }
     }
 
     pub async fn add_leaf(&mut self, data: Vec<u8>) -> Result<()> {
+        let size = data.len() as u64;
         let block = Block::leaf(data).await?;
-        let hash = upload_block(self.args.clone(), block).await?;
+        let hash = upload_block(self.args.clone(), self.state.clone(), block).await?;
         self.add_inner(hash, false).await?;
+
+        self.state.lock().unwrap().stats.bytes_read += size;
         Ok(())
     }
 
@@ -82,21 +71,26 @@ impl UploadTree {
             let range = if finalize { ..len } else { ..(len - 1) };
             let children = layer.drain(range).collect();
             let block = Block::branch(level, children).await?;
-            hash = upload_block(self.args.clone(), block).await?;
+            hash = upload_block(self.args.clone(), self.state.clone(), block).await?;
         }
 
         Ok(())
     }
 }
 
-async fn upload_block(args: Arc<BackupArgs>, block: Block) -> Result<Hash> {
+async fn upload_block(args: Arc<Args>, state: Arc<Mutex<State>>, block: Block) -> Result<Hash> {
     let key = block.storage_key();
     let hash = block.hash().to_owned();
 
     if !args.storage.exists(&key).await? {
         let bytes = block.encode(args.compression_level).await?;
+        let size = bytes.len() as u64;
         args.storage.put(&key, bytes).await?;
+
+        state.lock().unwrap().stats.blocks_uploaded += 1;
+        state.lock().unwrap().stats.bytes_uploaded += size;
     }
 
+    state.lock().unwrap().stats.blocks_used += 1;
     Ok(hash)
 }

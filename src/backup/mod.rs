@@ -1,5 +1,6 @@
 mod blocks;
 mod files;
+mod stats;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -14,18 +15,22 @@ use crate::{
     storage::BoxedStorage,
 };
 
-use self::files::{backup_recursive, upload_archive, upload_pending_files};
+use self::{
+    files::{backup_recursive, upload_archive, upload_pending_files},
+    stats::Stats,
+};
 
-pub struct BackupArgs {
-    pub storage: BoxedStorage,
-    pub compression_level: u8,
-    pub target_block_size: u32,
-    pub max_concurrency: usize,
-    pub paths: Vec<PathBuf>,
+struct Args {
+    storage: BoxedStorage,
+    compression_level: u8,
+    target_block_size: u32,
+    max_concurrency: usize,
+    paths: Vec<PathBuf>,
 }
 
-struct BackupState {
+struct State {
     archive: Archive,
+    stats: Stats,
 }
 
 pub async fn main(args: cli::BackupArgs) -> Result<()> {
@@ -34,14 +39,15 @@ pub async fn main(args: cli::BackupArgs) -> Result<()> {
 
     let time = Utc::now();
     let archive = Archive::new();
-    let args = Arc::new(BackupArgs {
+    let stats = Stats::new();
+    let args = Arc::new(Args {
         storage,
         compression_level: args.compression_level,
         target_block_size: args.target_block_size,
         max_concurrency: args.max_concurrency,
         paths: args.paths,
     });
-    let state = Arc::new(Mutex::new(BackupState { archive }));
+    let state = Arc::new(Mutex::new(State { archive, stats }));
     let (sender, receiver) = async_channel::bounded(args.max_concurrency);
 
     let uploader_args = args.clone();
@@ -56,7 +62,10 @@ pub async fn main(args: cli::BackupArgs) -> Result<()> {
 
     sender.close();
     uploader_task.await?;
+    upload_archive(args, state.clone(), time).await?;
 
-    upload_archive(args, state, time).await?;
+    let stats = &mut state.lock().unwrap().stats;
+    stats.end();
+
     Ok(())
 }

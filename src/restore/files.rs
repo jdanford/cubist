@@ -18,7 +18,7 @@ use crate::{
 
 use super::{
     blocks::{download_blocks, ActiveDownload},
-    RestoreArgs, RestoreState,
+    Args, State,
 };
 
 pub struct PendingDownload {
@@ -37,8 +37,8 @@ pub async fn download_archive(storage: &BoxedStorage) -> Result<Archive> {
 }
 
 pub async fn restore_recursive(
-    args: Arc<RestoreArgs>,
-    state: Arc<Mutex<RestoreState>>,
+    args: Arc<Args>,
+    state: Arc<Mutex<State>>,
     sender: Sender<PendingDownload>,
 ) -> Result<()> {
     for (path, node) in args.archive.walk() {
@@ -50,8 +50,8 @@ pub async fn restore_recursive(
 }
 
 async fn restore_from_node(
-    _args: Arc<RestoreArgs>,
-    _state: Arc<Mutex<RestoreState>>,
+    _args: Arc<Args>,
+    _state: Arc<Mutex<State>>,
     sender: Sender<PendingDownload>,
     path: &Path,
     node: &Node,
@@ -83,8 +83,8 @@ async fn restore_from_node(
 }
 
 pub async fn download_pending_files(
-    args: Arc<RestoreArgs>,
-    state: Arc<Mutex<RestoreState>>,
+    args: Arc<Args>,
+    state: Arc<Mutex<State>>,
     receiver: Receiver<PendingDownload>,
 ) {
     let semaphore = Arc::new(Semaphore::new(args.max_concurrency));
@@ -106,14 +106,14 @@ pub async fn download_pending_files(
 }
 
 async fn download_pending_file(
-    args: Arc<RestoreArgs>,
-    state: Arc<Mutex<RestoreState>>,
+    args: Arc<Args>,
+    state: Arc<Mutex<State>>,
     pending_file: PendingDownload,
 ) -> Result<()> {
     let mut file = ActiveDownload::new(&pending_file).await?;
 
     if let Some(hash) = pending_file.hash {
-        download_blocks(args, state, &mut file, hash, None).await?;
+        download_file(args, state, &mut file, hash).await?;
         file.sync_all().await?;
     }
 
@@ -121,4 +121,13 @@ async fn download_pending_file(
     let hash_str = hash::format(&pending_file.hash);
     info!("{hash_str} -> {}", pending_file.path.display());
     Ok(())
+}
+
+pub async fn download_file(
+    args: Arc<Args>,
+    state: Arc<Mutex<State>>,
+    file: &mut ActiveDownload,
+    hash: Hash,
+) -> Result<()> {
+    download_blocks(args, state, file, hash, None).await
 }

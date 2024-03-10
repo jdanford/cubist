@@ -10,7 +10,7 @@ use tokio::{
 
 use crate::error::{Error, Result};
 
-use super::core::Storage;
+use super::Storage;
 
 pub struct LocalStorage {
     path: PathBuf,

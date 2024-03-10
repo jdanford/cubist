@@ -14,11 +14,10 @@ use crate::{
     block::{self, Block},
     error::{Error, Result},
     hash::Hash,
-    restore::{RestoreArgs, RestoreState},
     storage,
 };
 
-use super::files::PendingDownload;
+use super::{files::PendingDownload, Args, State};
 
 #[derive(Clone, Copy)]
 pub struct LocalBlock {
@@ -76,27 +75,34 @@ impl DerefMut for ActiveDownload {
 
 #[async_recursion]
 pub async fn download_blocks(
-    args: Arc<RestoreArgs>,
-    state: Arc<Mutex<RestoreState>>,
+    args: Arc<Args>,
+    state: Arc<Mutex<State>>,
     file: &mut ActiveDownload,
     hash: Hash,
     level: Option<u8>,
 ) -> Result<()> {
+    state.lock().unwrap().stats.blocks_used += 1;
+
     // copied to avoid holding mutex lock
     let maybe_block = state.lock().unwrap().local_blocks.get(&hash).copied();
     if let Some(local_block) = maybe_block {
-        block::assert_level(0, level)?;
+        block::assert_level_eq(0, level)?;
         let data = read_local_block(args, local_block).await?;
-        write_local_block(file, &data).await?;
+        write_local_block(state.clone(), file, &data).await?;
         return Ok(());
     }
 
     let key = storage::block_key(&hash);
     let bytes = args.storage.get(&key).await?;
+    let size = bytes.len() as u64;
     let block = Block::decode(hash, level, &bytes).await?;
+
+    state.lock().unwrap().stats.blocks_downloaded += 1;
+    state.lock().unwrap().stats.bytes_downloaded += size;
+
     match block {
         Block::Leaf { data, .. } => {
-            let local_block = write_local_block(file, &data).await?;
+            let local_block = write_local_block(state.clone(), file, &data).await?;
             state.lock().unwrap().local_blocks.insert(hash, local_block);
         }
         Block::Branch {
@@ -111,7 +117,11 @@ pub async fn download_blocks(
     Ok(())
 }
 
-async fn write_local_block(file: &mut ActiveDownload, data: &[u8]) -> Result<LocalBlock> {
+async fn write_local_block(
+    state: Arc<Mutex<State>>,
+    file: &mut ActiveDownload,
+    data: &[u8],
+) -> Result<LocalBlock> {
     let length = data.len();
     let safe_length = length
         .try_into()
@@ -121,10 +131,11 @@ async fn write_local_block(file: &mut ActiveDownload, data: &[u8]) -> Result<Loc
     file.write_all(data).await?;
     file.offset += length as u64;
 
+    state.lock().unwrap().stats.bytes_written += length as u64;
     Ok(local_block)
 }
 
-async fn read_local_block(args: Arc<RestoreArgs>, local_block: LocalBlock) -> Result<Vec<u8>> {
+async fn read_local_block(args: Arc<Args>, local_block: LocalBlock) -> Result<Vec<u8>> {
     let path = args
         .archive
         .path(local_block.inode)

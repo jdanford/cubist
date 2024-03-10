@@ -1,6 +1,7 @@
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
+    pin::pin,
     sync::{Arc, Mutex},
 };
 
@@ -13,17 +14,19 @@ use tokio::{
     sync::Semaphore,
     task::spawn_blocking,
 };
+use tokio_stream::StreamExt;
 use walkdir::{DirEntry, WalkDir};
 
 use crate::{
+    block,
     error::Result,
     file::{read_metadata, Node},
-    hash,
+    hash::{self, Hash},
     serde::serialize,
     storage,
 };
 
-use super::{blocks::upload_file, BackupArgs, BackupState};
+use super::{blocks::UploadTree, Args, State};
 
 pub struct PendingUpload {
     local_path: PathBuf,
@@ -31,8 +34,8 @@ pub struct PendingUpload {
 }
 
 pub async fn upload_archive(
-    args: Arc<BackupArgs>,
-    state: Arc<Mutex<BackupState>>,
+    args: Arc<Args>,
+    state: Arc<Mutex<State>>,
     time: DateTime<Utc>,
 ) -> Result<()> {
     let timestamp = time.format("%Y%m%d%H%M%S").to_string();
@@ -46,8 +49,8 @@ pub async fn upload_archive(
 }
 
 pub async fn backup_recursive(
-    args: Arc<BackupArgs>,
-    state: Arc<Mutex<BackupState>>,
+    args: Arc<Args>,
+    state: Arc<Mutex<State>>,
     sender: Sender<PendingUpload>,
     path: &Path,
 ) -> Result<()> {
@@ -65,8 +68,8 @@ pub async fn backup_recursive(
 }
 
 async fn backup_from_entry(
-    _args: Arc<BackupArgs>,
-    state: Arc<Mutex<BackupState>>,
+    _args: Arc<Args>,
+    state: Arc<Mutex<State>>,
     sender: Sender<PendingUpload>,
     entry: DirEntry,
     base_path: &Path,
@@ -100,8 +103,8 @@ async fn backup_from_entry(
 }
 
 pub async fn upload_pending_files(
-    args: Arc<BackupArgs>,
-    state: Arc<Mutex<BackupState>>,
+    args: Arc<Args>,
+    state: Arc<Mutex<State>>,
     receiver: Receiver<PendingUpload>,
 ) {
     let semaphore = Arc::new(Semaphore::new(args.max_concurrency));
@@ -123,13 +126,13 @@ pub async fn upload_pending_files(
 }
 
 async fn upload_pending_file(
-    args: Arc<BackupArgs>,
-    state: Arc<Mutex<BackupState>>,
+    args: Arc<Args>,
+    state: Arc<Mutex<State>>,
     pending_file: PendingUpload,
 ) -> Result<()> {
     let metadata = read_metadata(&pending_file.local_path).await?;
     let mut file = File::open(&pending_file.local_path).await?;
-    let hash = upload_file(args.clone(), &mut file).await?;
+    let hash = upload_file(args.clone(), state.clone(), &mut file).await?;
     let node = Node::File { metadata, hash };
 
     state
@@ -141,4 +144,22 @@ async fn upload_pending_file(
     let hash_str = hash::format(&hash);
     info!("{hash_str} <- {}", pending_file.local_path.display());
     Ok(())
+}
+
+pub async fn upload_file(
+    args: Arc<Args>,
+    state: Arc<Mutex<State>>,
+    file: &mut File,
+) -> Result<Option<Hash>> {
+    let mut chunker = block::chunker(file, args.target_block_size);
+    let mut chunks = pin!(chunker.as_stream());
+    let mut tree = UploadTree::new(args.clone(), state.clone());
+
+    while let Some(chunk_result) = chunks.next().await {
+        let chunk = chunk_result?;
+        tree.add_leaf(chunk.data).await?;
+    }
+
+    let hash = tree.finalize().await?;
+    Ok(hash)
 }

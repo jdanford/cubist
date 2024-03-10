@@ -3,7 +3,7 @@ use aws_sdk_s3::Client;
 
 use crate::error::{Error, Result};
 
-use super::core::Storage;
+use super::Storage;
 
 pub struct S3Storage {
     client: aws_sdk_s3::Client,

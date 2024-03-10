@@ -25,7 +25,7 @@ pub enum Block {
 impl Block {
     pub async fn leaf(data: Vec<u8>) -> Result<Self> {
         let (data, hash) = spawn_blocking(move || {
-            let hash = blake3::hash(&data);
+            let hash = hash::leaf(&data);
             (data, hash)
         })
         .await?;
@@ -73,7 +73,7 @@ impl Block {
         let (&level, bytes) = bytes
             .split_first()
             .ok_or_else(|| Error::InvalidBlockSize(0))?;
-        assert_level(level, expected_level)?;
+        assert_level_eq(level, expected_level)?;
         Block::from_raw(&expected_hash, level, bytes.to_owned()).await
     }
 
@@ -99,7 +99,7 @@ impl Block {
             Block::branch_from_raw(level, bytes).await?
         };
 
-        assert_hash(block.hash(), expected_hash)?;
+        assert_hash_eq(block.hash(), expected_hash)?;
         Ok(block)
     }
 
@@ -116,9 +116,7 @@ impl Block {
 
     async fn branch_from_raw(level: u8, bytes: Vec<u8>) -> Result<Self> {
         let size = bytes.len();
-        if size % hash::SIZE != 0 {
-            return Err(Error::InvalidBlockSize(size));
-        }
+        assert_size_multiple_of_hash(size)?;
 
         let children = hash::split(&bytes).collect::<Vec<_>>();
         let (children, hash) = spawn_blocking(move || {
@@ -151,7 +149,7 @@ pub fn chunker<R: AsyncRead + Unpin>(reader: R, target_size: u32) -> AsyncStream
     AsyncStreamCDC::new(reader, min_size, target_size, max_size)
 }
 
-pub fn assert_level(actual: u8, expected: Option<u8>) -> Result<()> {
+pub fn assert_level_eq(actual: u8, expected: Option<u8>) -> Result<()> {
     if let Some(expected) = expected {
         if expected != actual {
             return Err(Error::WrongBlockLevel { actual, expected });
@@ -161,12 +159,20 @@ pub fn assert_level(actual: u8, expected: Option<u8>) -> Result<()> {
     Ok(())
 }
 
-fn assert_hash(actual: &Hash, expected: &Hash) -> Result<()> {
+pub fn assert_hash_eq(actual: &Hash, expected: &Hash) -> Result<()> {
     if expected != actual {
         return Err(Error::WrongBlockHash {
             actual: *actual,
             expected: *expected,
         });
+    }
+
+    Ok(())
+}
+
+pub fn assert_size_multiple_of_hash(size: usize) -> Result<()> {
+    if size % hash::SIZE != 0 {
+        return Err(Error::InvalidBlockSize(size));
     }
 
     Ok(())

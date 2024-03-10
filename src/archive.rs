@@ -1,5 +1,5 @@
 use std::{
-    collections::{btree_map, BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap},
     ffi::{OsStr, OsString},
     path::{Component, Path, PathBuf},
 };
@@ -9,6 +9,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::{
     error::{Error, Result},
     file::Node,
+    walker::FileWalker,
 };
 
 #[derive(Debug)]
@@ -25,7 +26,7 @@ impl Archive {
         }
     }
 
-    pub fn from_root(root: BTreeMap<OsString, Node>) -> Self {
+    fn from_root(root: BTreeMap<OsString, Node>) -> Self {
         let mut paths = HashMap::new();
         for (path, node) in FileWalker::from_root(&root) {
             paths.insert(node.metadata().inode, path);
@@ -87,44 +88,6 @@ impl<'de> Deserialize<'de> for Archive {
         deserializer: D,
     ) -> std::result::Result<Archive, D::Error> {
         Deserialize::deserialize(deserializer).map(Archive::from_root)
-    }
-}
-
-pub struct FileWalker<'a> {
-    path: PathBuf,
-    layers: Vec<btree_map::Iter<'a, OsString, Node>>,
-}
-
-impl<'a> FileWalker<'a> {
-    fn from_root(root: &'a BTreeMap<OsString, Node>) -> FileWalker<'a> {
-        FileWalker {
-            path: PathBuf::new(),
-            layers: vec![root.iter()],
-        }
-    }
-}
-
-impl<'a> Iterator for FileWalker<'a> {
-    type Item = (PathBuf, &'a Node);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        while let Some(layer) = self.layers.last_mut() {
-            if let Some((name, node)) = layer.next() {
-                let node_path = self.path.join(name);
-
-                if let Node::Directory { children, .. } = node {
-                    self.path.push(name);
-                    self.layers.push(children.iter());
-                }
-
-                return Some((node_path, node));
-            }
-
-            self.path.pop();
-            self.layers.pop();
-        }
-
-        None
     }
 }
 
