@@ -9,7 +9,7 @@ use aws_sdk_s3::{error::SdkError, primitives::ByteStreamError};
 use thiserror::Error;
 use tokio::task::JoinError;
 
-use crate::hash::Hash;
+use crate::hash::{self, Hash};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -108,6 +108,7 @@ impl<E, R> From<SdkError<E, R>> for Error {
         Error::Sdk(error.to_string())
     }
 }
+
 impl<T> From<SendError<T>> for Error {
     fn from(error: SendError<T>) -> Self {
         Error::Channel(error.to_string())
@@ -124,4 +125,33 @@ impl<E: Debug> From<ciborium::ser::Error<E>> for Error {
     fn from(error: ciborium::ser::Error<E>) -> Self {
         Error::Serializer(error.to_string())
     }
+}
+
+pub fn assert_block_level_eq(actual: u8, expected: Option<u8>) -> Result<()> {
+    if let Some(expected) = expected {
+        if expected != actual {
+            return Err(Error::WrongBlockLevel { actual, expected });
+        }
+    }
+
+    Ok(())
+}
+
+pub fn assert_hash_eq(actual: &Hash, expected: &Hash) -> Result<()> {
+    if expected != actual {
+        return Err(Error::WrongBlockHash {
+            actual: *actual,
+            expected: *expected,
+        });
+    }
+
+    Ok(())
+}
+
+pub fn assert_size_multiple_of_hash(size: usize) -> Result<()> {
+    if size % hash::SIZE != 0 {
+        return Err(Error::InvalidBlockSize(size));
+    }
+
+    Ok(())
 }

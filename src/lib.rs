@@ -19,5 +19,5 @@ mod archive;
 mod block;
 mod file;
 mod hash;
+mod refs;
 mod serde;
-mod walker;

@@ -5,15 +5,12 @@ use std::{
 
 use async_channel::{Receiver, Sender};
 use log::info;
-use tokio::{fs, spawn, sync::Semaphore, task::spawn_blocking};
+use tokio::{fs, spawn, sync::Semaphore};
 
 use crate::{
-    archive::Archive,
     error::{Error, Result},
     file::{restore_metadata, restore_metadata_from_node, try_exists, FileType, Metadata, Node},
     hash::{self, Hash},
-    serde::deserialize,
-    storage::{self, BoxedStorage, ARCHIVE_KEY_LATEST},
 };
 
 use super::{
@@ -27,15 +24,6 @@ pub struct PendingDownload {
     pub path: PathBuf,
 }
 
-pub async fn download_archive(storage: &BoxedStorage) -> Result<Archive> {
-    let timestamp_bytes = storage.get(ARCHIVE_KEY_LATEST).await?;
-    let timestamp = String::from_utf8(timestamp_bytes)?;
-    let key = storage::archive_key(&timestamp);
-    let bytes = storage.get(&key).await?;
-    let archive = spawn_blocking(move || deserialize(bytes)).await??;
-    Ok(archive)
-}
-
 pub async fn restore_recursive(
     args: Arc<Args>,
     state: Arc<Mutex<State>>,
@@ -43,7 +31,11 @@ pub async fn restore_recursive(
 ) -> Result<()> {
     for (path, node) in args.archive.walk() {
         let path = args.output_path.join(path);
-        restore_from_node(args.clone(), state.clone(), sender.clone(), &path, node).await?;
+        if let Some(pending_file) =
+            restore_from_node(args.clone(), state.clone(), &path, node).await?
+        {
+            sender.send(pending_file).await?;
+        }
     }
 
     Ok(())
@@ -52,10 +44,9 @@ pub async fn restore_recursive(
 async fn restore_from_node(
     _args: Arc<Args>,
     _state: Arc<Mutex<State>>,
-    sender: Sender<PendingDownload>,
     path: &Path,
     node: &Node,
-) -> Result<()> {
+) -> Result<Option<PendingDownload>> {
     if try_exists(path).await? {
         return Err(Error::FileAlreadyExists(path.to_owned()));
     }
@@ -67,7 +58,7 @@ async fn restore_from_node(
                 hash: *hash,
                 path: path.to_owned(),
             };
-            sender.send(pending_file).await?;
+            return Ok(Some(pending_file));
         }
         Node::Symlink { path: src, .. } => {
             fs::symlink(src, path).await?;
@@ -79,7 +70,7 @@ async fn restore_from_node(
         }
     }
 
-    Ok(())
+    Ok(None)
 }
 
 pub async fn download_pending_files(

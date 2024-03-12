@@ -9,18 +9,19 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::{
     error::{Error, Result},
     file::Node,
-    walker::FileWalker,
 };
 
+use super::walker::FileWalker;
+
 #[derive(Debug)]
-pub struct Archive {
+pub struct FileMap {
     root: BTreeMap<OsString, Node>,
     paths: HashMap<u64, PathBuf>,
 }
 
-impl Archive {
+impl FileMap {
     pub fn new() -> Self {
-        Archive {
+        FileMap {
             root: BTreeMap::new(),
             paths: HashMap::new(),
         }
@@ -32,7 +33,7 @@ impl Archive {
             paths.insert(node.metadata().inode, path);
         }
 
-        Archive { root, paths }
+        FileMap { root, paths }
     }
 
     pub fn insert(&mut self, path: PathBuf, node: Node) -> Result<()> {
@@ -77,17 +78,17 @@ impl Archive {
     }
 }
 
-impl Serialize for Archive {
+impl Serialize for FileMap {
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
         Serialize::serialize(&self.root, serializer)
     }
 }
 
-impl<'de> Deserialize<'de> for Archive {
+impl<'de> Deserialize<'de> for FileMap {
     fn deserialize<D: Deserializer<'de>>(
         deserializer: D,
-    ) -> std::result::Result<Archive, D::Error> {
-        Deserialize::deserialize(deserializer).map(Archive::from_root)
+    ) -> std::result::Result<FileMap, D::Error> {
+        Deserialize::deserialize(deserializer).map(FileMap::from_root)
     }
 }
 

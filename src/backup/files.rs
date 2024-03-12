@@ -6,13 +6,12 @@ use std::{
 };
 
 use async_channel::{Receiver, Sender};
-use chrono::{DateTime, Utc};
 use log::{info, warn};
 use tokio::{
     fs::{self, File},
+    io::BufReader,
     spawn,
     sync::Semaphore,
-    task::spawn_blocking,
 };
 use tokio_stream::StreamExt;
 use walkdir::{DirEntry, WalkDir};
@@ -22,8 +21,6 @@ use crate::{
     error::Result,
     file::{read_metadata, Node},
     hash::{self, Hash},
-    serde::serialize,
-    storage,
 };
 
 use super::{blocks::UploadTree, Args, State};
@@ -31,21 +28,6 @@ use super::{blocks::UploadTree, Args, State};
 pub struct PendingUpload {
     local_path: PathBuf,
     archive_path: PathBuf,
-}
-
-pub async fn upload_archive(
-    args: Arc<Args>,
-    state: Arc<Mutex<State>>,
-    time: DateTime<Utc>,
-) -> Result<()> {
-    let timestamp = time.format("%Y%m%d%H%M%S").to_string();
-    let key = storage::archive_key(&timestamp);
-    let bytes = spawn_blocking(move || serialize(&state.lock().unwrap().archive)).await?;
-    args.storage.put(&key, bytes).await?;
-    args.storage
-        .put(storage::ARCHIVE_KEY_LATEST, timestamp.into())
-        .await?;
-    Ok(())
 }
 
 pub async fn backup_recursive(
@@ -61,7 +43,11 @@ pub async fn backup_recursive(
             continue;
         }
 
-        backup_from_entry(args.clone(), state.clone(), sender.clone(), entry, path).await?;
+        if let Some(pending_file) =
+            backup_from_entry(args.clone(), state.clone(), entry, path).await?
+        {
+            sender.send(pending_file).await?;
+        }
     }
 
     Ok(())
@@ -70,10 +56,9 @@ pub async fn backup_recursive(
 async fn backup_from_entry(
     _args: Arc<Args>,
     state: Arc<Mutex<State>>,
-    sender: Sender<PendingUpload>,
     entry: DirEntry,
     base_path: &Path,
-) -> Result<()> {
+) -> Result<Option<PendingUpload>> {
     let local_path = entry.path();
     let archive_path = local_path.strip_prefix(base_path)?;
     let file_type = entry.file_type();
@@ -82,7 +67,7 @@ async fn backup_from_entry(
             local_path: local_path.to_owned(),
             archive_path: archive_path.to_owned(),
         };
-        sender.send(pending_file).await?;
+        return Ok(Some(pending_file));
     } else if file_type.is_symlink() {
         let metadata = read_metadata(local_path).await?;
         let path = fs::read_link(local_path).await?;
@@ -99,7 +84,7 @@ async fn backup_from_entry(
         warn!("skipping special file `{}`", local_path.display());
     };
 
-    Ok(())
+    Ok(None)
 }
 
 pub async fn upload_pending_files(
@@ -151,12 +136,14 @@ pub async fn upload_file(
     state: Arc<Mutex<State>>,
     file: &mut File,
 ) -> Result<Option<Hash>> {
-    let mut chunker = block::chunker(file, args.target_block_size);
+    let reader = BufReader::new(file);
+    let mut chunker = block::chunker(reader, args.target_block_size);
     let mut chunks = pin!(chunker.as_stream());
     let mut tree = UploadTree::new(args.clone(), state.clone());
 
     while let Some(chunk_result) = chunks.next().await {
         let chunk = chunk_result?;
+        state.lock().unwrap().stats.bytes_read += chunk.data.len() as u64;
         tree.add_leaf(chunk.data).await?;
     }
 

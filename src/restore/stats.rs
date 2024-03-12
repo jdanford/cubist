@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 
+#[derive(Debug)]
 pub struct Stats {
     pub start_time: DateTime<Utc>,
     pub end_time: Option<DateTime<Utc>>,

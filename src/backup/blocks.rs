@@ -24,12 +24,10 @@ impl UploadTree {
     }
 
     pub async fn add_leaf(&mut self, data: Vec<u8>) -> Result<()> {
-        let size = data.len() as u64;
         let block = Block::leaf(data).await?;
         let hash = upload_block(self.args.clone(), self.state.clone(), block).await?;
+        self.state.lock().unwrap().archive.add_ref(&hash);
         self.add_inner(hash, false).await?;
-
-        self.state.lock().unwrap().stats.bytes_read += size;
         Ok(())
     }
 
@@ -72,6 +70,7 @@ impl UploadTree {
             let children = layer.drain(range).collect();
             let block = Block::branch(level, children).await?;
             hash = upload_block(self.args.clone(), self.state.clone(), block).await?;
+            self.state.lock().unwrap().archive.add_ref(&hash);
         }
 
         Ok(())
@@ -85,8 +84,8 @@ async fn upload_block(args: Arc<Args>, state: Arc<Mutex<State>>, block: Block) -
     if !args.storage.exists(&key).await? {
         let bytes = block.encode(args.compression_level).await?;
         let size = bytes.len() as u64;
-        args.storage.put(&key, bytes).await?;
 
+        args.storage.put(&key, bytes).await?;
         state.lock().unwrap().stats.blocks_uploaded += 1;
         state.lock().unwrap().stats.bytes_uploaded += size;
     }

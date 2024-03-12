@@ -6,20 +6,20 @@ use std::{
 
 use async_recursion::async_recursion;
 use tokio::{
-    fs::{File, OpenOptions},
-    io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
+    fs::File,
+    io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufWriter},
 };
 
 use crate::{
-    block::{self, Block},
-    error::{Error, Result},
+    block::Block,
+    error::{assert_block_level_eq, Error, Result},
     hash::Hash,
     storage,
 };
 
 use super::{files::PendingDownload, Args, State};
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct LocalBlock {
     pub inode: u64,
     pub offset: u64,
@@ -37,22 +37,18 @@ impl LocalBlock {
 }
 
 pub struct ActiveDownload {
-    file: File,
+    writer: BufWriter<File>,
     inode: u64,
     offset: u64,
 }
 
 impl ActiveDownload {
     pub async fn new(pending_file: &PendingDownload) -> Result<Self> {
-        let file = OpenOptions::new()
-            .write(true)
-            .truncate(true)
-            .create(true)
-            .open(&pending_file.path)
-            .await?;
+        let file = File::create(&pending_file.path).await?;
+        let writer = BufWriter::new(file);
 
         Ok(ActiveDownload {
-            file,
+            writer,
             inode: pending_file.metadata.inode,
             offset: 0,
         })
@@ -63,13 +59,13 @@ impl Deref for ActiveDownload {
     type Target = File;
 
     fn deref(&self) -> &Self::Target {
-        &self.file
+        self.writer.get_ref()
     }
 }
 
 impl DerefMut for ActiveDownload {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.file
+        self.writer.get_mut()
     }
 }
 
@@ -86,7 +82,7 @@ pub async fn download_blocks(
     // copied to avoid holding mutex lock
     let maybe_block = state.lock().unwrap().local_blocks.get(&hash).copied();
     if let Some(local_block) = maybe_block {
-        block::assert_level_eq(0, level)?;
+        assert_block_level_eq(0, level)?;
         let data = read_local_block(args, local_block).await?;
         write_local_block(state.clone(), file, &data).await?;
         return Ok(());
@@ -94,12 +90,10 @@ pub async fn download_blocks(
 
     let key = storage::block_key(&hash);
     let bytes = args.storage.get(&key).await?;
-    let size = bytes.len() as u64;
-    let block = Block::decode(hash, level, &bytes).await?;
-
     state.lock().unwrap().stats.blocks_downloaded += 1;
-    state.lock().unwrap().stats.bytes_downloaded += size;
+    state.lock().unwrap().stats.bytes_downloaded += bytes.len() as u64;
 
+    let block = Block::decode(hash, level, &bytes).await?;
     match block {
         Block::Leaf { data, .. } => {
             let local_block = write_local_block(state.clone(), file, &data).await?;

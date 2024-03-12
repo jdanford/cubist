@@ -6,29 +6,6 @@ use crate::hash::Hash;
 
 use super::metadata::Metadata;
 
-#[derive(PartialEq, Eq)]
-pub enum FileType {
-    File,
-    Symlink,
-    Directory,
-}
-
-impl FileType {
-    #[allow(dead_code)]
-    pub fn is_file(&self) -> bool {
-        *self == FileType::File
-    }
-
-    pub fn is_symlink(&self) -> bool {
-        *self == FileType::Symlink
-    }
-
-    #[allow(dead_code)]
-    pub fn is_directory(&self) -> bool {
-        *self == FileType::Directory
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Node {
@@ -64,5 +41,28 @@ impl Node {
             Node::Symlink { .. } => FileType::Symlink,
             Node::Directory { .. } => FileType::Directory,
         }
+    }
+}
+
+#[derive(PartialEq, Eq)]
+pub enum FileType {
+    File,
+    Symlink,
+    Directory,
+}
+
+impl FileType {
+    #[allow(dead_code)]
+    pub fn is_file(&self) -> bool {
+        *self == FileType::File
+    }
+
+    pub fn is_symlink(&self) -> bool {
+        *self == FileType::Symlink
+    }
+
+    #[allow(dead_code)]
+    pub fn is_directory(&self) -> bool {
+        *self == FileType::Directory
     }
 }

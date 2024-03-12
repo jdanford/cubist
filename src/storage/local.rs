@@ -2,16 +2,13 @@ use std::{io, path::PathBuf, time::Duration};
 
 use async_trait::async_trait;
 use rand_distr::{Distribution, LogNormal};
-use tokio::{
-    fs::{self, OpenOptions},
-    io::AsyncWriteExt,
-    time::sleep,
-};
+use tokio::{fs, time::sleep};
 
 use crate::error::{Error, Result};
 
 use super::Storage;
 
+#[derive(Debug)]
 pub struct LocalStorage {
     path: PathBuf,
     latency: Option<Duration>,
@@ -55,6 +52,8 @@ impl Storage for LocalStorage {
     }
 
     async fn keys(&self, prefix: Option<&str>) -> Result<Vec<String>> {
+        self.simulate_latency().await;
+
         let mut read_dir = fs::read_dir(&self.path).await?;
         let mut keys = vec![];
 
@@ -82,16 +81,9 @@ impl Storage for LocalStorage {
     async fn put(&self, key: &str, bytes: Vec<u8>) -> Result<()> {
         self.simulate_latency().await;
 
-        let path = self.object_path(key);
         self.create_dir().await?;
-
-        let mut file = OpenOptions::new()
-            .write(true)
-            .truncate(true)
-            .create(true)
-            .open(path)
-            .await?;
-        file.write_all(&bytes).await?;
+        let path = self.object_path(key);
+        fs::write(path, bytes).await?;
         Ok(())
     }
 }

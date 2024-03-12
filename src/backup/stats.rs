@@ -1,8 +1,10 @@
 use chrono::{DateTime, Utc};
 
+#[derive(Debug)]
 pub struct Stats {
     pub start_time: DateTime<Utc>,
     pub end_time: Option<DateTime<Utc>>,
+    pub bytes_downloaded: u64,
     pub bytes_uploaded: u64,
     pub bytes_read: u64,
     pub blocks_uploaded: u64,
@@ -15,6 +17,7 @@ impl Stats {
             start_time: Utc::now(),
             end_time: None,
             bytes_read: 0,
+            bytes_downloaded: 0,
             bytes_uploaded: 0,
             blocks_used: 0,
             blocks_uploaded: 0,

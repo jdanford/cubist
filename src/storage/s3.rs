@@ -5,6 +5,7 @@ use crate::error::{Error, Result};
 
 use super::Storage;
 
+#[derive(Debug)]
 pub struct S3Storage {
     client: aws_sdk_s3::Client,
     bucket: String,

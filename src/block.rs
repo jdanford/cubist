@@ -5,7 +5,7 @@ use tokio::{
 };
 
 use crate::{
-    error::{Error, Result},
+    error::{assert_block_level_eq, assert_hash_eq, assert_size_multiple_of_hash, Error, Result},
     hash::{self, Hash},
     storage,
 };
@@ -73,7 +73,7 @@ impl Block {
         let (&level, bytes) = bytes
             .split_first()
             .ok_or_else(|| Error::InvalidBlockSize(0))?;
-        assert_level_eq(level, expected_level)?;
+        assert_block_level_eq(level, expected_level)?;
         Block::from_raw(&expected_hash, level, bytes.to_owned()).await
     }
 
@@ -147,33 +147,4 @@ pub fn chunker<R: AsyncRead + Unpin>(reader: R, target_size: u32) -> AsyncStream
     let min_size = target_size / 2;
     let max_size = target_size * 4;
     AsyncStreamCDC::new(reader, min_size, target_size, max_size)
-}
-
-pub fn assert_level_eq(actual: u8, expected: Option<u8>) -> Result<()> {
-    if let Some(expected) = expected {
-        if expected != actual {
-            return Err(Error::WrongBlockLevel { actual, expected });
-        }
-    }
-
-    Ok(())
-}
-
-pub fn assert_hash_eq(actual: &Hash, expected: &Hash) -> Result<()> {
-    if expected != actual {
-        return Err(Error::WrongBlockHash {
-            actual: *actual,
-            expected: *expected,
-        });
-    }
-
-    Ok(())
-}
-
-pub fn assert_size_multiple_of_hash(size: usize) -> Result<()> {
-    if size % hash::SIZE != 0 {
-        return Err(Error::InvalidBlockSize(size));
-    }
-
-    Ok(())
 }

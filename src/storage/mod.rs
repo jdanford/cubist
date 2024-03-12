@@ -19,6 +19,8 @@ pub trait Storage {
 
 pub const ARCHIVE_KEY_LATEST: &str = "archive:latest";
 
+pub const REF_COUNTS_KEY: &str = "ref-counts";
+
 pub fn archive_key(timestamp: &str) -> String {
     format!("archive:{timestamp}")
 }
