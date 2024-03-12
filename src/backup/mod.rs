@@ -89,7 +89,7 @@ async fn download_ref_counts(args: Arc<Args>, state: Arc<Mutex<State>>) -> Resul
     let bytes = args.storage.get(storage::REF_COUNTS_KEY).await?;
     state.lock().unwrap().stats.bytes_downloaded += bytes.len() as u64;
 
-    let ref_counts = deserialize(bytes)?;
+    let ref_counts = deserialize(&bytes)?;
     Ok(ref_counts)
 }
 
@@ -98,7 +98,7 @@ async fn upload_ref_counts(
     state: Arc<Mutex<State>>,
     ref_counts: &RefCounts,
 ) -> Result<()> {
-    let bytes = serialize(ref_counts);
+    let bytes = serialize(ref_counts)?;
     let size = bytes.len() as u64;
 
     args.storage.put(storage::REF_COUNTS_KEY, bytes).await?;
@@ -107,15 +107,15 @@ async fn upload_ref_counts(
 }
 
 async fn upload_archive(args: Arc<Args>, state: Arc<Mutex<State>>) -> Result<()> {
-    let start_time = state.lock().unwrap().stats.start_time;
-    let timestamp = start_time.format("%Y%m%d%H%M%S").to_string();
+    let time = state.lock().unwrap().stats.start_time;
+    let timestamp = time.format("%Y%m%d%H%M%S").to_string();
     let key = storage::archive_key(&timestamp);
     let timestamp_bytes = timestamp.into_bytes();
     let timestamp_size = timestamp_bytes.len() as u64;
 
     let task_state = state.clone();
     let archive_bytes =
-        spawn_blocking(move || serialize(&task_state.lock().unwrap().archive)).await?;
+        spawn_blocking(move || serialize(&task_state.lock().unwrap().archive)).await??;
     let archive_size = archive_bytes.len() as u64;
 
     args.storage.put(&key, archive_bytes).await?;

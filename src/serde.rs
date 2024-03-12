@@ -1,17 +1,18 @@
-use std::io::Cursor;
-
-use serde::{de::DeserializeOwned, Serialize};
+use bincode::{DefaultOptions, Options};
+use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
 
-pub fn serialize<T: Serialize>(value: &T) -> Vec<u8> {
-    let mut bytes = vec![];
-    ciborium::into_writer(value, &mut bytes).unwrap();
-    bytes
+pub fn serialize<T: Serialize>(value: &T) -> Result<Vec<u8>> {
+    let bytes = bincode_options().serialize(value)?;
+    Ok(bytes)
 }
 
-pub fn deserialize<T: DeserializeOwned>(bytes: Vec<u8>) -> Result<T> {
-    let reader = Cursor::new(bytes);
-    let value = ciborium::from_reader(reader)?;
+pub fn deserialize<'de, T: Deserialize<'de>>(bytes: &'de [u8]) -> Result<T> {
+    let value = bincode_options().deserialize(bytes)?;
     Ok(value)
+}
+
+fn bincode_options() -> impl Options {
+    DefaultOptions::new().with_varint_encoding()
 }

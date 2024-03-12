@@ -7,20 +7,17 @@ use crate::hash::Hash;
 use super::metadata::Metadata;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(tag = "type")]
+// #[serde(tag = "type")]
 pub enum Node {
     File {
-        #[serde(flatten)]
         metadata: Metadata,
         hash: Option<Hash>,
     },
     Symlink {
-        #[serde(flatten)]
         metadata: Metadata,
         path: PathBuf,
     },
     Directory {
-        #[serde(flatten)]
         metadata: Metadata,
         children: BTreeMap<OsString, Node>,
     },

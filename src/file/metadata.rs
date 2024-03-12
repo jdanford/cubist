@@ -1,6 +1,6 @@
 use std::os::unix::fs::MetadataExt;
 
-use chrono::{DateTime, Utc};
+use chrono::{serde::ts_milliseconds_option, DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -9,8 +9,11 @@ pub struct Metadata {
     pub mode: u32,
     pub group: u32,
     pub owner: u32,
+    #[serde(with = "ts_milliseconds_option")]
     pub accessed: Option<DateTime<Utc>>,
+    #[serde(with = "ts_milliseconds_option")]
     pub created: Option<DateTime<Utc>>,
+    #[serde(with = "ts_milliseconds_option")]
     pub modified: Option<DateTime<Utc>>,
 }
 

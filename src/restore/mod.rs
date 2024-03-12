@@ -84,6 +84,6 @@ pub async fn download_archive(storage: &BoxedStorage, stats: &mut Stats) -> Resu
 
     let archive_bytes = storage.get(&key).await?;
     stats.bytes_downloaded += archive_bytes.len() as u64;
-    let archive = spawn_blocking(move || deserialize(archive_bytes)).await??;
+    let archive = spawn_blocking(move || deserialize(&archive_bytes)).await??;
     Ok(archive)
 }

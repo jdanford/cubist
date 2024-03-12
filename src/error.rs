@@ -55,6 +55,12 @@ pub enum Error {
     },
 
     #[error("{source}")]
+    Bincode {
+        #[from]
+        source: bincode::Error,
+    },
+
+    #[error("{source}")]
     Join {
         #[from]
         source: JoinError,
@@ -95,12 +101,6 @@ pub enum Error {
 
     #[error("{0}")]
     Channel(String),
-
-    #[error("{0}")]
-    Deserializer(String),
-
-    #[error("{0}")]
-    Serializer(String),
 }
 
 impl<E, R> From<SdkError<E, R>> for Error {
@@ -112,18 +112,6 @@ impl<E, R> From<SdkError<E, R>> for Error {
 impl<T> From<SendError<T>> for Error {
     fn from(error: SendError<T>) -> Self {
         Error::Channel(error.to_string())
-    }
-}
-
-impl<E: Debug> From<ciborium::de::Error<E>> for Error {
-    fn from(error: ciborium::de::Error<E>) -> Self {
-        Error::Deserializer(error.to_string())
-    }
-}
-
-impl<E: Debug> From<ciborium::ser::Error<E>> for Error {
-    fn from(error: ciborium::ser::Error<E>) -> Self {
-        Error::Serializer(error.to_string())
     }
 }
 
