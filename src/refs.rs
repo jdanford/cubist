@@ -37,14 +37,12 @@ impl RefCounts {
         self.add_count(hash, 1);
     }
 
-    #[allow(dead_code)]
     pub fn add(&mut self, rhs: &Self) {
         for (hash, &count) in &rhs.map {
             self.add_count(hash, count);
         }
     }
 
-    #[allow(dead_code)]
     pub fn sub(&mut self, rhs: &Self) -> Result<HashSet<Hash>> {
         let mut removed = HashSet::new();
 

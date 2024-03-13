@@ -29,13 +29,13 @@ pub struct BackupArgs {
     #[arg(required = true)]
     pub paths: Vec<PathBuf>,
 
-    #[arg(long, default_value_t = DEFAULT_COMPRESSION_LEVEL, value_name = "LEVEL")]
+    #[arg(long, value_name = "LEVEL", default_value_t = DEFAULT_COMPRESSION_LEVEL)]
     pub compression_level: u8,
 
-    #[arg(long, default_value_t = DEFAULT_TARGET_BLOCK_SIZE, value_name = "SIZE")]
+    #[arg(long, value_name = "SIZE", default_value_t = DEFAULT_TARGET_BLOCK_SIZE)]
     pub target_block_size: u32,
 
-    #[arg(long, default_value_t = DEFAULT_MAX_CONCURRENCY, value_name = "N")]
+    #[arg(long, value_name = "N", default_value_t = DEFAULT_MAX_CONCURRENCY)]
     pub max_concurrency: u32,
 
     #[command(flatten)]
@@ -49,7 +49,7 @@ pub struct BackupArgs {
 pub struct RestoreArgs {
     pub path: PathBuf,
 
-    #[arg(long, default_value_t = DEFAULT_MAX_CONCURRENCY, value_name = "N")]
+    #[arg(long, value_name = "N", default_value_t = DEFAULT_MAX_CONCURRENCY)]
     pub max_concurrency: u32,
 
     #[command(flatten)]
@@ -64,7 +64,12 @@ pub struct StorageArgs {
     #[arg(long, group = "storage")]
     pub bucket: Option<String>,
 
-    #[arg(long, value_name = "PATH", group = "storage", group = "storage-local")]
+    #[arg(
+        long,
+        value_name = "STORAGE_PATH",
+        group = "storage",
+        group = "storage-local"
+    )]
     pub local: Option<PathBuf>,
 
     #[arg(long, value_parser = humantime::parse_duration, requires = "storage-local")]
@@ -76,8 +81,8 @@ pub struct LoggerArgs {
     #[arg(short, long, action = ArgAction::Count, group = "verbosity")]
     pub verbose: u8,
 
-    #[arg(short, long, group = "verbosity")]
-    pub quiet: bool,
+    #[arg(short, long, action = ArgAction::Count, group = "verbosity")]
+    pub quiet: u8,
 }
 
 pub async fn create_storage(args: StorageArgs) -> BoxedStorage {
@@ -101,15 +106,15 @@ pub fn init_logger(args: LoggerArgs) {
     logger::init(level);
 }
 
-fn log_level_from_args(verbose: u8, quiet: bool) -> log::LevelFilter {
+fn log_level_from_args(verbose: u8, quiet: u8) -> log::LevelFilter {
     let base_verbosity: i8 = verbose.try_into().unwrap();
-    let quiet_verbosity = if quiet { 0 } else { -1 };
+    let quiet_verbosity: i8 = quiet.try_into().unwrap();
     let verbosity = base_verbosity - quiet_verbosity;
     match verbosity {
-        -1 => log::LevelFilter::Error,
-        0 => log::LevelFilter::Warn,
-        1 => log::LevelFilter::Info,
-        2 => log::LevelFilter::Debug,
+        -2 => log::LevelFilter::Error,
+        -1 => log::LevelFilter::Warn,
+        0 => log::LevelFilter::Info,
+        1 => log::LevelFilter::Debug,
         _ => log::LevelFilter::Trace,
     }
 }
