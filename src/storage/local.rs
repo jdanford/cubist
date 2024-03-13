@@ -74,7 +74,13 @@ impl Storage for LocalStorage {
         self.simulate_latency().await;
 
         let path = self.object_path(key);
-        let bytes = fs::read(path).await?;
+        let bytes = fs::read(path).await.map_err(|err| {
+            if err.kind() == std::io::ErrorKind::NotFound {
+                Error::ItemNotFound(key.to_owned())
+            } else {
+                err.into()
+            }
+        })?;
         Ok(bytes)
     }
 

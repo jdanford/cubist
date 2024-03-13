@@ -9,7 +9,7 @@ use crate::{
 
 const DEFAULT_COMPRESSION_LEVEL: u8 = 3;
 const DEFAULT_TARGET_BLOCK_SIZE: u32 = 1024 * 1024;
-const DEFAULT_MAX_CONCURRENCY: usize = 64;
+const DEFAULT_MAX_CONCURRENCY: u32 = 64;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, propagate_version = true)]
@@ -36,7 +36,7 @@ pub struct BackupArgs {
     pub target_block_size: u32,
 
     #[arg(long, default_value_t = DEFAULT_MAX_CONCURRENCY, value_name = "N")]
-    pub max_concurrency: usize,
+    pub max_concurrency: u32,
 
     #[command(flatten)]
     pub storage: StorageArgs,
@@ -50,7 +50,7 @@ pub struct RestoreArgs {
     pub path: PathBuf,
 
     #[arg(long, default_value_t = DEFAULT_MAX_CONCURRENCY, value_name = "N")]
-    pub max_concurrency: usize,
+    pub max_concurrency: u32,
 
     #[command(flatten)]
     pub storage: StorageArgs,
@@ -67,14 +67,17 @@ pub struct StorageArgs {
     #[arg(long, value_name = "PATH", group = "storage", group = "storage-local")]
     pub local: Option<PathBuf>,
 
-    #[arg(long, value_parser = parse_duration_ms, requires = "storage-local")]
+    #[arg(long, value_parser = humantime::parse_duration, requires = "storage-local")]
     pub latency: Option<Duration>,
 }
 
 #[derive(Args, Debug)]
 pub struct LoggerArgs {
-    #[arg(short, long, action = ArgAction::Count)]
+    #[arg(short, long, action = ArgAction::Count, group = "verbosity")]
     pub verbose: u8,
+
+    #[arg(short, long, group = "verbosity")]
+    pub quiet: bool,
 }
 
 pub async fn create_storage(args: StorageArgs) -> BoxedStorage {
@@ -94,20 +97,19 @@ pub async fn create_storage(args: StorageArgs) -> BoxedStorage {
 
 #[allow(clippy::needless_pass_by_value)]
 pub fn init_logger(args: LoggerArgs) {
-    let level = log_level_from_verbose(args.verbose);
+    let level = log_level_from_args(args.verbose, args.quiet);
     logger::init(level);
 }
 
-fn log_level_from_verbose(n: u8) -> log::LevelFilter {
-    match n {
+fn log_level_from_args(verbose: u8, quiet: bool) -> log::LevelFilter {
+    let base_verbosity: i8 = verbose.try_into().unwrap();
+    let quiet_verbosity = if quiet { 0 } else { -1 };
+    let verbosity = base_verbosity - quiet_verbosity;
+    match verbosity {
+        -1 => log::LevelFilter::Error,
         0 => log::LevelFilter::Warn,
         1 => log::LevelFilter::Info,
         2 => log::LevelFilter::Debug,
         _ => log::LevelFilter::Trace,
     }
-}
-
-fn parse_duration_ms(s: &str) -> Result<Duration, String> {
-    let ms = s.parse().map_err(|_| format!("`{s}` is out of range"))?;
-    Ok(Duration::from_millis(ms))
 }

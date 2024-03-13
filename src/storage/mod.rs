@@ -3,7 +3,10 @@ mod s3;
 
 use async_trait::async_trait;
 
-use crate::{error::Result, hash::Hash};
+use crate::{
+    error::{Error, Result},
+    hash::Hash,
+};
 
 pub use {local::LocalStorage, s3::S3Storage};
 
@@ -15,10 +18,17 @@ pub trait Storage {
     async fn keys(&self, prefix: Option<&str>) -> Result<Vec<String>>;
     async fn get(&self, key: &str) -> Result<Vec<u8>>;
     async fn put(&self, key: &str, bytes: Vec<u8>) -> Result<()>;
+
+    async fn try_get(&self, key: &str) -> Result<Option<Vec<u8>>> {
+        match self.get(key).await {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(Error::ItemNotFound(_)) => Ok(None),
+            Err(err) => Err(err),
+        }
+    }
 }
 
 pub const ARCHIVE_KEY_LATEST: &str = "archive:latest";
-
 pub const REF_COUNTS_KEY: &str = "ref-counts";
 
 pub fn archive_key(timestamp: &str) -> String {

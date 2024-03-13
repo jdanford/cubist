@@ -1,13 +1,14 @@
 mod blocks;
 mod files;
-mod stats;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use tokio::task::spawn_blocking;
-use tokio::{spawn, try_join};
+use humantime::format_duration;
+use log::info;
+use tokio::{spawn, task::spawn_blocking, try_join};
 
+use crate::stats::format_size;
 use crate::storage;
 use crate::{
     archive::Archive,
@@ -15,19 +16,17 @@ use crate::{
     error::Result,
     refs::RefCounts,
     serde::{deserialize, serialize},
+    stats::Stats,
     storage::BoxedStorage,
 };
 
-use self::{
-    files::{backup_recursive, upload_pending_files},
-    stats::Stats,
-};
+use self::files::{backup_recursive, upload_pending_files};
 
 struct Args {
     storage: BoxedStorage,
     compression_level: u8,
     target_block_size: u32,
-    max_concurrency: usize,
+    max_concurrency: u32,
     paths: Vec<PathBuf>,
 }
 
@@ -51,7 +50,7 @@ pub async fn main(args: cli::BackupArgs) -> Result<()> {
         paths: args.paths,
     });
     let state = Arc::new(Mutex::new(State { archive, stats }));
-    let (sender, receiver) = async_channel::bounded(args.max_concurrency);
+    let (sender, receiver) = async_channel::bounded(args.max_concurrency as usize);
 
     let uploader_args = args.clone();
     let uploader_state = state.clone();
@@ -67,38 +66,47 @@ pub async fn main(args: cli::BackupArgs) -> Result<()> {
     uploader_task.await?;
 
     try_join!(
-        async { upload_archive(args.clone(), state.clone()).await },
-        async {
-            // TODO: don't ignore all errors
-            let mut ref_counts = download_ref_counts(args.clone(), state.clone())
-                .await
-                .unwrap_or_else(|_| RefCounts::new());
-            ref_counts.add(&state.lock().unwrap().archive.ref_counts);
-            upload_ref_counts(args.clone(), state.clone(), &ref_counts).await
-        }
+        upload_archive(args.clone(), state.clone()),
+        update_ref_counts(args.clone(), state.clone())
     )?;
 
     let stats = &mut state.lock().unwrap().stats;
-    stats.end();
-    // TODO: print stats
+    let elapsed_time = stats.end();
+
+    info!("bytes downloaded: {}", format_size(stats.bytes_downloaded));
+    info!("bytes uploaded: {}", format_size(stats.bytes_uploaded));
+    info!("bytes read: {}", format_size(stats.bytes_read));
+    info!("files read: {}", stats.files_read);
+    info!("blocks uploaded: {}", stats.blocks_uploaded);
+    info!("blocks used: {}", stats.blocks_used);
+    info!("elapsed time: {}", format_duration(elapsed_time));
 
     Ok(())
 }
 
-async fn download_ref_counts(args: Arc<Args>, state: Arc<Mutex<State>>) -> Result<RefCounts> {
-    let bytes = args.storage.get(storage::REF_COUNTS_KEY).await?;
-    state.lock().unwrap().stats.bytes_downloaded += bytes.len() as u64;
+async fn update_ref_counts(args: Arc<Args>, state: Arc<Mutex<State>>) -> Result<()> {
+    let mut ref_counts = download_ref_counts(args.clone(), state.clone()).await?;
+    ref_counts.add(&state.lock().unwrap().archive.ref_counts);
+    upload_ref_counts(args.clone(), state.clone(), ref_counts).await
+}
 
-    let ref_counts = deserialize(&bytes)?;
+async fn download_ref_counts(args: Arc<Args>, state: Arc<Mutex<State>>) -> Result<RefCounts> {
+    let maybe_bytes = args.storage.try_get(storage::REF_COUNTS_KEY).await?;
+    let ref_counts = if let Some(bytes) = maybe_bytes {
+        state.lock().unwrap().stats.bytes_downloaded += bytes.len() as u64;
+        spawn_blocking(move || deserialize(&bytes)).await??
+    } else {
+        RefCounts::new()
+    };
     Ok(ref_counts)
 }
 
 async fn upload_ref_counts(
     args: Arc<Args>,
     state: Arc<Mutex<State>>,
-    ref_counts: &RefCounts,
+    ref_counts: RefCounts,
 ) -> Result<()> {
-    let bytes = serialize(ref_counts)?;
+    let bytes = spawn_blocking(move || serialize(&ref_counts)).await??;
     let size = bytes.len() as u64;
 
     args.storage.put(storage::REF_COUNTS_KEY, bytes).await?;

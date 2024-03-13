@@ -54,7 +54,7 @@ impl FileMap {
                     return Err(Error::FileIsNotDirectory(current_path));
                 }
                 None => {
-                    return Err(Error::DirectoryDoesNotExist(current_path));
+                    return Err(Error::FileDoesNotExist(current_path));
                 }
             }
         }
@@ -108,19 +108,3 @@ fn get_normal_component(component: Component) -> Option<&OsStr> {
         None
     }
 }
-
-// fn serialize_with_lossy_string_keys<'a, M, T, S>(
-//     value: &'a M,
-//     serializer: S,
-// ) -> std::result::Result<S::Ok, S::Error>
-// where
-//     &'a M: IntoIterator<Item = (&'a OsString, &'a T)>,
-//     T: 'a + Serialize,
-//     S: Serializer,
-// {
-//     let mut map = serializer.serialize_map(None)?;
-//     for (k, v) in value {
-//         map.serialize_entry(&k.to_string_lossy(), v)?;
-//     }
-//     map.end()
-// }

@@ -21,3 +21,4 @@ mod file;
 mod hash;
 mod refs;
 mod serde;
+mod stats;

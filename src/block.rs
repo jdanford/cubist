@@ -73,7 +73,7 @@ impl Block {
         let (&level, bytes) = bytes
             .split_first()
             .ok_or_else(|| Error::InvalidBlockSize(0))?;
-        assert_block_level_eq(level, expected_level)?;
+        assert_block_level_eq(expected_hash, level, expected_level)?;
         Block::from_raw(&expected_hash, level, bytes.to_owned()).await
     }
 

@@ -4,7 +4,7 @@ use std::{
 };
 
 use async_channel::{Receiver, Sender};
-use log::info;
+use log::debug;
 use tokio::{fs, spawn, sync::Semaphore};
 
 use crate::{
@@ -14,7 +14,7 @@ use crate::{
 };
 
 use super::{
-    blocks::{download_blocks, ActiveDownload},
+    blocks::{download_block_recursive, ActiveDownload},
     Args, State,
 };
 
@@ -78,7 +78,9 @@ pub async fn download_pending_files(
     state: Arc<Mutex<State>>,
     receiver: Receiver<PendingDownload>,
 ) {
-    let semaphore = Arc::new(Semaphore::new(args.max_concurrency));
+    let permit_count = args.max_concurrency;
+    let semaphore = Arc::new(Semaphore::new(permit_count as usize));
+
     while let Ok(pending_file) = receiver.recv().await {
         let args = args.clone();
         let state = state.clone();
@@ -92,7 +94,6 @@ pub async fn download_pending_files(
         });
     }
 
-    let permit_count = u32::try_from(args.max_concurrency).unwrap();
     let _ = semaphore.acquire_many(permit_count).await.unwrap();
 }
 
@@ -102,23 +103,15 @@ async fn download_pending_file(
     pending_file: PendingDownload,
 ) -> Result<()> {
     let mut file = ActiveDownload::new(&pending_file).await?;
+    state.lock().unwrap().stats.files_created += 1;
 
     if let Some(hash) = pending_file.hash {
-        download_file(args, state, &mut file, hash).await?;
+        download_block_recursive(args, state.clone(), &mut file, hash, None).await?;
         file.sync_all().await?;
     }
 
     restore_metadata(&pending_file.path, &pending_file.metadata, FileType::File).await?;
     let hash_str = hash::format(&pending_file.hash);
-    info!("{hash_str} -> {}", pending_file.path.display());
+    debug!("{hash_str} -> {}", pending_file.path.display());
     Ok(())
-}
-
-pub async fn download_file(
-    args: Arc<Args>,
-    state: Arc<Mutex<State>>,
-    file: &mut ActiveDownload,
-    hash: Hash,
-) -> Result<()> {
-    download_blocks(args, state, file, hash, None).await
 }

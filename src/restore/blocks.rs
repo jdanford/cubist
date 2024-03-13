@@ -70,7 +70,7 @@ impl DerefMut for ActiveDownload {
 }
 
 #[async_recursion]
-pub async fn download_blocks(
+pub async fn download_block_recursive(
     args: Arc<Args>,
     state: Arc<Mutex<State>>,
     file: &mut ActiveDownload,
@@ -82,7 +82,7 @@ pub async fn download_blocks(
     // copied to avoid holding mutex lock
     let maybe_block = state.lock().unwrap().local_blocks.get(&hash).copied();
     if let Some(local_block) = maybe_block {
-        assert_block_level_eq(0, level)?;
+        assert_block_level_eq(hash, 0, level)?;
         let data = read_local_block(args, local_block).await?;
         write_local_block(state.clone(), file, &data).await?;
         return Ok(());
@@ -103,7 +103,8 @@ pub async fn download_blocks(
             level, children, ..
         } => {
             for hash in children {
-                download_blocks(args.clone(), state.clone(), file, hash, Some(level - 1)).await?;
+                download_block_recursive(args.clone(), state.clone(), file, hash, Some(level - 1))
+                    .await?;
             }
         }
     }

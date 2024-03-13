@@ -90,6 +90,9 @@ async fn upload_block(args: Arc<Args>, state: Arc<Mutex<State>>, block: Block) -
         state.lock().unwrap().stats.bytes_uploaded += size;
     }
 
-    state.lock().unwrap().stats.blocks_used += 1;
+    if !state.lock().unwrap().archive.ref_counts.contains(&hash) {
+        state.lock().unwrap().stats.blocks_used += 1;
+    }
+
     Ok(hash)
 }

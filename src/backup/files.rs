@@ -6,7 +6,7 @@ use std::{
 };
 
 use async_channel::{Receiver, Sender};
-use log::{info, warn};
+use log::{debug, warn};
 use tokio::{
     fs::{self, File},
     io::BufReader,
@@ -92,7 +92,9 @@ pub async fn upload_pending_files(
     state: Arc<Mutex<State>>,
     receiver: Receiver<PendingUpload>,
 ) {
-    let semaphore = Arc::new(Semaphore::new(args.max_concurrency));
+    let permit_count = args.max_concurrency;
+    let semaphore = Arc::new(Semaphore::new(permit_count as usize));
+
     while let Ok(pending_file) = receiver.recv().await {
         let args = args.clone();
         let state = state.clone();
@@ -106,7 +108,6 @@ pub async fn upload_pending_files(
         });
     }
 
-    let permit_count = u32::try_from(args.max_concurrency).unwrap();
     let _ = semaphore.acquire_many(permit_count).await.unwrap();
 }
 
@@ -127,7 +128,7 @@ async fn upload_pending_file(
         .insert(pending_file.archive_path, node)?;
 
     let hash_str = hash::format(&hash);
-    info!("{hash_str} <- {}", pending_file.local_path.display());
+    debug!("{hash_str} <- {}", pending_file.local_path.display());
     Ok(())
 }
 
@@ -147,6 +148,7 @@ pub async fn upload_file(
         tree.add_leaf(chunk.data).await?;
     }
 
+    state.lock().unwrap().stats.files_read += 1;
     let hash = tree.finalize().await?;
     Ok(hash)
 }

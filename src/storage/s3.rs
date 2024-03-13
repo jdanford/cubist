@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use aws_sdk_s3::Client;
+use aws_sdk_s3::{operation::get_object::GetObjectError, Client};
 
 use crate::error::{Error, Result};
 
@@ -63,7 +63,11 @@ impl Storage for S3Storage {
             .bucket(&self.bucket)
             .key(key)
             .send()
-            .await?;
+            .await
+            .map_err(|err| match err.into_service_error() {
+                GetObjectError::NoSuchKey(_) => Error::ItemNotFound(key.to_owned()),
+                err => Error::Sdk(err.to_string()),
+            })?;
         let bytes = object.body.collect().await?.to_vec();
         Ok(bytes)
     }

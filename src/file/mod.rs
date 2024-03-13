@@ -44,7 +44,7 @@ pub async fn restore_metadata(path: &Path, metadata: &Metadata, file_type: FileT
 pub async fn try_exists<P: AsRef<Path>>(path: P) -> Result<bool> {
     match fs::symlink_metadata(path).await {
         Ok(_) => Ok(true),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(error.into()),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(err) => Err(err.into()),
     }
 }

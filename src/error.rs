@@ -15,17 +15,20 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("`{0}` is not a directory")]
-    FileIsNotDirectory(PathBuf),
-
-    #[error("directory `{0}` does not exist")]
-    DirectoryDoesNotExist(PathBuf),
-
-    #[error("inode {0} does not exist")]
-    InodeDoesNotExist(u64),
+    #[error("no item found for key `{0}`")]
+    ItemNotFound(String),
 
     #[error("key `{0}` is invalid")]
     InvalidKey(String),
+
+    #[error("`{0}` is not a directory")]
+    FileIsNotDirectory(PathBuf),
+
+    #[error("`{0}` does not exist")]
+    FileDoesNotExist(PathBuf),
+
+    #[error("inode {0} does not exist")]
+    InodeDoesNotExist(u64),
 
     #[error("path is empty")]
     EmptyPath,
@@ -36,11 +39,22 @@ pub enum Error {
     #[error("`{0}` already exists")]
     FileAlreadyExists(PathBuf),
 
-    #[error("block has hash `{actual}`, expected `{expected}`")]
+    #[error("block {hash} has ref count {actual}, expected at least {expected}")]
+    WrongRefCount {
+        hash: Hash,
+        actual: u64,
+        expected: u64,
+    },
+
+    #[error("block has hash {actual}, expected {expected}")]
     WrongBlockHash { actual: Hash, expected: Hash },
 
-    #[error("block has level `{actual}`, expected `{expected}`")]
-    WrongBlockLevel { actual: u8, expected: u8 },
+    #[error("block has level {actual}, expected {expected}")]
+    WrongBlockLevel {
+        hash: Hash,
+        actual: u8,
+        expected: u8,
+    },
 
     #[error("block has invalid size {0}")]
     InvalidBlockSize(usize),
@@ -115,10 +129,14 @@ impl<T> From<SendError<T>> for Error {
     }
 }
 
-pub fn assert_block_level_eq(actual: u8, expected: Option<u8>) -> Result<()> {
+pub fn assert_block_level_eq(hash: Hash, actual: u8, expected: Option<u8>) -> Result<()> {
     if let Some(expected) = expected {
         if expected != actual {
-            return Err(Error::WrongBlockLevel { actual, expected });
+            return Err(Error::WrongBlockLevel {
+                hash,
+                actual,
+                expected,
+            });
         }
     }
 

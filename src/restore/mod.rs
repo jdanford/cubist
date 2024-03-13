@@ -1,6 +1,5 @@
 mod blocks;
 mod files;
-mod stats;
 
 use std::{
     collections::HashMap,
@@ -8,6 +7,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use humantime::format_duration;
+use log::info;
 use tokio::{spawn, task::spawn_blocking};
 
 use crate::{
@@ -16,18 +17,18 @@ use crate::{
     error::Result,
     hash::Hash,
     serde::deserialize,
+    stats::{format_size, Stats},
     storage::{self, BoxedStorage},
 };
 
 use self::{
     blocks::LocalBlock,
     files::{download_pending_files, restore_recursive},
-    stats::Stats,
 };
 
 struct Args {
     storage: BoxedStorage,
-    max_concurrency: usize,
+    max_concurrency: u32,
     output_path: PathBuf,
     archive: Archive,
 }
@@ -56,7 +57,7 @@ pub async fn main(args: cli::RestoreArgs) -> Result<()> {
         local_blocks,
         stats,
     }));
-    let (sender, receiver) = async_channel::bounded(args.max_concurrency);
+    let (sender, receiver) = async_channel::bounded(args.max_concurrency as usize);
 
     let downloader_args = args.clone();
     let downloader_state = state.clone();
@@ -70,8 +71,14 @@ pub async fn main(args: cli::RestoreArgs) -> Result<()> {
     downloader_task.await?;
 
     let stats = &mut state.lock().unwrap().stats;
-    stats.end();
-    // TODO: print stats
+    let elapsed_time = stats.end();
+
+    info!("bytes downloaded: {}", format_size(stats.bytes_downloaded));
+    info!("bytes written: {}", format_size(stats.bytes_written));
+    info!("files created: {}", stats.files_created);
+    info!("blocks downloaded: {}", stats.blocks_downloaded);
+    info!("blocks used: {}", stats.blocks_used);
+    info!("elapsed time: {}", format_duration(elapsed_time));
 
     Ok(())
 }

@@ -22,6 +22,10 @@ impl RefCounts {
         }
     }
 
+    pub fn contains(&mut self, hash: &Hash) -> bool {
+        self.map.contains_key(hash)
+    }
+
     pub fn add_count(&mut self, hash: &Hash, count: u64) {
         self.map
             .entry(*hash)
