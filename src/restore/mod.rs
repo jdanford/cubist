@@ -1,15 +1,11 @@
 mod blocks;
 mod files;
 
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use humantime::format_duration;
 use log::info;
-use tokio::{spawn, task::spawn_blocking};
+use tokio::{spawn, sync::RwLock, task::spawn_blocking};
 
 use crate::{
     archive::Archive,
@@ -27,33 +23,32 @@ use self::{
 };
 
 struct Args {
-    storage: BoxedStorage,
     max_concurrency: u32,
     output_path: PathBuf,
     archive: Archive,
 }
 
-#[derive(Debug)]
 struct State {
+    storage: BoxedStorage,
     local_blocks: HashMap<Hash, LocalBlock>,
     stats: Stats,
 }
 
 pub async fn main(args: cli::RestoreArgs) -> Result<()> {
     cli::init_logger(args.logger);
-    let storage = cli::create_storage(args.storage).await;
+    let mut storage = cli::create_storage(args.storage).await;
 
     let local_blocks = HashMap::new();
     let mut stats = Stats::new();
-    let archive = download_archive(&storage, &mut stats).await?;
+    let archive = download_archive(&mut storage, &mut stats).await?;
 
     let args = Arc::new(Args {
-        storage,
         max_concurrency: args.max_concurrency,
         output_path: args.path,
         archive,
     });
-    let state = Arc::new(Mutex::new(State {
+    let state = Arc::new(RwLock::new(State {
+        storage,
         local_blocks,
         stats,
     }));
@@ -70,27 +65,30 @@ pub async fn main(args: cli::RestoreArgs) -> Result<()> {
     sender.close();
     downloader_task.await?;
 
-    let stats = &mut state.lock().unwrap().stats;
-    let elapsed_time = stats.end();
+    let mut locked_state = state.write().await;
+    let elapsed_time = locked_state.stats.end();
+    let main_stats = &locked_state.stats;
+    let storage_stats = locked_state.storage.stats();
 
-    info!("bytes downloaded: {}", format_size(stats.bytes_downloaded));
-    info!("bytes written: {}", format_size(stats.bytes_written));
-    info!("files created: {}", stats.files_created);
-    info!("blocks downloaded: {}", stats.blocks_downloaded);
-    info!("blocks used: {}", stats.blocks_used);
+    info!(
+        "bytes downloaded: {}",
+        format_size(storage_stats.bytes_downloaded)
+    );
+    info!("bytes written: {}", format_size(main_stats.bytes_written));
+    info!("files created: {}", main_stats.files_created);
+    info!("blocks downloaded: {}", main_stats.blocks_downloaded);
+    info!("blocks used: {}", main_stats.blocks_used);
     info!("elapsed time: {}", format_duration(elapsed_time));
 
     Ok(())
 }
 
-pub async fn download_archive(storage: &BoxedStorage, stats: &mut Stats) -> Result<Archive> {
+pub async fn download_archive(storage: &mut BoxedStorage, _stats: &mut Stats) -> Result<Archive> {
     let timestamp_bytes = storage.get(storage::ARCHIVE_KEY_LATEST).await?;
-    stats.bytes_downloaded += timestamp_bytes.len() as u64;
     let timestamp = String::from_utf8(timestamp_bytes)?;
     let key = storage::archive_key(&timestamp);
 
     let archive_bytes = storage.get(&key).await?;
-    stats.bytes_downloaded += archive_bytes.len() as u64;
     let archive = spawn_blocking(move || deserialize(&archive_bytes)).await??;
     Ok(archive)
 }

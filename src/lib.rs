@@ -5,6 +5,7 @@
     clippy::module_name_repetitions,
     clippy::must_use_candidate,
     clippy::new_without_default,
+    clippy::no_effect_underscore_binding,
     clippy::similar_names
 )]
 

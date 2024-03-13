@@ -1,4 +1,6 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+
+use tokio::sync::RwLock;
 
 use crate::{
     block::Block,
@@ -10,12 +12,12 @@ use super::{Args, State};
 
 pub struct UploadTree {
     args: Arc<Args>,
-    state: Arc<Mutex<State>>,
+    state: Arc<RwLock<State>>,
     layers: Vec<Vec<Hash>>,
 }
 
 impl UploadTree {
-    pub fn new(args: Arc<Args>, state: Arc<Mutex<State>>) -> Self {
+    pub fn new(args: Arc<Args>, state: Arc<RwLock<State>>) -> Self {
         UploadTree {
             args,
             state,
@@ -26,7 +28,7 @@ impl UploadTree {
     pub async fn add_leaf(&mut self, data: Vec<u8>) -> Result<()> {
         let block = Block::leaf(data).await?;
         let hash = upload_block(self.args.clone(), self.state.clone(), block).await?;
-        self.state.lock().unwrap().archive.add_ref(&hash);
+        self.state.write().await.archive.add_ref(&hash);
         self.add_inner(hash, false).await?;
         Ok(())
     }
@@ -70,29 +72,23 @@ impl UploadTree {
             let children = layer.drain(range).collect();
             let block = Block::branch(level, children).await?;
             hash = upload_block(self.args.clone(), self.state.clone(), block).await?;
-            self.state.lock().unwrap().archive.add_ref(&hash);
+            self.state.write().await.archive.add_ref(&hash);
         }
 
         Ok(())
     }
 }
 
-async fn upload_block(args: Arc<Args>, state: Arc<Mutex<State>>, block: Block) -> Result<Hash> {
+async fn upload_block(args: Arc<Args>, state: Arc<RwLock<State>>, block: Block) -> Result<Hash> {
     let key = block.storage_key();
     let hash = block.hash().to_owned();
 
-    if !args.storage.exists(&key).await? {
+    if !state.write().await.storage.exists(&key).await? {
         let bytes = block.encode(args.compression_level).await?;
-        let size = bytes.len() as u64;
-
-        args.storage.put(&key, bytes).await?;
-        state.lock().unwrap().stats.blocks_uploaded += 1;
-        state.lock().unwrap().stats.bytes_uploaded += size;
+        state.write().await.storage.put(&key, bytes).await?;
+        state.write().await.stats.blocks_uploaded += 1;
     }
 
-    if !state.lock().unwrap().archive.ref_counts.contains(&hash) {
-        state.lock().unwrap().stats.blocks_used += 1;
-    }
-
+    state.write().await.stats.blocks_used += 1;
     Ok(hash)
 }

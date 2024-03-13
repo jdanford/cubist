@@ -22,7 +22,7 @@ impl RefCounts {
         }
     }
 
-    pub fn contains(&mut self, hash: &Hash) -> bool {
+    pub fn contains(&self, hash: &Hash) -> bool {
         self.map.contains_key(hash)
     }
 
@@ -46,19 +46,23 @@ impl RefCounts {
     pub fn sub(&mut self, rhs: &Self) -> Result<HashSet<Hash>> {
         let mut removed = HashSet::new();
 
-        for (hash, &rhs_count) in &rhs.map {
-            let lhs_count = self.map.get(hash).copied().unwrap_or(0);
+        for (&hash, &rhs_count) in &rhs.map {
+            let lhs_count = self.map.get(&hash).copied().unwrap_or(0);
             match lhs_count.cmp(&rhs_count) {
                 Ordering::Greater => {
                     let count = rhs_count - lhs_count;
-                    self.map.insert(*hash, count);
+                    self.map.insert(hash, count);
                 }
                 Ordering::Equal => {
-                    self.map.remove(hash);
-                    removed.insert(*hash);
+                    self.map.remove(&hash);
+                    removed.insert(hash);
                 }
                 Ordering::Less => {
-                    return Err(Error::InvalidKey(hash.to_string()));
+                    return Err(Error::WrongRefCount {
+                        hash,
+                        actual: lhs_count,
+                        expected: rhs_count,
+                    });
                 }
             }
         }

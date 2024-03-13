@@ -6,17 +6,22 @@ use tokio::{fs, time::sleep};
 
 use crate::error::{Error, Result};
 
-use super::Storage;
+use super::{stats::StorageStats, Storage};
 
 #[derive(Debug)]
 pub struct LocalStorage {
     path: PathBuf,
     latency: Option<Duration>,
+    stats: StorageStats,
 }
 
 impl LocalStorage {
     pub fn new(path: PathBuf, latency: Option<Duration>) -> Self {
-        LocalStorage { path, latency }
+        LocalStorage {
+            path,
+            latency,
+            stats: StorageStats::new(),
+        }
     }
 
     fn object_path(&self, key: &str) -> PathBuf {
@@ -24,10 +29,12 @@ impl LocalStorage {
     }
 
     async fn create_dir(&self) -> Result<()> {
-        match fs::create_dir(&self.path).await {
+        let result = fs::create_dir(&self.path).await;
+        match result {
             Err(err) if err.kind() == io::ErrorKind::AlreadyExists => Ok(()),
             result => result,
         }?;
+
         Ok(())
     }
 
@@ -43,15 +50,17 @@ impl LocalStorage {
 
 #[async_trait]
 impl Storage for LocalStorage {
-    async fn exists(&self, key: &str) -> Result<bool> {
+    async fn exists(&mut self, key: &str) -> Result<bool> {
         self.simulate_latency().await;
 
         let path = self.object_path(key);
         let exists = fs::try_exists(path).await?;
+
+        self.stats.get_requests += 1;
         Ok(exists)
     }
 
-    async fn keys(&self, prefix: Option<&str>) -> Result<Vec<String>> {
+    async fn keys(&mut self, prefix: Option<&str>) -> Result<Vec<String>> {
         self.simulate_latency().await;
 
         let mut read_dir = fs::read_dir(&self.path).await?;
@@ -67,10 +76,11 @@ impl Storage for LocalStorage {
             }
         }
 
+        self.stats.get_requests += 1;
         Ok(keys)
     }
 
-    async fn get(&self, key: &str) -> Result<Vec<u8>> {
+    async fn get(&mut self, key: &str) -> Result<Vec<u8>> {
         self.simulate_latency().await;
 
         let path = self.object_path(key);
@@ -81,15 +91,31 @@ impl Storage for LocalStorage {
                 err.into()
             }
         })?;
+
+        self.stats.bytes_downloaded += bytes.len() as u64;
+        self.stats.get_requests += 1;
         Ok(bytes)
     }
 
-    async fn put(&self, key: &str, bytes: Vec<u8>) -> Result<()> {
+    async fn put(&mut self, key: &str, bytes: Vec<u8>) -> Result<()> {
         self.simulate_latency().await;
 
-        self.create_dir().await?;
         let path = self.object_path(key);
+        let size = bytes.len() as u64;
+
+        self.create_dir().await?;
         fs::write(path, bytes).await?;
+
+        self.stats.bytes_uploaded += size;
+        self.stats.put_requests += 1;
         Ok(())
+    }
+
+    fn stats(&self) -> &StorageStats {
+        &self.stats
+    }
+
+    fn stats_mut(&mut self) -> &mut StorageStats {
+        &mut self.stats
     }
 }

@@ -1,13 +1,14 @@
 use std::{
     io::SeekFrom,
     ops::{Deref, DerefMut},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use async_recursion::async_recursion;
 use tokio::{
     fs::File,
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufWriter},
+    sync::RwLock,
 };
 
 use crate::{
@@ -72,15 +73,15 @@ impl DerefMut for ActiveDownload {
 #[async_recursion]
 pub async fn download_block_recursive(
     args: Arc<Args>,
-    state: Arc<Mutex<State>>,
+    state: Arc<RwLock<State>>,
     file: &mut ActiveDownload,
     hash: Hash,
     level: Option<u8>,
 ) -> Result<()> {
-    state.lock().unwrap().stats.blocks_used += 1;
+    state.write().await.stats.blocks_used += 1;
 
     // copied to avoid holding mutex lock
-    let maybe_block = state.lock().unwrap().local_blocks.get(&hash).copied();
+    let maybe_block = state.read().await.local_blocks.get(&hash).copied();
     if let Some(local_block) = maybe_block {
         assert_block_level_eq(hash, 0, level)?;
         let data = read_local_block(args, local_block).await?;
@@ -89,15 +90,14 @@ pub async fn download_block_recursive(
     }
 
     let key = storage::block_key(&hash);
-    let bytes = args.storage.get(&key).await?;
-    state.lock().unwrap().stats.blocks_downloaded += 1;
-    state.lock().unwrap().stats.bytes_downloaded += bytes.len() as u64;
+    let bytes = state.write().await.storage.get(&key).await?;
+    state.write().await.stats.blocks_downloaded += 1;
 
     let block = Block::decode(hash, level, &bytes).await?;
     match block {
         Block::Leaf { data, .. } => {
             let local_block = write_local_block(state.clone(), file, &data).await?;
-            state.lock().unwrap().local_blocks.insert(hash, local_block);
+            state.write().await.local_blocks.insert(hash, local_block);
         }
         Block::Branch {
             level, children, ..
@@ -113,7 +113,7 @@ pub async fn download_block_recursive(
 }
 
 async fn write_local_block(
-    state: Arc<Mutex<State>>,
+    state: Arc<RwLock<State>>,
     file: &mut ActiveDownload,
     data: &[u8],
 ) -> Result<LocalBlock> {
@@ -126,7 +126,7 @@ async fn write_local_block(
     file.write_all(data).await?;
     file.offset += length as u64;
 
-    state.lock().unwrap().stats.bytes_written += length as u64;
+    state.write().await.stats.bytes_written += length as u64;
     Ok(local_block)
 }
 
@@ -135,13 +135,13 @@ async fn read_local_block(args: Arc<Args>, local_block: LocalBlock) -> Result<Ve
         .archive
         .path(local_block.inode)
         .ok_or_else(|| Error::InodeDoesNotExist(local_block.inode))?;
-    let mut block_file = File::open(path).await?;
+    let mut file = File::open(path).await?;
     let seek_pos = SeekFrom::Start(local_block.offset);
     let read_length = local_block.length as usize;
     let mut data = vec![0; read_length];
 
-    block_file.seek(seek_pos).await?;
-    block_file.read_exact(&mut data).await?;
+    file.seek(seek_pos).await?;
+    file.read_exact(&mut data).await?;
 
     Ok(data)
 }

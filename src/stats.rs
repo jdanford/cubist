@@ -7,8 +7,6 @@ use humansize::{ToF64, Unsigned, BINARY};
 pub struct Stats {
     pub start_time: DateTime<Utc>,
     pub end_time: Option<DateTime<Utc>>,
-    pub bytes_downloaded: u64,
-    pub bytes_uploaded: u64,
     pub bytes_read: u64,
     pub bytes_written: u64,
     pub files_read: u64,
@@ -23,8 +21,6 @@ impl Stats {
         Stats {
             start_time: Utc::now(),
             end_time: None,
-            bytes_downloaded: 0,
-            bytes_uploaded: 0,
             bytes_read: 0,
             bytes_written: 0,
             files_read: 0,
@@ -42,10 +38,6 @@ impl Stats {
         let ms = delta.num_milliseconds().try_into().unwrap();
         Duration::from_millis(ms)
     }
-
-    // pub fn elapsed_time(&self) -> Option<TimeDelta> {
-    //     self.end_time.map(|end| end - self.start_time)
-    // }
 }
 
 pub fn format_size<T: ToF64 + Unsigned>(input: T) -> String {
