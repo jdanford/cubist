@@ -7,7 +7,7 @@ use std::{
 use async_recursion::async_recursion;
 use tokio::{
     fs::File,
-    io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufWriter},
+    io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, BufWriter},
     sync::RwLock,
 };
 
@@ -135,13 +135,15 @@ async fn read_local_block(args: Arc<Args>, local_block: LocalBlock) -> Result<Ve
         .archive
         .path(local_block.inode)
         .ok_or_else(|| Error::InodeDoesNotExist(local_block.inode))?;
-    let mut file = File::open(path).await?;
+    let file = File::open(path).await?;
+    let mut reader = BufReader::new(file);
+
     let seek_pos = SeekFrom::Start(local_block.offset);
     let read_length = local_block.length as usize;
     let mut data = vec![0; read_length];
 
-    file.seek(seek_pos).await?;
-    file.read_exact(&mut data).await?;
+    reader.seek(seek_pos).await?;
+    reader.read_exact(&mut data).await?;
 
     Ok(data)
 }

@@ -1,28 +1,25 @@
 mod blocks;
 mod files;
 
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use humantime::format_duration;
 use log::info;
-use tokio::sync::RwLock;
-use tokio::{spawn, task::spawn_blocking, try_join};
+use tokio::{spawn, sync::RwLock, task::spawn_blocking, try_join};
 
-use crate::stats::format_size;
-use crate::storage;
 use crate::{
     archive::Archive,
-    cli::{self},
+    cli,
     error::Result,
     refs::RefCounts,
     serde::{deserialize, serialize},
-    stats::Stats,
-    storage::BoxedStorage,
+    stats::{format_size, Stats},
+    storage::{self, BoxedStorage},
 };
 
 use self::files::{backup_recursive, upload_pending_files};
 
+#[derive(Debug)]
 struct Args {
     compression_level: u8,
     target_block_size: u32,
@@ -30,18 +27,22 @@ struct Args {
     paths: Vec<PathBuf>,
 }
 
+#[derive(Debug)]
 struct State {
     storage: BoxedStorage,
     archive: Archive,
+    ref_counts: RefCounts,
     stats: Stats,
 }
 
 pub async fn main(args: cli::BackupArgs) -> Result<()> {
     cli::init_logger(args.logger);
-    let storage = cli::create_storage(args.storage).await;
+    let mut storage = cli::create_storage(args.storage).await;
 
     let archive = Archive::new();
     let stats = Stats::new();
+    let ref_counts = download_ref_counts(&mut storage).await?;
+
     let args = Arc::new(Args {
         compression_level: args.compression_level,
         target_block_size: args.target_block_size,
@@ -51,6 +52,7 @@ pub async fn main(args: cli::BackupArgs) -> Result<()> {
     let state = Arc::new(RwLock::new(State {
         storage,
         archive,
+        ref_counts,
         stats,
     }));
     let (sender, receiver) = async_channel::bounded(args.max_concurrency as usize);
@@ -68,15 +70,23 @@ pub async fn main(args: cli::BackupArgs) -> Result<()> {
     sender.close();
     uploader_task.await?;
 
+    let State {
+        storage,
+        archive,
+        ref_counts,
+        mut stats,
+    } = Arc::try_unwrap(state).unwrap().into_inner();
+    let storage = Arc::new(RwLock::new(storage));
+    let archive = Arc::new(archive);
+
     try_join!(
-        upload_archive(args.clone(), state.clone()),
-        update_ref_counts(args.clone(), state.clone()),
+        update_ref_counts(storage.clone(), archive.clone(), ref_counts),
+        upload_archive(storage.clone(), archive.clone(), &stats),
     )?;
 
-    let mut locked_state = state.write().await;
-    let elapsed_time = locked_state.stats.end();
-    let main_stats = &locked_state.stats;
-    let storage_stats = locked_state.storage.stats();
+    let elapsed_time = stats.end();
+    let storage = storage.read().await;
+    let storage_stats = storage.stats();
 
     info!(
         "bytes downloaded: {}",
@@ -86,28 +96,42 @@ pub async fn main(args: cli::BackupArgs) -> Result<()> {
         "bytes uploaded: {}",
         format_size(storage_stats.bytes_uploaded)
     );
-    info!("bytes read: {}", format_size(main_stats.bytes_read));
-    info!("files read: {}", main_stats.files_read);
-    info!("blocks uploaded: {}", main_stats.blocks_uploaded);
-    info!("blocks used: {}", main_stats.blocks_used);
+    info!("bytes read: {}", format_size(stats.bytes_read));
+    info!("files read: {}", stats.files_read);
+    info!("blocks uploaded: {}", stats.blocks_uploaded);
+    info!("blocks used: {}", stats.blocks_used);
     info!("elapsed time: {}", format_duration(elapsed_time));
-
     Ok(())
 }
 
-async fn update_ref_counts(args: Arc<Args>, state: Arc<RwLock<State>>) -> Result<()> {
-    let mut ref_counts = download_ref_counts(args.clone(), state.clone()).await?;
-    ref_counts.add(&state.read().await.archive.ref_counts);
-    upload_ref_counts(args.clone(), state.clone(), ref_counts).await
+async fn update_ref_counts(
+    storage: Arc<RwLock<BoxedStorage>>,
+    archive: Arc<Archive>,
+    mut ref_counts: RefCounts,
+) -> Result<()> {
+    ref_counts.add(&archive.ref_counts);
+    upload_ref_counts(storage, ref_counts).await
 }
 
-async fn download_ref_counts(_args: Arc<Args>, state: Arc<RwLock<State>>) -> Result<RefCounts> {
-    let maybe_bytes = state
+async fn upload_archive(
+    storage: Arc<RwLock<BoxedStorage>>,
+    archive: Arc<Archive>,
+    stats: &Stats,
+) -> Result<()> {
+    let timestamp = stats.start_time.format("%Y%m%d%H%M%S").to_string();
+    let key = storage::archive_key(&timestamp);
+    let archive_bytes = spawn_blocking(move || serialize(archive.as_ref())).await??;
+    storage.write().await.put(&key, archive_bytes).await?;
+    storage
         .write()
         .await
-        .storage
-        .try_get(storage::REF_COUNTS_KEY)
+        .put(storage::ARCHIVE_KEY_LATEST, timestamp.into())
         .await?;
+    Ok(())
+}
+
+async fn download_ref_counts(storage: &mut BoxedStorage) -> Result<RefCounts> {
+    let maybe_bytes = storage.try_get(storage::REF_COUNTS_KEY).await?;
     let ref_counts = if let Some(bytes) = maybe_bytes {
         spawn_blocking(move || deserialize(&bytes)).await??
     } else {
@@ -117,35 +141,14 @@ async fn download_ref_counts(_args: Arc<Args>, state: Arc<RwLock<State>>) -> Res
 }
 
 async fn upload_ref_counts(
-    _args: Arc<Args>,
-    state: Arc<RwLock<State>>,
+    storage: Arc<RwLock<BoxedStorage>>,
     ref_counts: RefCounts,
 ) -> Result<()> {
     let bytes = spawn_blocking(move || serialize(&ref_counts)).await??;
-    state
+    storage
         .write()
         .await
-        .storage
         .put(storage::REF_COUNTS_KEY, bytes)
-        .await?;
-    Ok(())
-}
-
-async fn upload_archive(_args: Arc<Args>, state: Arc<RwLock<State>>) -> Result<()> {
-    let time = state.read().await.stats.start_time;
-    let timestamp = time.format("%Y%m%d%H%M%S").to_string();
-    let key = storage::archive_key(&timestamp);
-
-    let task_state = state.clone();
-    let archive_bytes =
-        spawn_blocking(move || serialize(&task_state.blocking_read().archive)).await??;
-
-    state.write().await.storage.put(&key, archive_bytes).await?;
-    state
-        .write()
-        .await
-        .storage
-        .put(storage::ARCHIVE_KEY_LATEST, timestamp.into())
         .await?;
     Ok(())
 }

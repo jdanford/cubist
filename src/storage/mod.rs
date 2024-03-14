@@ -2,6 +2,8 @@ mod local;
 mod s3;
 mod stats;
 
+use std::fmt::Debug;
+
 use async_trait::async_trait;
 
 use crate::{
@@ -16,7 +18,7 @@ pub use {local::LocalStorage, s3::S3Storage};
 pub type BoxedStorage = Box<dyn Storage + Sync + Send + 'static>;
 
 #[async_trait]
-pub trait Storage {
+pub trait Storage: Debug {
     async fn exists(&mut self, key: &str) -> Result<bool>;
     async fn keys(&mut self, prefix: Option<&str>) -> Result<Vec<String>>;
     async fn get(&mut self, key: &str) -> Result<Vec<u8>>;

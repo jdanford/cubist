@@ -22,12 +22,14 @@ use self::{
     files::{download_pending_files, restore_recursive},
 };
 
+#[derive(Debug)]
 struct Args {
     max_concurrency: u32,
     output_path: PathBuf,
     archive: Archive,
 }
 
+#[derive(Debug)]
 struct State {
     storage: BoxedStorage,
     local_blocks: HashMap<Hash, LocalBlock>,
@@ -65,19 +67,21 @@ pub async fn main(args: cli::RestoreArgs) -> Result<()> {
     sender.close();
     downloader_task.await?;
 
-    let mut locked_state = state.write().await;
-    let elapsed_time = locked_state.stats.end();
-    let main_stats = &locked_state.stats;
-    let storage_stats = locked_state.storage.stats();
+    let State {
+        storage, mut stats, ..
+    } = Arc::try_unwrap(state).unwrap().into_inner();
+
+    let elapsed_time = stats.end();
+    let storage_stats = storage.stats();
 
     info!(
         "bytes downloaded: {}",
         format_size(storage_stats.bytes_downloaded)
     );
-    info!("bytes written: {}", format_size(main_stats.bytes_written));
-    info!("files created: {}", main_stats.files_created);
-    info!("blocks downloaded: {}", main_stats.blocks_downloaded);
-    info!("blocks used: {}", main_stats.blocks_used);
+    info!("bytes written: {}", format_size(stats.bytes_written));
+    info!("files created: {}", stats.files_created);
+    info!("blocks downloaded: {}", stats.blocks_downloaded);
+    info!("blocks used: {}", stats.blocks_used);
     info!("elapsed time: {}", format_duration(elapsed_time));
 
     Ok(())

@@ -11,7 +11,7 @@ use super::{stats::StorageStats, Storage};
 
 #[derive(Debug)]
 pub struct S3Storage {
-    client: aws_sdk_s3::Client,
+    client: Client,
     bucket: String,
     stats: StorageStats,
 }
@@ -21,6 +21,7 @@ impl S3Storage {
         let s3_config = aws_config::load_from_env().await;
         let client = Client::new(&s3_config);
         let stats = StorageStats::new();
+
         S3Storage {
             client,
             bucket,

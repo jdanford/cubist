@@ -83,7 +83,9 @@ async fn upload_block(args: Arc<Args>, state: Arc<RwLock<State>>, block: Block) 
     let key = block.storage_key();
     let hash = block.hash().to_owned();
 
-    if !state.write().await.storage.exists(&key).await? {
+    if !state.read().await.archive.ref_counts.contains(&hash)
+        && !state.read().await.ref_counts.contains(&hash)
+    {
         let bytes = block.encode(args.compression_level).await?;
         state.write().await.storage.put(&key, bytes).await?;
         state.write().await.stats.blocks_uploaded += 1;

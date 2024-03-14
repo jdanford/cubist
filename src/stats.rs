@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use humansize::{ToF64, Unsigned, BINARY};
+use humansize::{ToF64, Unsigned, DECIMAL};
 
 #[derive(Debug)]
 pub struct Stats {
@@ -41,5 +41,5 @@ impl Stats {
 }
 
 pub fn format_size<T: ToF64 + Unsigned>(input: T) -> String {
-    humansize::format_size(input, BINARY)
+    humansize::format_size(input, DECIMAL)
 }
