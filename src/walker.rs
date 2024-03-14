@@ -12,7 +12,7 @@ pub struct FileWalker<'a> {
 }
 
 impl<'a> FileWalker<'a> {
-    pub fn from_root(root: &'a BTreeMap<OsString, Node>) -> FileWalker<'a> {
+    pub fn new(root: &'a BTreeMap<OsString, Node>) -> FileWalker<'a> {
         FileWalker {
             path: PathBuf::new(),
             layers: vec![root.iter()],

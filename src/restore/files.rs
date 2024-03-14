@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -14,6 +15,7 @@ use crate::{
     error::{Error, Result},
     file::{restore_metadata, restore_metadata_from_node, try_exists, FileType, Metadata, Node},
     hash::{self, Hash},
+    walker::FileWalker,
 };
 
 use super::{
@@ -32,16 +34,40 @@ pub async fn restore_recursive(
     state: Arc<RwLock<State>>,
     sender: Sender<PendingDownload>,
 ) -> Result<()> {
-    for (path, node) in args.archive.walk() {
-        let path = args.output_path.join(path);
-        if let Some(pending_file) =
-            restore_from_node(args.clone(), state.clone(), &path, node).await?
-        {
-            sender.send(pending_file).await?;
+    let root_paths = if args.paths.is_empty() {
+        Cow::Owned(vec![PathBuf::new()])
+    } else {
+        Cow::Borrowed(&args.paths)
+    };
+
+    for root_path in root_paths.iter() {
+        for (path, node) in walk(args.as_ref(), root_path)? {
+            let maybe_file = restore_from_node(args.clone(), state.clone(), &path, node).await?;
+            if let Some(pending_file) = maybe_file {
+                sender.send(pending_file).await?;
+            }
         }
     }
 
     Ok(())
+}
+
+fn walk<'a>(
+    args: &'a Args,
+    path: &Path,
+) -> Result<Box<dyn Iterator<Item = (PathBuf, &'a Node)> + 'a>> {
+    let node = args
+        .archive
+        .get(path)
+        .ok_or(Error::FileDoesNotExist(path.to_owned()))?;
+
+    if let Node::Directory { children, .. } = node {
+        let walker = FileWalker::new(children);
+        Ok(Box::new(walker))
+    } else {
+        let singleton = vec![(path.to_owned(), node)].into_iter();
+        Ok(Box::new(singleton))
+    }
 }
 
 async fn restore_from_node(

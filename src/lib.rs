@@ -23,3 +23,4 @@ mod hash;
 mod refs;
 mod serde;
 mod stats;
+mod walker;

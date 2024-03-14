@@ -25,7 +25,7 @@ use self::{
 #[derive(Debug)]
 struct Args {
     max_concurrency: u32,
-    output_path: PathBuf,
+    paths: Vec<PathBuf>,
     archive: Archive,
 }
 
@@ -41,12 +41,12 @@ pub async fn main(args: cli::RestoreArgs) -> Result<()> {
     let mut storage = cli::create_storage(args.storage).await;
 
     let local_blocks = HashMap::new();
-    let mut stats = Stats::new();
-    let archive = download_archive(&mut storage, &mut stats).await?;
+    let stats = Stats::new();
+    let archive = download_archive(&mut storage).await?;
 
     let args = Arc::new(Args {
         max_concurrency: args.max_concurrency,
-        output_path: args.path,
+        paths: args.paths,
         archive,
     });
     let state = Arc::new(RwLock::new(State {
@@ -83,11 +83,10 @@ pub async fn main(args: cli::RestoreArgs) -> Result<()> {
     info!("blocks downloaded: {}", stats.blocks_downloaded);
     info!("blocks used: {}", stats.blocks_used);
     info!("elapsed time: {}", format_duration(elapsed_time));
-
     Ok(())
 }
 
-pub async fn download_archive(storage: &mut BoxedStorage, _stats: &mut Stats) -> Result<Archive> {
+pub async fn download_archive(storage: &mut BoxedStorage) -> Result<Archive> {
     let timestamp_bytes = storage.get(storage::ARCHIVE_KEY_LATEST).await?;
     let timestamp = String::from_utf8(timestamp_bytes)?;
     let key = storage::archive_key(&timestamp);

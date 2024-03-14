@@ -9,9 +9,8 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::{
     error::{Error, Result},
     file::Node,
+    walker::FileWalker,
 };
-
-use super::walker::FileWalker;
 
 #[derive(Debug)]
 pub struct FileMap {
@@ -29,26 +28,41 @@ impl FileMap {
 
     fn from_root(root: BTreeMap<OsString, Node>) -> Self {
         let mut paths = HashMap::new();
-        for (path, node) in FileWalker::from_root(&root) {
+        for (path, node) in FileWalker::new(&root) {
             paths.insert(node.metadata().inode, path);
         }
 
         FileMap { root, paths }
     }
 
+    pub fn get(&self, path: &Path) -> Option<&Node> {
+        let (keys, name) = path_keys(path).ok()?;
+        let mut subtree = &self.root;
+
+        for key in keys {
+            match subtree.get(key) {
+                Some(Node::Directory { children, .. }) => {
+                    subtree = children;
+                }
+                _ => {
+                    return None;
+                }
+            }
+        }
+
+        subtree.get(name)
+    }
+
     pub fn insert(&mut self, path: PathBuf, node: Node) -> Result<()> {
         let (keys, name) = path_keys(&path)?;
         let mut current_path = PathBuf::new();
-        let mut children = &mut self.root;
+        let mut subtree = &mut self.root;
 
         for key in keys {
             current_path.push(key);
-            match children.get_mut(key) {
-                Some(Node::Directory {
-                    children: grandchildren,
-                    ..
-                }) => {
-                    children = grandchildren;
+            match subtree.get_mut(key) {
+                Some(Node::Directory { children, .. }) => {
+                    subtree = children;
                 }
                 Some(_) => {
                     return Err(Error::FileIsNotDirectory(current_path));
@@ -59,13 +73,13 @@ impl FileMap {
             }
         }
 
-        if children.contains_key(name) {
+        if subtree.contains_key(name) {
             return Err(Error::PathAlreadyArchived(path));
         }
 
         let name = name.to_owned();
         self.paths.insert(node.metadata().inode, path);
-        children.insert(name, node);
+        subtree.insert(name, node);
         Ok(())
     }
 
@@ -74,7 +88,7 @@ impl FileMap {
     }
 
     pub fn walk(&self) -> FileWalker<'_> {
-        FileWalker::from_root(&self.root)
+        FileWalker::new(&self.root)
     }
 }
 

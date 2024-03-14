@@ -144,6 +144,5 @@ async fn read_local_block(args: Arc<Args>, local_block: LocalBlock) -> Result<Ve
 
     reader.seek(seek_pos).await?;
     reader.read_exact(&mut data).await?;
-
     Ok(data)
 }

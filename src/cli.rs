@@ -47,7 +47,7 @@ pub struct BackupArgs {
 
 #[derive(Args, Debug)]
 pub struct RestoreArgs {
-    pub path: PathBuf,
+    pub paths: Vec<PathBuf>,
 
     #[arg(long, value_name = "N", default_value_t = DEFAULT_MAX_CONCURRENCY)]
     pub max_concurrency: u32,
@@ -60,6 +60,7 @@ pub struct RestoreArgs {
 }
 
 #[derive(Args, Debug)]
+#[clap(group(clap::ArgGroup::new("storage").required(true)))]
 pub struct StorageArgs {
     #[arg(long, group = "storage")]
     pub bucket: Option<String>,

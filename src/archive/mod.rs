@@ -1,5 +1,4 @@
 mod map;
-mod walker;
 
 use std::ops::{Deref, DerefMut};
 
