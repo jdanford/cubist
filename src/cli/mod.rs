@@ -1,6 +1,13 @@
+mod backup;
+mod delete;
+mod restore;
+
+mod common;
+
 use std::{path::PathBuf, time::Duration};
 
 use clap::{ArgAction, Args, Parser, Subcommand};
+use log::error;
 
 use crate::{
     logger,
@@ -18,11 +25,33 @@ pub struct Cli {
     pub command: Command,
 }
 
+#[derive(Args, Debug)]
+pub struct GlobalArgs {
+    #[arg(short, long, default_value_t = false)]
+    stats: bool,
+
+    #[command(flatten)]
+    pub storage: StorageArgs,
+
+    #[command(flatten)]
+    pub logger: LoggerArgs,
+}
+
 #[derive(Subcommand, Debug)]
 pub enum Command {
     Backup(#[command(flatten)] BackupArgs),
     Restore(#[command(flatten)] RestoreArgs),
     Delete(#[command(flatten)] DeleteArgs),
+}
+
+impl Command {
+    fn global(&self) -> &GlobalArgs {
+        match self {
+            Command::Backup(args) => &args.global,
+            Command::Restore(args) => &args.global,
+            Command::Delete(args) => &args.global,
+        }
+    }
 }
 
 #[derive(Args, Debug)]
@@ -40,10 +69,7 @@ pub struct BackupArgs {
     pub max_concurrency: u32,
 
     #[command(flatten)]
-    pub storage: StorageArgs,
-
-    #[command(flatten)]
-    pub logger: LoggerArgs,
+    pub global: GlobalArgs,
 }
 
 #[derive(Args, Debug)]
@@ -56,10 +82,7 @@ pub struct RestoreArgs {
     pub max_concurrency: u32,
 
     #[command(flatten)]
-    pub storage: StorageArgs,
-
-    #[command(flatten)]
-    pub logger: LoggerArgs,
+    pub global: GlobalArgs,
 }
 
 #[derive(Args, Debug)]
@@ -67,10 +90,7 @@ pub struct DeleteArgs {
     pub archive_name: String,
 
     #[command(flatten)]
-    pub storage: StorageArgs,
-
-    #[command(flatten)]
-    pub logger: LoggerArgs,
+    pub global: GlobalArgs,
 }
 
 #[derive(Args, Debug)]
@@ -100,6 +120,21 @@ pub struct LoggerArgs {
     pub quiet: u8,
 }
 
+pub async fn main() {
+    let cli = Cli::parse();
+    init_logger(&cli.command.global().logger);
+
+    let result = match cli.command {
+        Command::Backup(args) => backup::main(args).await,
+        Command::Restore(args) => restore::main(args).await,
+        Command::Delete(args) => delete::main(args).await,
+    };
+
+    if let Err(err) = result {
+        error!("{err}");
+    }
+}
+
 pub async fn create_storage(args: StorageArgs) -> BoxedStorage {
     match args {
         StorageArgs {
@@ -115,8 +150,7 @@ pub async fn create_storage(args: StorageArgs) -> BoxedStorage {
     }
 }
 
-#[allow(clippy::needless_pass_by_value)]
-pub fn init_logger(args: LoggerArgs) {
+fn init_logger(args: &LoggerArgs) {
     let level = log_level_from_args(args.verbose, args.quiet);
     logger::init(level);
 }

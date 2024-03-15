@@ -23,7 +23,7 @@ impl Archive {
     }
 
     pub fn add_ref(&mut self, hash: &Hash) {
-        self.ref_counts.increment(hash);
+        self.ref_counts.add_count(hash, 1);
     }
 }
 

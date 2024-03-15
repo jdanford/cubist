@@ -141,6 +141,7 @@ async fn download_pending_file(
 
     restore_metadata(&pending_file.path, &pending_file.metadata, FileType::File).await?;
     let hash_str = hash::format(&pending_file.hash);
-    debug!("{hash_str} -> {}", pending_file.path.display());
+    let local_path = pending_file.path.display();
+    debug!("{hash_str} -> {local_path}");
     Ok(())
 }

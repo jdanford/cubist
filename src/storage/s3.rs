@@ -81,7 +81,7 @@ impl Storage for S3Storage {
             let contents = page.contents.unwrap_or(vec![]);
 
             for object in contents {
-                if let Some(size_signed) = object.size() {
+                if let Some(size_signed) = object.size {
                     let size = u64::try_from(size_signed).unwrap();
                     self.stats.bytes_downloaded += size;
                 }
@@ -165,21 +165,13 @@ impl Storage for S3Storage {
     }
 
     async fn delete_many(&mut self, keys: Vec<String>) -> Result<()> {
-        let delete_objects = keys
-            .into_iter()
-            .map(|key| {
-                ObjectIdentifier::builder()
-                    .set_key(Some(key))
-                    .build()
-                    .map_err(Error::from)
-            })
-            .collect::<Result<Vec<_>>>()?;
+        let mut delete_builder = Delete::builder().quiet(true);
+        for key in keys {
+            let object = ObjectIdentifier::builder().key(key).build()?;
+            delete_builder = delete_builder.objects(object);
+        }
 
-        let delete = Delete::builder()
-            .set_objects(Some(delete_objects))
-            .quiet(true)
-            .build()?;
-
+        let delete = delete_builder.build()?;
         let response = self
             .client
             .delete_objects()
@@ -187,8 +179,6 @@ impl Storage for S3Storage {
             .delete(delete)
             .send()
             .await?;
-
-        // self.stats.bytes_deleted = ???;
 
         if response.request_charged.is_some() {
             self.stats.put_requests += 1;

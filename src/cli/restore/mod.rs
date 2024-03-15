@@ -10,12 +10,13 @@ use tokio::{spawn, sync::RwLock};
 use crate::{
     archive::Archive,
     cli,
-    common::download_archive,
     error::Result,
     hash::Hash,
     stats::{format_size, Stats},
     storage::{self, BoxedStorage},
 };
+
+use super::common::download_archive;
 
 use self::{
     blocks::LocalBlock,
@@ -31,16 +32,14 @@ struct Args {
 
 #[derive(Debug)]
 struct State {
+    stats: Stats,
     storage: BoxedStorage,
     local_blocks: HashMap<Hash, LocalBlock>,
-    stats: Stats,
 }
 
-pub async fn main(args: cli::RestoreArgs) -> Result<()> {
-    cli::init_logger(args.logger);
-    let storage = cli::create_storage(args.storage).await;
+pub async fn main(cli: cli::RestoreArgs) -> Result<()> {
     let stats = Stats::new();
-
+    let storage = cli::create_storage(cli.global.storage).await;
     let storage_arc = Arc::new(RwLock::new(storage));
     let timestamp_bytes = storage_arc
         .write()
@@ -51,17 +50,17 @@ pub async fn main(args: cli::RestoreArgs) -> Result<()> {
     let archive = download_archive(&timestamp, storage_arc.clone()).await?;
 
     let args = Arc::new(Args {
-        max_concurrency: args.max_concurrency,
-        paths: args.paths,
+        max_concurrency: cli.max_concurrency,
+        paths: cli.paths,
         archive,
     });
 
     let storage = Arc::try_unwrap(storage_arc).unwrap().into_inner();
     let local_blocks = HashMap::new();
     let state = Arc::new(RwLock::new(State {
+        stats,
         storage,
         local_blocks,
-        stats,
     }));
 
     let (sender, receiver) = async_channel::bounded(args.max_concurrency as usize);
@@ -84,14 +83,17 @@ pub async fn main(args: cli::RestoreArgs) -> Result<()> {
     let elapsed_time = stats.end();
     let storage_stats = storage.stats();
 
-    info!(
-        "bytes downloaded: {}",
-        format_size(storage_stats.bytes_downloaded)
-    );
-    info!("bytes written: {}", format_size(stats.bytes_written));
-    info!("files created: {}", stats.files_created);
-    info!("blocks downloaded: {}", stats.blocks_downloaded);
-    info!("blocks used: {}", stats.blocks_used);
-    info!("elapsed time: {}", format_duration(elapsed_time));
+    if cli.global.stats {
+        info!(
+            "bytes downloaded: {}",
+            format_size(storage_stats.bytes_downloaded)
+        );
+        info!("bytes written: {}", format_size(stats.bytes_written));
+        info!("files created: {}", stats.files_created);
+        info!("blocks downloaded: {}", stats.blocks_downloaded);
+        info!("blocks used: {}", stats.blocks_used);
+        info!("elapsed time: {}", format_duration(elapsed_time));
+    }
+
     Ok(())
 }

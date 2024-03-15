@@ -33,10 +33,6 @@ impl RefCounts {
             .or_insert(count);
     }
 
-    pub fn increment(&mut self, hash: &Hash) {
-        self.add_count(hash, 1);
-    }
-
     pub fn add(&mut self, rhs: &Self) {
         for (hash, &count) in &rhs.map {
             self.add_count(hash, count);

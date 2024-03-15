@@ -10,12 +10,13 @@ use tokio::{spawn, sync::RwLock, try_join};
 use crate::{
     archive::Archive,
     cli,
-    common::{download_ref_counts, update_ref_counts, upload_archive},
     error::Result,
     refs::RefCounts,
     stats::{format_size, Stats},
     storage::BoxedStorage,
 };
+
+use super::common::{download_ref_counts, update_ref_counts, upload_archive};
 
 use self::files::{backup_recursive, upload_pending_files};
 
@@ -30,33 +31,31 @@ struct Args {
 
 #[derive(Debug)]
 struct State {
+    stats: Stats,
     storage: BoxedStorage,
     archive: Archive,
-    stats: Stats,
 }
 
-pub async fn main(args: cli::BackupArgs) -> Result<()> {
-    cli::init_logger(args.logger);
-    let storage = cli::create_storage(args.storage).await;
-
+pub async fn main(cli: cli::BackupArgs) -> Result<()> {
+    let stats = Stats::new();
+    let storage = cli::create_storage(cli.global.storage).await;
     let storage_arc = Arc::new(RwLock::new(storage));
     let ref_counts = download_ref_counts(storage_arc.clone()).await?;
 
     let args = Arc::new(Args {
-        compression_level: args.compression_level,
-        target_block_size: args.target_block_size,
-        max_concurrency: args.max_concurrency,
-        paths: args.paths,
+        compression_level: cli.compression_level,
+        target_block_size: cli.target_block_size,
+        max_concurrency: cli.max_concurrency,
+        paths: cli.paths,
         ref_counts,
     });
 
     let storage = Arc::try_unwrap(storage_arc).unwrap().into_inner();
     let archive = Archive::new();
-    let stats = Stats::new();
     let state = Arc::new(RwLock::new(State {
+        stats,
         storage,
         archive,
-        stats,
     }));
 
     let (sender, receiver) = async_channel::bounded(args.max_concurrency as usize);
@@ -76,9 +75,9 @@ pub async fn main(args: cli::BackupArgs) -> Result<()> {
 
     let Args { ref_counts, .. } = Arc::try_unwrap(args).unwrap();
     let State {
+        mut stats,
         storage,
         archive,
-        mut stats,
     } = Arc::try_unwrap(state).unwrap().into_inner();
     let storage = Arc::new(RwLock::new(storage));
     let archive = Arc::new(archive);
@@ -92,18 +91,21 @@ pub async fn main(args: cli::BackupArgs) -> Result<()> {
     let storage = storage.read().await;
     let storage_stats = storage.stats();
 
-    info!(
-        "bytes downloaded: {}",
-        format_size(storage_stats.bytes_downloaded)
-    );
-    info!(
-        "bytes uploaded: {}",
-        format_size(storage_stats.bytes_uploaded)
-    );
-    info!("bytes read: {}", format_size(stats.bytes_read));
-    info!("files read: {}", stats.files_read);
-    info!("blocks uploaded: {}", stats.blocks_uploaded);
-    info!("blocks used: {}", stats.blocks_used);
-    info!("elapsed time: {}", format_duration(elapsed_time));
+    if cli.global.stats {
+        info!(
+            "bytes downloaded: {}",
+            format_size(storage_stats.bytes_downloaded)
+        );
+        info!(
+            "bytes uploaded: {}",
+            format_size(storage_stats.bytes_uploaded)
+        );
+        info!("bytes read: {}", format_size(stats.bytes_read));
+        info!("files read: {}", stats.files_read);
+        info!("blocks uploaded: {}", stats.blocks_uploaded);
+        info!("blocks used: {}", stats.blocks_used);
+        info!("elapsed time: {}", format_duration(elapsed_time));
+    }
+
     Ok(())
 }

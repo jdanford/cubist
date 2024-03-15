@@ -86,10 +86,6 @@ impl FileMap {
     pub fn path(&self, inode: u64) -> Option<&Path> {
         self.paths.get(&inode).map(PathBuf::as_path)
     }
-
-    pub fn walk(&self) -> FileWalker<'_> {
-        FileWalker::new(&self.root)
-    }
 }
 
 impl Serialize for FileMap {

@@ -43,9 +43,8 @@ pub async fn backup_recursive(
             continue;
         }
 
-        if let Some(pending_file) =
-            backup_from_entry(args.clone(), state.clone(), entry, path).await?
-        {
+        let maybe_file = backup_from_entry(args.clone(), state.clone(), entry, path).await?;
+        if let Some(pending_file) = maybe_file {
             sender.send(pending_file).await?;
         }
     }
@@ -128,7 +127,8 @@ async fn upload_pending_file(
         .insert(pending_file.archive_path, node)?;
 
     let hash_str = hash::format(&hash);
-    debug!("{hash_str} <- {}", pending_file.local_path.display());
+    let local_path = pending_file.local_path.display();
+    debug!("{hash_str} <- {local_path}");
     Ok(())
 }
 

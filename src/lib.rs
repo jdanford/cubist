@@ -9,15 +9,10 @@
     clippy::similar_names
 )]
 
-pub mod backup;
-pub mod common;
-pub mod delete;
-pub mod restore;
-
 pub mod cli;
-pub mod error;
-pub mod logger;
-pub mod storage;
+mod error;
+mod logger;
+mod storage;
 
 mod archive;
 mod block;

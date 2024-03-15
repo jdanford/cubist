@@ -6,6 +6,7 @@ use crate::{
     block::Block,
     error::{Error, Result},
     hash::{self, Hash},
+    storage,
 };
 
 use super::{Args, State};
@@ -80,10 +81,10 @@ impl UploadTree {
 }
 
 async fn upload_block(args: Arc<Args>, state: Arc<RwLock<State>>, block: Block) -> Result<Hash> {
-    let key = block.storage_key();
     let hash = block.hash().to_owned();
 
     if !block_exists(args.clone(), state.clone(), &hash).await {
+        let key = storage::block_key(&hash);
         let bytes = block.encode(args.compression_level).await?;
         state.write().await.storage.put(&key, bytes).await?;
         state.write().await.stats.blocks_uploaded += 1;

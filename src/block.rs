@@ -7,7 +7,6 @@ use tokio::{
 use crate::{
     error::{assert_block_level_eq, assert_hash_eq, assert_size_multiple_of_hash, Error, Result},
     hash::{self, Hash},
-    storage,
 };
 
 pub enum Block {
@@ -51,10 +50,6 @@ impl Block {
         match self {
             Block::Leaf { hash, .. } | Block::Branch { hash, .. } => hash,
         }
-    }
-
-    pub fn storage_key(&self) -> String {
-        storage::block_key(self.hash())
     }
 
     pub async fn encode(self, compression_level: u8) -> Result<Vec<u8>> {
