@@ -5,7 +5,10 @@ use std::{
 };
 
 use async_channel::SendError;
-use aws_sdk_s3::{error::SdkError, primitives::ByteStreamError};
+use aws_sdk_s3::{
+    error::{BuildError, SdkError},
+    primitives::ByteStreamError,
+};
 use thiserror::Error;
 use tokio::task::JoinError;
 
@@ -119,6 +122,12 @@ pub enum Error {
 
 impl<E, R> From<SdkError<E, R>> for Error {
     fn from(error: SdkError<E, R>) -> Self {
+        Error::Sdk(error.to_string())
+    }
+}
+
+impl From<BuildError> for Error {
+    fn from(error: BuildError) -> Self {
         Error::Sdk(error.to_string())
     }
 }

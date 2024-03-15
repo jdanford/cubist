@@ -2,6 +2,7 @@ use clap::Parser;
 use cubist::{
     backup,
     cli::{Cli, Command},
+    delete,
     error::Result,
     restore,
 };
@@ -12,5 +13,6 @@ async fn main() -> Result<()> {
     match cli.command {
         Command::Backup(args) => backup::main(args).await,
         Command::Restore(args) => restore::main(args).await,
+        Command::Delete(args) => delete::main(args).await,
     }
 }

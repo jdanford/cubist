@@ -111,11 +111,21 @@ impl Storage for LocalStorage {
         Ok(())
     }
 
-    fn stats(&self) -> &StorageStats {
-        &self.stats
+    async fn delete(&mut self, key: &str) -> Result<()> {
+        let path = self.object_path(key);
+        fs::remove_file(path).await?;
+        Ok(())
     }
 
-    fn stats_mut(&mut self) -> &mut StorageStats {
-        &mut self.stats
+    async fn delete_many(&mut self, keys: Vec<String>) -> Result<()> {
+        for key in keys {
+            self.delete(&key).await?;
+        }
+
+        Ok(())
+    }
+
+    fn stats(&self) -> &StorageStats {
+        &self.stats
     }
 }

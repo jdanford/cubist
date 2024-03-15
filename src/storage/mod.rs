@@ -23,9 +23,10 @@ pub trait Storage: Debug {
     async fn keys(&mut self, prefix: Option<&str>) -> Result<Vec<String>>;
     async fn get(&mut self, key: &str) -> Result<Vec<u8>>;
     async fn put(&mut self, key: &str, bytes: Vec<u8>) -> Result<()>;
+    async fn delete(&mut self, key: &str) -> Result<()>;
+    async fn delete_many(&mut self, keys: Vec<String>) -> Result<()>;
 
     fn stats(&self) -> &StorageStats;
-    fn stats_mut(&mut self) -> &mut StorageStats;
 
     async fn try_get(&mut self, key: &str) -> Result<Option<Vec<u8>>> {
         match self.get(key).await {

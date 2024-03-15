@@ -5,14 +5,14 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use humantime::format_duration;
 use log::info;
-use tokio::{spawn, sync::RwLock, task::spawn_blocking};
+use tokio::{spawn, sync::RwLock};
 
 use crate::{
     archive::Archive,
     cli,
+    common::download_archive,
     error::Result,
     hash::Hash,
-    serde::deserialize,
     stats::{format_size, Stats},
     storage::{self, BoxedStorage},
 };
@@ -38,22 +38,32 @@ struct State {
 
 pub async fn main(args: cli::RestoreArgs) -> Result<()> {
     cli::init_logger(args.logger);
-    let mut storage = cli::create_storage(args.storage).await;
-
-    let local_blocks = HashMap::new();
+    let storage = cli::create_storage(args.storage).await;
     let stats = Stats::new();
-    let archive = download_archive(&mut storage).await?;
+
+    let storage_arc = Arc::new(RwLock::new(storage));
+    let timestamp_bytes = storage_arc
+        .write()
+        .await
+        .get(storage::ARCHIVE_KEY_LATEST)
+        .await?;
+    let timestamp = String::from_utf8(timestamp_bytes)?;
+    let archive = download_archive(&timestamp, storage_arc.clone()).await?;
 
     let args = Arc::new(Args {
         max_concurrency: args.max_concurrency,
         paths: args.paths,
         archive,
     });
+
+    let storage = Arc::try_unwrap(storage_arc).unwrap().into_inner();
+    let local_blocks = HashMap::new();
     let state = Arc::new(RwLock::new(State {
         storage,
         local_blocks,
         stats,
     }));
+
     let (sender, receiver) = async_channel::bounded(args.max_concurrency as usize);
 
     let downloader_args = args.clone();
@@ -84,14 +94,4 @@ pub async fn main(args: cli::RestoreArgs) -> Result<()> {
     info!("blocks used: {}", stats.blocks_used);
     info!("elapsed time: {}", format_duration(elapsed_time));
     Ok(())
-}
-
-pub async fn download_archive(storage: &mut BoxedStorage) -> Result<Archive> {
-    let timestamp_bytes = storage.get(storage::ARCHIVE_KEY_LATEST).await?;
-    let timestamp = String::from_utf8(timestamp_bytes)?;
-    let key = storage::archive_key(&timestamp);
-
-    let archive_bytes = storage.get(&key).await?;
-    let archive = spawn_blocking(move || deserialize(&archive_bytes)).await??;
-    Ok(archive)
 }

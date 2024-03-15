@@ -22,6 +22,7 @@ pub struct Cli {
 pub enum Command {
     Backup(#[command(flatten)] BackupArgs),
     Restore(#[command(flatten)] RestoreArgs),
+    Delete(#[command(flatten)] DeleteArgs),
 }
 
 #[derive(Args, Debug)]
@@ -47,10 +48,23 @@ pub struct BackupArgs {
 
 #[derive(Args, Debug)]
 pub struct RestoreArgs {
+    pub archive_name: String,
+
     pub paths: Vec<PathBuf>,
 
     #[arg(long, value_name = "N", default_value_t = DEFAULT_MAX_CONCURRENCY)]
     pub max_concurrency: u32,
+
+    #[command(flatten)]
+    pub storage: StorageArgs,
+
+    #[command(flatten)]
+    pub logger: LoggerArgs,
+}
+
+#[derive(Args, Debug)]
+pub struct DeleteArgs {
+    pub archive_name: String,
 
     #[command(flatten)]
     pub storage: StorageArgs,

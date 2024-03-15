@@ -2,8 +2,11 @@ use async_trait::async_trait;
 use aws_sdk_s3::{
     error::SdkError,
     operation::{get_object::GetObjectError, head_object::HeadObjectError},
+    types::{Delete, ObjectIdentifier},
     Client,
 };
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
+use tokio::task::spawn_blocking;
 
 use crate::error::{Error, Result};
 
@@ -33,7 +36,7 @@ impl S3Storage {
 #[async_trait]
 impl Storage for S3Storage {
     async fn exists(&mut self, key: &str) -> Result<bool> {
-        let head_result = self
+        let response_result = self
             .client
             .head_object()
             .bucket(&self.bucket)
@@ -42,13 +45,21 @@ impl Storage for S3Storage {
             .await
             .map_err(SdkError::into_service_error);
 
-        let exists = match head_result {
-            Ok(_) => Ok(true),
-            Err(HeadObjectError::NotFound(_)) => Ok(false),
+        let exists = match response_result {
+            Ok(response) => {
+                if response.request_charged.is_some() {
+                    self.stats.get_requests += 1;
+                }
+
+                Ok(true)
+            }
+            Err(HeadObjectError::NotFound(_)) => {
+                self.stats.get_requests += 1;
+                Ok(false)
+            }
             Err(err) => Err(Error::Sdk(err.to_string())),
         }?;
 
-        self.stats.get_requests += 1;
         Ok(exists)
     }
 
@@ -63,9 +74,12 @@ impl Storage for S3Storage {
             .send();
 
         let mut keys = vec![];
-        while let Some(result) = stream.next().await {
-            let page = result?;
+        let mut charged = false;
+
+        while let Some(page) = stream.try_next().await? {
+            charged = charged || page.request_charged.is_some();
             let contents = page.contents.unwrap_or(vec![]);
+
             for object in contents {
                 if let Some(size_signed) = object.size() {
                     let size = u64::try_from(size_signed).unwrap();
@@ -77,12 +91,15 @@ impl Storage for S3Storage {
             }
         }
 
-        self.stats.get_requests += 1;
+        if charged {
+            self.stats.get_requests += 1;
+        }
+
         Ok(keys)
     }
 
     async fn get(&mut self, key: &str) -> Result<Vec<u8>> {
-        let object = self
+        let response = self
             .client
             .get_object()
             .bucket(&self.bucket)
@@ -94,33 +111,98 @@ impl Storage for S3Storage {
                 err => Error::Sdk(err.to_string()),
             })?;
 
-        let bytes = object.body.collect().await?.to_vec();
+        let bytes = response.body.collect().await?.to_vec();
         self.stats.bytes_downloaded += bytes.len() as u64;
-        self.stats.get_requests += 1;
+
+        if response.request_charged.is_some() {
+            self.stats.get_requests += 1;
+        }
+
         Ok(bytes)
     }
 
     async fn put(&mut self, key: &str, bytes: Vec<u8>) -> Result<()> {
         let size = bytes.len() as u64;
+        let (bytes, encoded_digest) = spawn_blocking(move || {
+            let encoded_digest = md5_base64(&bytes);
+            (bytes, encoded_digest)
+        })
+        .await?;
 
-        self.client
+        let response = self
+            .client
             .put_object()
             .bucket(&self.bucket)
             .key(key)
             .body(bytes.into())
+            .content_md5(encoded_digest)
             .send()
             .await?;
 
         self.stats.bytes_uploaded += size;
-        self.stats.put_requests += 1;
+
+        if response.request_charged.is_some() {
+            self.stats.put_requests += 1;
+        }
+
+        Ok(())
+    }
+
+    async fn delete(&mut self, key: &str) -> Result<()> {
+        let response = self
+            .client
+            .delete_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .send()
+            .await?;
+
+        if response.request_charged.is_some() {
+            self.stats.put_requests += 1;
+        }
+
+        Ok(())
+    }
+
+    async fn delete_many(&mut self, keys: Vec<String>) -> Result<()> {
+        let delete_objects = keys
+            .into_iter()
+            .map(|key| {
+                ObjectIdentifier::builder()
+                    .set_key(Some(key))
+                    .build()
+                    .map_err(Error::from)
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let delete = Delete::builder()
+            .set_objects(Some(delete_objects))
+            .quiet(true)
+            .build()?;
+
+        let response = self
+            .client
+            .delete_objects()
+            .bucket(&self.bucket)
+            .delete(delete)
+            .send()
+            .await?;
+
+        // self.stats.bytes_deleted = ???;
+
+        if response.request_charged.is_some() {
+            self.stats.put_requests += 1;
+        }
+
         Ok(())
     }
 
     fn stats(&self) -> &StorageStats {
         &self.stats
     }
+}
 
-    fn stats_mut(&mut self) -> &mut StorageStats {
-        &mut self.stats
-    }
+fn md5_base64(bytes: &[u8]) -> String {
+    let digest = md5::compute(bytes);
+    BASE64_STANDARD.encode(digest.0)
 }

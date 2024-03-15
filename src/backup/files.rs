@@ -142,8 +142,7 @@ pub async fn upload_file(
     let mut chunks = pin!(chunker.as_stream());
     let mut tree = UploadTree::new(args.clone(), state.clone());
 
-    while let Some(chunk_result) = chunks.next().await {
-        let chunk = chunk_result?;
+    while let Some(chunk) = chunks.try_next().await? {
         state.write().await.stats.bytes_read += chunk.data.len() as u64;
         tree.add_leaf(chunk.data).await?;
     }

@@ -10,10 +10,13 @@
 )]
 
 pub mod backup;
+pub mod common;
+pub mod delete;
+pub mod restore;
+
 pub mod cli;
 pub mod error;
 pub mod logger;
-pub mod restore;
 pub mod storage;
 
 mod archive;

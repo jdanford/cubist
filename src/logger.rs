@@ -10,7 +10,7 @@ pub fn init(level: log::LevelFilter) {
         .init();
 }
 
-pub fn format(f: &mut Formatter, record: &Record) -> io::Result<()> {
+fn format(f: &mut Formatter, record: &Record) -> io::Result<()> {
     let level = record.level();
     let prefix_style = f.default_level_style(level);
     let prefix = level_prefix(level);
