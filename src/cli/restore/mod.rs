@@ -13,10 +13,10 @@ use crate::{
     error::Result,
     hash::Hash,
     stats::{format_size, Stats},
-    storage::{self, BoxedStorage},
+    storage::BoxedStorage,
 };
 
-use super::common::download_archive;
+use super::common::{create_storage, download_archive};
 
 use self::{
     blocks::LocalBlock,
@@ -39,15 +39,9 @@ struct State {
 
 pub async fn main(cli: cli::RestoreArgs) -> Result<()> {
     let stats = Stats::new();
-    let storage = cli::create_storage(cli.global.storage).await;
+    let storage = create_storage(cli.global.storage).await?;
     let storage_arc = Arc::new(RwLock::new(storage));
-    let timestamp_bytes = storage_arc
-        .write()
-        .await
-        .get(storage::ARCHIVE_KEY_LATEST)
-        .await?;
-    let timestamp = String::from_utf8(timestamp_bytes)?;
-    let archive = download_archive(&timestamp, storage_arc.clone()).await?;
+    let archive = download_archive(storage_arc.clone(), &cli.archive_name).await?;
 
     let args = Arc::new(Args {
         max_concurrency: cli.max_concurrency,

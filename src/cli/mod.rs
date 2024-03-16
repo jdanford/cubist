@@ -1,3 +1,4 @@
+mod archives;
 mod backup;
 mod delete;
 mod restore;
@@ -7,12 +8,10 @@ mod common;
 use std::{path::PathBuf, time::Duration};
 
 use clap::{ArgAction, Args, Parser, Subcommand};
+use humantime::parse_duration;
 use log::error;
 
-use crate::{
-    logger,
-    storage::{BoxedStorage, LocalStorage, S3Storage},
-};
+use crate::logger;
 
 const DEFAULT_COMPRESSION_LEVEL: u8 = 3;
 const DEFAULT_TARGET_BLOCK_SIZE: u32 = 1024 * 1024;
@@ -25,23 +24,12 @@ pub struct Cli {
     pub command: Command,
 }
 
-#[derive(Args, Debug)]
-pub struct GlobalArgs {
-    #[arg(short, long, default_value_t = false)]
-    stats: bool,
-
-    #[command(flatten)]
-    pub storage: StorageArgs,
-
-    #[command(flatten)]
-    pub logger: LoggerArgs,
-}
-
 #[derive(Subcommand, Debug)]
 pub enum Command {
     Backup(#[command(flatten)] BackupArgs),
     Restore(#[command(flatten)] RestoreArgs),
     Delete(#[command(flatten)] DeleteArgs),
+    Archives(#[command(flatten)] ArchivesArgs),
 }
 
 impl Command {
@@ -50,6 +38,7 @@ impl Command {
             Command::Backup(args) => &args.global,
             Command::Restore(args) => &args.global,
             Command::Delete(args) => &args.global,
+            Command::Archives(args) => &args.global,
         }
     }
 }
@@ -87,14 +76,34 @@ pub struct RestoreArgs {
 
 #[derive(Args, Debug)]
 pub struct DeleteArgs {
-    pub archive_name: String,
+    pub archive_names: Vec<String>,
+
+    #[arg(long, value_name = "N", default_value_t = DEFAULT_MAX_CONCURRENCY)]
+    pub max_concurrency: u32,
 
     #[command(flatten)]
     pub global: GlobalArgs,
 }
 
 #[derive(Args, Debug)]
-#[clap(group(clap::ArgGroup::new("storage").required(true)))]
+pub struct ArchivesArgs {
+    #[command(flatten)]
+    pub global: GlobalArgs,
+}
+
+#[derive(Args, Debug)]
+pub struct GlobalArgs {
+    #[arg(short, long, default_value_t = false)]
+    stats: bool,
+
+    #[command(flatten)]
+    pub storage: StorageArgs,
+
+    #[command(flatten)]
+    pub logger: LoggerArgs,
+}
+
+#[derive(Args, Debug)]
 pub struct StorageArgs {
     #[arg(long, group = "storage")]
     pub bucket: Option<String>,
@@ -107,7 +116,7 @@ pub struct StorageArgs {
     )]
     pub local: Option<PathBuf>,
 
-    #[arg(long, value_parser = humantime::parse_duration, requires = "storage-local")]
+    #[arg(long, value_parser = parse_duration, requires = "storage-local")]
     pub latency: Option<Duration>,
 }
 
@@ -128,25 +137,11 @@ pub async fn main() {
         Command::Backup(args) => backup::main(args).await,
         Command::Restore(args) => restore::main(args).await,
         Command::Delete(args) => delete::main(args).await,
+        Command::Archives(args) => archives::main(args).await,
     };
 
     if let Err(err) = result {
         error!("{err}");
-    }
-}
-
-pub async fn create_storage(args: StorageArgs) -> BoxedStorage {
-    match args {
-        StorageArgs {
-            bucket: Some(bucket),
-            ..
-        } => Box::new(S3Storage::new(bucket).await),
-        StorageArgs {
-            local: Some(path),
-            latency,
-            ..
-        } => Box::new(LocalStorage::new(path, latency)),
-        _ => unreachable!(),
     }
 }
 

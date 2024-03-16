@@ -16,7 +16,7 @@ use crate::{
     storage::BoxedStorage,
 };
 
-use super::common::{download_ref_counts, update_ref_counts, upload_archive};
+use super::common::{create_storage, download_ref_counts, update_ref_counts, upload_archive};
 
 use self::files::{backup_recursive, upload_pending_files};
 
@@ -38,7 +38,7 @@ struct State {
 
 pub async fn main(cli: cli::BackupArgs) -> Result<()> {
     let stats = Stats::new();
-    let storage = cli::create_storage(cli.global.storage).await;
+    let storage = create_storage(cli.global.storage).await?;
     let storage_arc = Arc::new(RwLock::new(storage));
     let ref_counts = download_ref_counts(storage_arc.clone()).await?;
 

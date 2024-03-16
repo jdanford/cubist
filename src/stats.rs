@@ -13,6 +13,7 @@ pub struct Stats {
     pub files_created: u64,
     pub blocks_downloaded: u64,
     pub blocks_uploaded: u64,
+    pub blocks_deleted: u64,
     pub blocks_used: u64,
 }
 
@@ -27,6 +28,7 @@ impl Stats {
             files_created: 0,
             blocks_downloaded: 0,
             blocks_uploaded: 0,
+            blocks_deleted: 0,
             blocks_used: 0,
         }
     }

@@ -1,4 +1,5 @@
 use std::{
+    env::VarError,
     fmt::Debug,
     path::{PathBuf, StripPrefixError},
     string::FromUtf8Error,
@@ -9,6 +10,7 @@ use aws_sdk_s3::{
     error::{BuildError, SdkError},
     primitives::ByteStreamError,
 };
+use humantime::DurationError;
 use thiserror::Error;
 use tokio::task::JoinError;
 
@@ -72,6 +74,12 @@ pub enum Error {
     },
 
     #[error("{source}")]
+    EnvVar {
+        #[from]
+        source: VarError,
+    },
+
+    #[error("{source}")]
     Bincode {
         #[from]
         source: bincode::Error,
@@ -112,6 +120,15 @@ pub enum Error {
         #[from]
         source: StripPrefixError,
     },
+
+    #[error("{source}")]
+    Duration {
+        #[from]
+        source: DurationError,
+    },
+
+    #[error("{0}")]
+    Cli(String),
 
     #[error("{0}")]
     Sdk(String),
