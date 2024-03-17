@@ -24,19 +24,20 @@ use super::{files::PendingDownload, Args, State};
 pub struct LocalBlock {
     pub inode: u64,
     pub offset: u64,
-    pub length: u32,
+    pub size: u32,
 }
 
 impl LocalBlock {
-    pub fn new(inode: u64, offset: u64, length: u32) -> Self {
+    pub fn new(inode: u64, offset: u64, size: u32) -> Self {
         LocalBlock {
             inode,
             offset,
-            length,
+            size,
         }
     }
 }
 
+#[derive(Debug)]
 pub struct ActiveDownload {
     writer: BufWriter<File>,
     inode: u64,
@@ -78,7 +79,7 @@ pub async fn download_block_recursive(
     hash: Hash,
     level: Option<u8>,
 ) -> Result<()> {
-    state.write().await.stats.blocks_used += 1;
+    state.write().await.stats.blocks_referenced += 1;
 
     // copied to avoid holding mutex lock
     let maybe_block = state.read().await.local_blocks.get(&hash).copied();
@@ -91,7 +92,7 @@ pub async fn download_block_recursive(
 
     let key = storage::block_key(&hash);
     let bytes = state.write().await.storage.get(&key).await?;
-    state.write().await.stats.blocks_downloaded += 1;
+    state.write().await.stats.content_bytes_downloaded += bytes.len() as u64;
 
     let block = Block::decode(hash, level, &bytes).await?;
     match block {
@@ -117,16 +118,14 @@ async fn write_local_block(
     file: &mut ActiveDownload,
     data: &[u8],
 ) -> Result<LocalBlock> {
-    let length = data.len();
-    let safe_length = length
-        .try_into()
-        .map_err(|_| Error::InvalidBlockSize(length))?;
-    let local_block = LocalBlock::new(file.inode, file.offset, safe_length);
+    let size = data.len();
+    let safe_size = size.try_into().map_err(|_| Error::InvalidBlockSize(size))?;
+    let local_block = LocalBlock::new(file.inode, file.offset, safe_size);
 
     file.write_all(data).await?;
-    file.offset += length as u64;
+    file.offset += size as u64;
 
-    state.write().await.stats.bytes_written += length as u64;
+    state.write().await.stats.bytes_written += size as u64;
     Ok(local_block)
 }
 
@@ -139,8 +138,8 @@ async fn read_local_block(args: Arc<Args>, local_block: LocalBlock) -> Result<Ve
     let mut reader = BufReader::new(file);
 
     let seek_pos = SeekFrom::Start(local_block.offset);
-    let read_length = local_block.length as usize;
-    let mut data = vec![0; read_length];
+    let buffer_size = local_block.size as usize;
+    let mut data = vec![0; buffer_size];
 
     reader.seek(seek_pos).await?;
     reader.read_exact(&mut data).await?;

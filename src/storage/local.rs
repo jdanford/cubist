@@ -4,9 +4,12 @@ use async_trait::async_trait;
 use rand_distr::{Distribution, LogNormal};
 use tokio::{fs, time::sleep};
 
-use crate::error::{Error, Result};
+use crate::{
+    error::{Error, Result},
+    stats::StorageStats,
+};
 
-use super::{stats::StorageStats, Storage};
+use super::Storage;
 
 #[derive(Debug)]
 pub struct LocalStorage {

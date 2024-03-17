@@ -10,15 +10,14 @@
 )]
 
 pub mod cli;
-mod error;
-mod logger;
-mod storage;
 
 mod archive;
 mod block;
+mod error;
 mod file;
 mod hash;
-mod refs;
+mod logger;
 mod serde;
 mod stats;
+mod storage;
 mod walker;

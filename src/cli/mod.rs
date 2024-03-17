@@ -26,10 +26,10 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
-    Backup(#[command(flatten)] BackupArgs),
-    Restore(#[command(flatten)] RestoreArgs),
-    Delete(#[command(flatten)] DeleteArgs),
-    Archives(#[command(flatten)] ArchivesArgs),
+    Backup(BackupArgs),
+    Restore(RestoreArgs),
+    Delete(DeleteArgs),
+    Archives(ArchivesArgs),
 }
 
 impl Command {
@@ -94,13 +94,16 @@ pub struct ArchivesArgs {
 #[derive(Args, Debug)]
 pub struct GlobalArgs {
     #[arg(short, long, default_value_t = false)]
-    stats: bool,
+    pub stats: bool,
+
+    #[arg(short, long, action = ArgAction::Count, group = "verbosity")]
+    pub verbose: u8,
+
+    #[arg(short, long, action = ArgAction::Count, group = "verbosity")]
+    pub quiet: u8,
 
     #[command(flatten)]
     pub storage: StorageArgs,
-
-    #[command(flatten)]
-    pub logger: LoggerArgs,
 }
 
 #[derive(Args, Debug)]
@@ -120,18 +123,9 @@ pub struct StorageArgs {
     pub latency: Option<Duration>,
 }
 
-#[derive(Args, Debug)]
-pub struct LoggerArgs {
-    #[arg(short, long, action = ArgAction::Count, group = "verbosity")]
-    pub verbose: u8,
-
-    #[arg(short, long, action = ArgAction::Count, group = "verbosity")]
-    pub quiet: u8,
-}
-
 pub async fn main() {
     let cli = Cli::parse();
-    init_logger(&cli.command.global().logger);
+    init_logger(cli.command.global());
 
     let result = match cli.command {
         Command::Backup(args) => backup::main(args).await,
@@ -145,7 +139,7 @@ pub async fn main() {
     }
 }
 
-fn init_logger(args: &LoggerArgs) {
+fn init_logger(args: &GlobalArgs) {
     let level = log_level_from_args(args.verbose, args.quiet);
     logger::init(level);
 }

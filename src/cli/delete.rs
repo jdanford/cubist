@@ -6,53 +6,66 @@ use tokio::{sync::RwLock, try_join};
 
 use crate::{
     cli,
-    error::Result,
-    stats::{format_size, Stats},
+    error::{Error, Result},
+    stats::{format_size, CoreStats},
 };
 
 use super::common::{
-    create_storage, delete_archives, delete_blocks, download_archives, download_ref_counts,
-    upload_ref_counts,
+    create_storage, delete_archives, delete_blocks, download_archives, download_block_records,
+    upload_block_records,
 };
 
 pub async fn main(cli: cli::DeleteArgs) -> Result<()> {
-    let mut stats = Stats::new();
+    let mut stats = CoreStats::new();
     let storage = create_storage(cli.global.storage).await?;
     let storage_arc = Arc::new(RwLock::new(storage));
 
-    let mut ref_counts = download_ref_counts(storage_arc.clone()).await?;
-    let mut garbage_blocks = HashSet::new();
+    let mut block_records = download_block_records(storage_arc.clone()).await?;
+    let mut removed_blocks = HashSet::new();
     let archives =
         download_archives(storage_arc.clone(), &cli.archive_names, cli.max_concurrency).await?;
 
-    for archive in archives {
-        let archive_deleted_blocks = ref_counts.sub(&archive.ref_counts)?;
-        garbage_blocks.extend(archive_deleted_blocks);
+    for archive in &archives {
+        let archive_garbage_blocks = block_records.remove_refs(&archive.block_refs)?;
+        removed_blocks.extend(archive_garbage_blocks);
     }
 
-    delete_blocks(storage_arc.clone(), garbage_blocks.iter().by_ref()).await?;
-    stats.blocks_deleted += garbage_blocks.len() as u64;
+    let mut bytes_deleted = 0;
+    let mut blocks_deleted = 0;
+
+    for hash in &removed_blocks {
+        let record = block_records
+            .get(hash)
+            .ok_or_else(|| Error::BlockRecordNotFound(*hash))?;
+        bytes_deleted += record.size;
+        blocks_deleted += 1;
+    }
+
+    delete_blocks(storage_arc.clone(), removed_blocks.iter().by_ref()).await?;
+    stats.bytes_deleted += bytes_deleted;
+    stats.blocks_deleted += blocks_deleted;
 
     try_join!(
         delete_archives(storage_arc.clone(), &cli.archive_names, cli.max_concurrency),
-        upload_ref_counts(storage_arc.clone(), ref_counts),
+        upload_block_records(storage_arc.clone(), block_records),
     )?;
 
-    let elapsed_time = stats.end();
-    let storage = storage_arc.read().await;
-    let storage_stats = storage.stats();
-
     if cli.global.stats {
+        let full_stats = stats.finalize(storage_arc.read().await.stats());
         info!(
             "bytes downloaded: {}",
-            format_size(storage_stats.bytes_downloaded)
+            format_size(full_stats.metadata_bytes_downloaded())
         );
         info!(
             "bytes uploaded: {}",
-            format_size(storage_stats.bytes_uploaded)
+            format_size(full_stats.metadata_bytes_uploaded())
         );
-        info!("blocks deleted: {}", stats.blocks_deleted);
-        info!("elapsed time: {}", format_duration(elapsed_time));
+        info!("bytes deleted: {}", format_size(full_stats.bytes_deleted));
+        info!("blocks deleted: {}", full_stats.blocks_deleted);
+        info!(
+            "elapsed time: {}",
+            format_duration(full_stats.elapsed_time())
+        );
     }
 
     Ok(())

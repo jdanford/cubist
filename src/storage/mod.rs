@@ -1,6 +1,5 @@
 mod local;
 mod s3;
-mod stats;
 
 use std::fmt::Debug;
 
@@ -9,9 +8,8 @@ use async_trait::async_trait;
 use crate::{
     error::{Error, Result},
     hash::Hash,
+    stats::StorageStats,
 };
-
-use self::stats::StorageStats;
 
 pub use {local::LocalStorage, s3::S3Storage};
 
@@ -39,7 +37,7 @@ pub trait Storage: Debug {
 
 pub const ARCHIVE_KEY_PREFIX: &str = "archive:";
 pub const BLOCK_KEY_PREFIX: &str = "block:";
-pub const REF_COUNTS_KEY: &str = "ref-counts";
+pub const BLOCK_RECORDS_KEY: &str = "meta:blocks";
 
 pub fn archive_key(name: &str) -> String {
     format!("{ARCHIVE_KEY_PREFIX}{name}")

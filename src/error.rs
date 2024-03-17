@@ -44,6 +44,9 @@ pub enum Error {
     #[error("`{0}` already exists")]
     FileAlreadyExists(PathBuf),
 
+    #[error("no block record found for {0}")]
+    BlockRecordNotFound(Hash),
+
     #[error("block {hash} has ref count {actual}, expected at least {expected}")]
     WrongRefCount {
         hash: Hash,

@@ -6,6 +6,7 @@ use std::{
 
 use crate::file::Node;
 
+#[derive(Debug)]
 pub struct FileWalker<'a> {
     path: PathBuf,
     layers: Vec<btree_map::Iter<'a, OsString, Node>>,

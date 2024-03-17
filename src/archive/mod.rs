@@ -4,26 +4,26 @@ use std::ops::{Deref, DerefMut};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{hash::Hash, refs::RefCounts};
+use crate::{block::BlockRefs, hash::Hash};
 
 use self::map::FileMap;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Archive {
     files: FileMap,
-    pub ref_counts: RefCounts,
+    pub block_refs: BlockRefs,
 }
 
 impl Archive {
     pub fn new() -> Self {
         Archive {
             files: FileMap::new(),
-            ref_counts: RefCounts::new(),
+            block_refs: BlockRefs::new(),
         }
     }
 
     pub fn add_ref(&mut self, hash: &Hash) {
-        self.ref_counts.add_count(hash, 1);
+        self.block_refs.add_count(hash, 1);
     }
 }
 

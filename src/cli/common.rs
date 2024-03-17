@@ -14,11 +14,11 @@ use tokio::{
 
 use crate::{
     archive::Archive,
+    block::BlockRecords,
     error::{Error, Result},
     hash::Hash,
-    refs::RefCounts,
     serde::{deserialize, serialize},
-    stats::Stats,
+    stats::CoreStats,
     storage::{self, BoxedStorage, LocalStorage, S3Storage},
 };
 
@@ -103,7 +103,7 @@ pub async fn download_archives<S: ToString, I: IntoIterator<Item = S>>(
 pub async fn upload_archive(
     storage: Arc<RwLock<BoxedStorage>>,
     archive: Arc<Archive>,
-    stats: &Stats,
+    stats: &CoreStats,
 ) -> Result<()> {
     let timestamp = stats.start_time.format("%Y%m%d%H%M%S").to_string();
     let key = storage::archive_key(&timestamp);
@@ -140,41 +140,32 @@ pub async fn delete_archives<S: ToString, I: IntoIterator<Item = S>>(
     Ok(())
 }
 
-pub async fn download_ref_counts(storage: Arc<RwLock<BoxedStorage>>) -> Result<RefCounts> {
+pub async fn download_block_records(storage: Arc<RwLock<BoxedStorage>>) -> Result<BlockRecords> {
     let maybe_bytes = storage
         .write()
         .await
-        .try_get(storage::REF_COUNTS_KEY)
+        .try_get(storage::BLOCK_RECORDS_KEY)
         .await?;
-    let ref_counts = if let Some(bytes) = maybe_bytes {
+    let block_records = if let Some(bytes) = maybe_bytes {
         spawn_blocking(move || deserialize(&bytes)).await??
     } else {
-        RefCounts::new()
+        BlockRecords::new()
     };
 
-    Ok(ref_counts)
+    Ok(block_records)
 }
 
-pub async fn upload_ref_counts(
+pub async fn upload_block_records(
     storage: Arc<RwLock<BoxedStorage>>,
-    ref_counts: RefCounts,
+    block_records: BlockRecords,
 ) -> Result<()> {
-    let bytes = spawn_blocking(move || serialize(&ref_counts)).await??;
+    let bytes = spawn_blocking(move || serialize(&block_records)).await??;
     storage
         .write()
         .await
-        .put(storage::REF_COUNTS_KEY, bytes)
+        .put(storage::BLOCK_RECORDS_KEY, bytes)
         .await?;
     Ok(())
-}
-
-pub async fn update_ref_counts(
-    storage: Arc<RwLock<BoxedStorage>>,
-    mut ref_counts: RefCounts,
-    archive_ref_counts: &RefCounts,
-) -> Result<()> {
-    ref_counts.add(archive_ref_counts);
-    upload_ref_counts(storage, ref_counts).await
 }
 
 pub async fn delete_blocks<'a, I: IntoIterator<Item = &'a Hash>>(

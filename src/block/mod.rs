@@ -1,3 +1,5 @@
+mod records;
+
 use fastcdc::v2020::AsyncStreamCDC;
 use tokio::{
     io::{AsyncRead, AsyncWriteExt},
@@ -9,6 +11,9 @@ use crate::{
     hash::{self, Hash},
 };
 
+pub use self::records::{BlockRecord, BlockRecords, BlockRefs};
+
+#[derive(Debug)]
 pub enum Block {
     Leaf {
         hash: Hash,

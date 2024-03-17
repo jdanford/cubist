@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::{
-    block::Block,
+    block::{Block, BlockRecord},
     error::{Error, Result},
     hash::{self, Hash},
     storage,
@@ -29,7 +29,6 @@ impl UploadTree {
     pub async fn add_leaf(&mut self, data: Vec<u8>) -> Result<()> {
         let block = Block::leaf(data).await?;
         let hash = upload_block(self.args.clone(), self.state.clone(), block).await?;
-        self.state.write().await.archive.add_ref(&hash);
         self.add_inner(hash, false).await?;
         Ok(())
     }
@@ -73,7 +72,6 @@ impl UploadTree {
             let children = layer.drain(range).collect();
             let block = Block::branch(level, children).await?;
             hash = upload_block(self.args.clone(), self.state.clone(), block).await?;
-            self.state.write().await.archive.add_ref(&hash);
         }
 
         Ok(())
@@ -86,14 +84,21 @@ async fn upload_block(args: Arc<Args>, state: Arc<RwLock<State>>, block: Block) 
     if !block_exists(args.clone(), state.clone(), &hash).await {
         let key = storage::block_key(&hash);
         let bytes = block.encode(args.compression_level).await?;
+        let size = bytes.len() as u64;
+        let record = BlockRecord { ref_count: 1, size };
+
         state.write().await.storage.put(&key, bytes).await?;
+        state.write().await.block_records.insert(hash, record);
         state.write().await.stats.blocks_uploaded += 1;
+        state.write().await.stats.content_bytes_uploaded += size;
     }
 
-    state.write().await.stats.blocks_used += 1;
+    state.write().await.archive.add_ref(&hash);
+    state.write().await.stats.blocks_referenced += 1;
     Ok(hash)
 }
 
-async fn block_exists(args: Arc<Args>, state: Arc<RwLock<State>>, hash: &Hash) -> bool {
-    state.read().await.archive.ref_counts.contains(hash) || args.ref_counts.contains(hash)
+async fn block_exists(_args: Arc<Args>, state: Arc<RwLock<State>>, hash: &Hash) -> bool {
+    state.read().await.archive.block_refs.contains(hash)
+        || state.read().await.block_records.contains(hash)
 }

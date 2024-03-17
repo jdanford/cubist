@@ -23,6 +23,7 @@ use super::{
     Args, State,
 };
 
+#[derive(Debug)]
 pub struct PendingDownload {
     pub metadata: Metadata,
     pub hash: Option<Hash>,

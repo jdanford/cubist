@@ -12,7 +12,7 @@ use crate::{
     cli,
     error::Result,
     hash::Hash,
-    stats::{format_size, Stats},
+    stats::{format_size, CoreStats},
     storage::BoxedStorage,
 };
 
@@ -32,13 +32,13 @@ struct Args {
 
 #[derive(Debug)]
 struct State {
-    stats: Stats,
+    stats: CoreStats,
     storage: BoxedStorage,
     local_blocks: HashMap<Hash, LocalBlock>,
 }
 
 pub async fn main(cli: cli::RestoreArgs) -> Result<()> {
-    let stats = Stats::new();
+    let stats = CoreStats::new();
     let storage = create_storage(cli.global.storage).await?;
     let storage_arc = Arc::new(RwLock::new(storage));
     let archive = download_archive(storage_arc.clone(), &cli.archive_name).await?;
@@ -70,23 +70,26 @@ pub async fn main(cli: cli::RestoreArgs) -> Result<()> {
     sender.close();
     downloader_task.await?;
 
-    let State {
-        storage, mut stats, ..
-    } = Arc::try_unwrap(state).unwrap().into_inner();
-
-    let elapsed_time = stats.end();
-    let storage_stats = storage.stats();
+    let State { storage, stats, .. } = Arc::try_unwrap(state).unwrap().into_inner();
 
     if cli.global.stats {
+        let full_stats = stats.finalize(storage.stats());
         info!(
-            "bytes downloaded: {}",
-            format_size(storage_stats.bytes_downloaded)
+            "content downloaded: {}",
+            format_size(full_stats.content_bytes_downloaded)
         );
-        info!("bytes written: {}", format_size(stats.bytes_written));
-        info!("files created: {}", stats.files_created);
-        info!("blocks downloaded: {}", stats.blocks_downloaded);
-        info!("blocks used: {}", stats.blocks_used);
-        info!("elapsed time: {}", format_duration(elapsed_time));
+        info!(
+            "metadata downloaded: {}",
+            format_size(full_stats.metadata_bytes_downloaded())
+        );
+        info!("bytes written: {}", format_size(full_stats.bytes_written));
+        info!("files created: {}", full_stats.files_created);
+        info!("blocks downloaded: {}", full_stats.blocks_downloaded);
+        info!("blocks referenced: {}", full_stats.blocks_referenced);
+        info!(
+            "elapsed time: {}",
+            format_duration(full_stats.elapsed_time())
+        );
     }
 
     Ok(())

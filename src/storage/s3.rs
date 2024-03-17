@@ -8,9 +8,12 @@ use aws_sdk_s3::{
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
 use tokio::task::spawn_blocking;
 
-use crate::error::{Error, Result};
+use crate::{
+    error::{Error, Result},
+    stats::StorageStats,
+};
 
-use super::{stats::StorageStats, Storage};
+use super::Storage;
 
 #[derive(Debug)]
 pub struct S3Storage {

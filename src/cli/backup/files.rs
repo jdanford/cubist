@@ -25,6 +25,7 @@ use crate::{
 
 use super::{blocks::UploadTree, Args, State};
 
+#[derive(Debug)]
 pub struct PendingUpload {
     local_path: PathBuf,
     archive_path: PathBuf,

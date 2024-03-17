@@ -9,14 +9,14 @@ use tokio::{spawn, sync::RwLock, try_join};
 
 use crate::{
     archive::Archive,
-    cli,
+    block::BlockRecords,
+    cli::{self, common::upload_block_records},
     error::Result,
-    refs::RefCounts,
-    stats::{format_size, Stats},
+    stats::{format_size, CoreStats},
     storage::BoxedStorage,
 };
 
-use super::common::{create_storage, download_ref_counts, update_ref_counts, upload_archive};
+use super::common::{create_storage, download_block_records, upload_archive};
 
 use self::files::{backup_recursive, upload_pending_files};
 
@@ -26,28 +26,27 @@ struct Args {
     target_block_size: u32,
     max_concurrency: u32,
     paths: Vec<PathBuf>,
-    ref_counts: RefCounts,
 }
 
 #[derive(Debug)]
 struct State {
-    stats: Stats,
+    stats: CoreStats,
     storage: BoxedStorage,
     archive: Archive,
+    block_records: BlockRecords,
 }
 
 pub async fn main(cli: cli::BackupArgs) -> Result<()> {
-    let stats = Stats::new();
+    let stats = CoreStats::new();
     let storage = create_storage(cli.global.storage).await?;
     let storage_arc = Arc::new(RwLock::new(storage));
-    let ref_counts = download_ref_counts(storage_arc.clone()).await?;
+    let block_records = download_block_records(storage_arc.clone()).await?;
 
     let args = Arc::new(Args {
         compression_level: cli.compression_level,
         target_block_size: cli.target_block_size,
         max_concurrency: cli.max_concurrency,
         paths: cli.paths,
-        ref_counts,
     });
 
     let storage = Arc::try_unwrap(storage_arc).unwrap().into_inner();
@@ -56,6 +55,7 @@ pub async fn main(cli: cli::BackupArgs) -> Result<()> {
         stats,
         storage,
         archive,
+        block_records,
     }));
 
     let (sender, receiver) = async_channel::bounded(args.max_concurrency as usize);
@@ -73,38 +73,42 @@ pub async fn main(cli: cli::BackupArgs) -> Result<()> {
     sender.close();
     uploader_task.await?;
 
-    let Args { ref_counts, .. } = Arc::try_unwrap(args).unwrap();
     let State {
-        mut stats,
+        stats,
         storage,
         archive,
+        block_records,
     } = Arc::try_unwrap(state).unwrap().into_inner();
-    let storage = Arc::new(RwLock::new(storage));
+    let storage_arc = Arc::new(RwLock::new(storage));
     let archive = Arc::new(archive);
 
     try_join!(
-        upload_archive(storage.clone(), archive.clone(), &stats),
-        update_ref_counts(storage.clone(), ref_counts, &archive.ref_counts),
+        upload_archive(storage_arc.clone(), archive.clone(), &stats),
+        upload_block_records(storage_arc.clone(), block_records),
     )?;
 
-    let elapsed_time = stats.end();
-    let storage = storage.read().await;
-    let storage_stats = storage.stats();
-
     if cli.global.stats {
+        let full_stats = stats.finalize(storage_arc.read().await.stats());
         info!(
             "bytes downloaded: {}",
-            format_size(storage_stats.bytes_downloaded)
+            format_size(full_stats.metadata_bytes_downloaded())
         );
         info!(
-            "bytes uploaded: {}",
-            format_size(storage_stats.bytes_uploaded)
+            "content uploaded: {}",
+            format_size(full_stats.content_bytes_uploaded)
         );
-        info!("bytes read: {}", format_size(stats.bytes_read));
-        info!("files read: {}", stats.files_read);
-        info!("blocks uploaded: {}", stats.blocks_uploaded);
-        info!("blocks used: {}", stats.blocks_used);
-        info!("elapsed time: {}", format_duration(elapsed_time));
+        info!(
+            "metadata uploaded: {}",
+            format_size(full_stats.metadata_bytes_uploaded())
+        );
+        info!("bytes read: {}", format_size(full_stats.bytes_read));
+        info!("files read: {}", full_stats.files_read);
+        info!("blocks uploaded: {}", full_stats.blocks_uploaded);
+        info!("blocks referenced: {}", full_stats.blocks_referenced);
+        info!(
+            "elapsed time: {}",
+            format_duration(full_stats.elapsed_time())
+        );
     }
 
     Ok(())
