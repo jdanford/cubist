@@ -16,7 +16,7 @@ use crate::{
     storage::BoxedStorage,
 };
 
-use super::common::{create_storage, download_archive};
+use super::{common::download_archive, storage::create_storage};
 
 use self::{
     blocks::LocalBlock,
@@ -25,9 +25,9 @@ use self::{
 
 #[derive(Debug)]
 struct Args {
-    max_concurrency: u32,
-    paths: Vec<PathBuf>,
     archive: Archive,
+    paths: Vec<PathBuf>,
+    max_concurrency: u32,
 }
 
 #[derive(Debug)]
@@ -39,7 +39,7 @@ struct State {
 
 pub async fn main(cli: cli::RestoreArgs) -> Result<()> {
     let stats = CoreStats::new();
-    let storage = create_storage(cli.global.storage).await?;
+    let storage = create_storage(&cli.global).await?;
     let storage_arc = Arc::new(RwLock::new(storage));
     let archive = download_archive(storage_arc.clone(), &cli.archive_name).await?;
 
@@ -70,7 +70,7 @@ pub async fn main(cli: cli::RestoreArgs) -> Result<()> {
     sender.close();
     downloader_task.await?;
 
-    let State { storage, stats, .. } = Arc::try_unwrap(state).unwrap().into_inner();
+    let State { stats, storage, .. } = Arc::try_unwrap(state).unwrap().into_inner();
 
     if cli.global.stats {
         let full_stats = stats.finalize(storage.stats());

@@ -1,11 +1,5 @@
-use std::{
-    env::{self, VarError},
-    ffi::OsStr,
-    path::PathBuf,
-    sync::Arc,
-};
+use std::sync::Arc;
 
-use humantime::parse_duration;
 use tokio::{
     spawn,
     sync::{RwLock, Semaphore},
@@ -15,54 +9,12 @@ use tokio::{
 use crate::{
     archive::Archive,
     block::BlockRecords,
-    error::{Error, Result},
+    error::Result,
     hash::Hash,
     serde::{deserialize, serialize},
     stats::CoreStats,
-    storage::{self, BoxedStorage, LocalStorage, S3Storage},
+    storage::{self, BoxedStorage},
 };
-
-use super::StorageArgs;
-
-const ENV_VAR_BUCKET: &str = "CUBIST_BUCKET";
-const ENV_VAR_LOCAL: &str = "CUBIST_LOCAL";
-const ENV_VAR_LATENCY: &str = "CUBIST_LATENCY";
-
-pub async fn create_storage(args: StorageArgs) -> Result<BoxedStorage> {
-    let StorageArgs {
-        mut bucket,
-        mut local,
-        latency,
-    } = args;
-
-    if bucket.is_none() && local.is_none() {
-        bucket = get_env_var(ENV_VAR_BUCKET)?;
-        local = get_env_var(ENV_VAR_LOCAL)?.map(PathBuf::from);
-    }
-
-    let latency = get_env_var(ENV_VAR_LATENCY)?
-        .as_deref()
-        .map(parse_duration)
-        .transpose()?
-        .or(latency);
-
-    match (bucket, local) {
-        (Some(bucket), None) => {
-            let s3_storage = S3Storage::new(bucket).await;
-            Ok(Box::new(s3_storage))
-        }
-        (None, Some(path)) => {
-            let local_storage = LocalStorage::new(path, latency);
-            Ok(Box::new(local_storage))
-        }
-        (None, None) => Err(Error::Cli(format!(
-            "Either `{ENV_VAR_BUCKET}` or `{ENV_VAR_LOCAL}` must be set"
-        ))),
-        _ => Err(Error::Cli(format!(
-            "`{ENV_VAR_BUCKET}` and `{ENV_VAR_LOCAL}` can't both be set"
-        ))),
-    }
-}
 
 pub async fn download_archive(
     storage: Arc<RwLock<BoxedStorage>>,
@@ -175,12 +127,4 @@ pub async fn delete_blocks<'a, I: IntoIterator<Item = &'a Hash>>(
     let keys = hashes.into_iter().map(storage::block_key).collect();
     storage.write().await.delete_many(keys).await?;
     Ok(())
-}
-
-fn get_env_var<T: AsRef<OsStr>>(name: T) -> Result<Option<String>> {
-    match env::var(name) {
-        Ok(value) => Ok(Some(value)),
-        Err(VarError::NotPresent) => Ok(None),
-        Err(err) => Err(err.into()),
-    }
 }

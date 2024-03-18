@@ -10,14 +10,17 @@ use crate::{
     stats::{format_size, CoreStats},
 };
 
-use super::common::{
-    create_storage, delete_archives, delete_blocks, download_archives, download_block_records,
-    upload_block_records,
+use super::{
+    common::{
+        delete_archives, delete_blocks, download_archives, download_block_records,
+        upload_block_records,
+    },
+    storage::create_storage,
 };
 
 pub async fn main(cli: cli::DeleteArgs) -> Result<()> {
     let mut stats = CoreStats::new();
-    let storage = create_storage(cli.global.storage).await?;
+    let storage = create_storage(&cli.global).await?;
     let storage_arc = Arc::new(RwLock::new(storage));
 
     let mut block_records = download_block_records(storage_arc.clone()).await?;

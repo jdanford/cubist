@@ -1,4 +1,8 @@
-use std::{io, path::PathBuf, time::Duration};
+use std::{
+    io,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use rand_distr::{Distribution, LogNormal};
@@ -31,8 +35,9 @@ impl LocalStorage {
         self.path.join(key)
     }
 
-    async fn create_dir(&self) -> Result<()> {
-        let result = fs::create_dir(&self.path).await;
+    async fn create_parent_dirs(&self, path: &Path) -> Result<()> {
+        let parent = path.parent().unwrap();
+        let result = fs::create_dir_all(parent).await;
         match result {
             Err(err) if err.kind() == io::ErrorKind::AlreadyExists => Ok(()),
             result => result,
@@ -106,7 +111,7 @@ impl Storage for LocalStorage {
         let path = self.object_path(key);
         let size = bytes.len() as u64;
 
-        self.create_dir().await?;
+        self.create_parent_dirs(&path).await?;
         fs::write(path, bytes).await?;
 
         self.stats.bytes_uploaded += size;

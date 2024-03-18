@@ -16,16 +16,19 @@ use crate::{
     storage::BoxedStorage,
 };
 
-use super::common::{create_storage, download_block_records, upload_archive};
+use super::{
+    common::{download_block_records, upload_archive},
+    storage::create_storage,
+};
 
 use self::files::{backup_recursive, upload_pending_files};
 
 #[derive(Debug)]
 struct Args {
+    paths: Vec<PathBuf>,
     compression_level: u8,
     target_block_size: u32,
     max_concurrency: u32,
-    paths: Vec<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -38,7 +41,7 @@ struct State {
 
 pub async fn main(cli: cli::BackupArgs) -> Result<()> {
     let stats = CoreStats::new();
-    let storage = create_storage(cli.global.storage).await?;
+    let storage = create_storage(&cli.global).await?;
     let storage_arc = Arc::new(RwLock::new(storage));
     let block_records = download_block_records(storage_arc.clone()).await?;
 

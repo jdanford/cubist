@@ -4,6 +4,7 @@ mod delete;
 mod restore;
 
 mod common;
+mod storage;
 
 use std::{path::PathBuf, time::Duration};
 
@@ -11,7 +12,7 @@ use clap::{ArgAction, Args, Parser, Subcommand};
 use humantime::parse_duration;
 use log::error;
 
-use crate::logger;
+use crate::{logger, storage::StorageUrl};
 
 const DEFAULT_COMPRESSION_LEVEL: u8 = 3;
 const DEFAULT_TARGET_BLOCK_SIZE: u32 = 1024 * 1024;
@@ -21,11 +22,11 @@ const DEFAULT_MAX_CONCURRENCY: u32 = 64;
 #[command(version, about, long_about = None, propagate_version = true)]
 pub struct Cli {
     #[command(subcommand)]
-    pub command: Command,
+    command: Command,
 }
 
 #[derive(Subcommand, Debug)]
-pub enum Command {
+enum Command {
     Backup(BackupArgs),
     Restore(RestoreArgs),
     Delete(DeleteArgs),
@@ -44,7 +45,7 @@ impl Command {
 }
 
 #[derive(Args, Debug)]
-pub struct BackupArgs {
+struct BackupArgs {
     #[arg(required = true)]
     pub paths: Vec<PathBuf>,
 
@@ -62,7 +63,7 @@ pub struct BackupArgs {
 }
 
 #[derive(Args, Debug)]
-pub struct RestoreArgs {
+struct RestoreArgs {
     pub archive_name: String,
 
     pub paths: Vec<PathBuf>,
@@ -75,7 +76,7 @@ pub struct RestoreArgs {
 }
 
 #[derive(Args, Debug)]
-pub struct DeleteArgs {
+struct DeleteArgs {
     pub archive_names: Vec<String>,
 
     #[arg(long, value_name = "N", default_value_t = DEFAULT_MAX_CONCURRENCY)]
@@ -86,14 +87,20 @@ pub struct DeleteArgs {
 }
 
 #[derive(Args, Debug)]
-pub struct ArchivesArgs {
+struct ArchivesArgs {
     #[command(flatten)]
     pub global: GlobalArgs,
 }
 
 #[derive(Args, Debug)]
-pub struct GlobalArgs {
-    #[arg(short, long, default_value_t = false)]
+struct GlobalArgs {
+    #[arg(short, long)]
+    pub storage: Option<StorageUrl>,
+
+    #[arg(short, long, value_parser = parse_duration)]
+    pub latency: Option<Duration>,
+
+    #[arg(long, default_value_t = false)]
     pub stats: bool,
 
     #[arg(short, long, action = ArgAction::Count, group = "verbosity")]
@@ -101,26 +108,6 @@ pub struct GlobalArgs {
 
     #[arg(short, long, action = ArgAction::Count, group = "verbosity")]
     pub quiet: u8,
-
-    #[command(flatten)]
-    pub storage: StorageArgs,
-}
-
-#[derive(Args, Debug)]
-pub struct StorageArgs {
-    #[arg(long, group = "storage")]
-    pub bucket: Option<String>,
-
-    #[arg(
-        long,
-        value_name = "STORAGE_PATH",
-        group = "storage",
-        group = "storage-local"
-    )]
-    pub local: Option<PathBuf>,
-
-    #[arg(long, value_parser = parse_duration, requires = "storage-local")]
-    pub latency: Option<Duration>,
 }
 
 pub async fn main() {

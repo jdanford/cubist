@@ -1,5 +1,6 @@
 mod local;
 mod s3;
+mod url;
 
 use std::fmt::Debug;
 
@@ -11,7 +12,7 @@ use crate::{
     stats::StorageStats,
 };
 
-pub use {local::LocalStorage, s3::S3Storage};
+pub use {local::LocalStorage, s3::S3Storage, url::StorageUrl};
 
 pub type BoxedStorage = Box<dyn Storage + Sync + Send + 'static>;
 
@@ -35,9 +36,9 @@ pub trait Storage: Debug {
     }
 }
 
-pub const ARCHIVE_KEY_PREFIX: &str = "archive:";
-pub const BLOCK_KEY_PREFIX: &str = "block:";
-pub const BLOCK_RECORDS_KEY: &str = "meta:blocks";
+pub const ARCHIVE_KEY_PREFIX: &str = "archives/";
+pub const BLOCK_KEY_PREFIX: &str = "blocks/";
+pub const BLOCK_RECORDS_KEY: &str = "metadata/blocks";
 
 pub fn archive_key(name: &str) -> String {
     format!("{ARCHIVE_KEY_PREFIX}{name}")

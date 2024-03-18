@@ -5,16 +5,16 @@ use crate::{
     cli,
     error::Result,
     stats::{format_size, CoreStats},
-    storage::ARCHIVE_KEY_PREFIX,
+    storage,
 };
 
-use super::common::create_storage;
+use super::storage::create_storage;
 
 pub async fn main(cli: cli::ArchivesArgs) -> Result<()> {
     let stats = CoreStats::new();
-    let mut storage = create_storage(cli.global.storage).await?;
+    let mut storage = create_storage(&cli.global).await?;
 
-    let prefix = ARCHIVE_KEY_PREFIX;
+    let prefix = storage::ARCHIVE_KEY_PREFIX;
     let keys = storage.keys(Some(prefix)).await?;
     let mut archive_names = keys
         .into_iter()

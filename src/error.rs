@@ -23,6 +23,9 @@ pub enum Error {
     #[error("no item found for key `{0}`")]
     ItemNotFound(String),
 
+    #[error("storage URL `{0}` is invalid")]
+    InvalidStorageUrl(String),
+
     #[error("key `{0}` is invalid")]
     InvalidKey(String),
 
@@ -138,6 +141,12 @@ pub enum Error {
 
     #[error("{0}")]
     Channel(String),
+}
+
+impl From<clap::Error> for Error {
+    fn from(error: clap::Error) -> Self {
+        Error::Cli(error.to_string())
+    }
 }
 
 impl<E, R> From<SdkError<E, R>> for Error {
