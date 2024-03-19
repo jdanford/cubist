@@ -23,6 +23,7 @@ pub async fn main(cli: cli::DeleteArgs) -> Result<()> {
     let mut stats = CoreStats::new();
     let storage = rwarc(create_storage(&cli.global).await?);
     let mut removed_blocks = HashSet::new();
+
     let (archives, mut block_records) = try_join!(
         download_archives(storage.clone(), &cli.archives, cli.jobs),
         download_block_records(storage.clone()),

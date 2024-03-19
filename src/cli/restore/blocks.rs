@@ -121,14 +121,14 @@ async fn write_local_block(
     file: &mut ActiveDownload,
     data: &[u8],
 ) -> Result<LocalBlock> {
-    let size = data.len();
+    let size = data.len() as u64;
     let safe_size = size.try_into().map_err(|_| Error::InvalidBlockSize(size))?;
     let local_block = LocalBlock::new(file.inode, file.offset, safe_size);
 
     file.write_all(data).await?;
-    file.offset += size as u64;
+    file.offset += size;
+    state.stats.write().await.bytes_written += size;
 
-    state.stats.write().await.bytes_written += size as u64;
     Ok(local_block)
 }
 
@@ -146,5 +146,6 @@ async fn read_local_block(args: Arc<Args>, local_block: LocalBlock) -> Result<Ve
 
     reader.seek(seek_pos).await?;
     reader.read_exact(&mut data).await?;
+
     Ok(data)
 }

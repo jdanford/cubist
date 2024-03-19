@@ -68,7 +68,7 @@ pub enum Error {
     },
 
     #[error("block has invalid size {0}")]
-    InvalidBlockSize(usize),
+    InvalidBlockSize(u64),
 
     #[error("too many block levels")]
     TooManyBlockLevels,
@@ -101,12 +101,6 @@ pub enum Error {
     Acquire {
         #[from]
         source: AcquireError,
-    },
-
-    #[error("{source}")]
-    Walk {
-        #[from]
-        source: walkdir::Error,
     },
 
     #[error("{source}")]
@@ -198,8 +192,8 @@ pub fn assert_hash_eq(actual: &Hash, expected: &Hash) -> Result<()> {
     Ok(())
 }
 
-pub fn assert_size_multiple_of_hash(size: usize) -> Result<()> {
-    if size % hash::SIZE != 0 {
+pub fn assert_size_multiple_of_hash(size: u64) -> Result<()> {
+    if size % hash::SIZE as u64 != 0 {
         return Err(Error::InvalidBlockSize(size));
     }
 

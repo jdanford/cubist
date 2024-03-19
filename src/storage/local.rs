@@ -1,12 +1,15 @@
 use std::{
+    borrow::Borrow,
     mem::size_of_val,
     path::{Path, PathBuf},
     time::Duration,
 };
 
 use async_trait::async_trait;
+use async_walkdir::{Filtering, WalkDir};
 use rand_distr::{Distribution, LogNormal};
 use tokio::{fs, time::sleep};
+use tokio_stream::StreamExt;
 
 use crate::{
     error::{Error, Result},
@@ -68,17 +71,36 @@ impl Storage for LocalStorage {
     async fn keys(&mut self, prefix: Option<&str>) -> Result<Vec<String>> {
         self.simulate_latency().await;
 
-        let mut read_dir = fs::read_dir(&self.path).await?;
-        let mut keys = vec![];
+        let prefix_path = self.path.join(prefix.unwrap_or(""));
+        let (dirname, filename_prefix) = if prefix_path.to_str().is_some_and(|s| s.ends_with('/')) {
+            (prefix_path.borrow(), "")
+        } else {
+            let dirname = prefix_path.parent().unwrap();
+            let filename_prefix = prefix_path
+                .strip_prefix(dirname)?
+                .to_str()
+                .ok_or_else(|| invalid_key_error(&prefix_path))?;
+            (dirname, filename_prefix)
+        };
 
-        while let Some(entry) = read_dir.next_entry().await? {
+        let mut keys = vec![];
+        let mut walker = WalkDir::new(dirname).filter(|entry| async move {
+            if let Ok(file_type) = entry.file_type().await {
+                if file_type.is_file() {
+                    return Filtering::Continue;
+                }
+            }
+
+            Filtering::Ignore
+        });
+
+        while let Some(entry) = walker.try_next().await? {
             self.stats.bytes_downloaded += size_of_val(&entry) as u64;
 
-            let name = entry.file_name();
-            let key = name
-                .to_str()
-                .ok_or_else(|| Error::InvalidKey(name.to_string_lossy().into_owned()))?;
-            if key.starts_with(prefix.unwrap_or("")) {
+            let absolute_path = entry.path();
+            let path = absolute_path.strip_prefix(&self.path)?;
+            let full_key = path.to_str().ok_or_else(|| invalid_key_error(path))?;
+            if let Some(key) = full_key.strip_prefix(filename_prefix) {
                 keys.push(key.to_owned());
             }
         }
@@ -135,4 +157,8 @@ impl Storage for LocalStorage {
     fn stats(&self) -> &StorageStats {
         &self.stats
     }
+}
+
+fn invalid_key_error(path: &Path) -> Error {
+    Error::InvalidKey(path.to_string_lossy().into_owned())
 }

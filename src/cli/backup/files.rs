@@ -6,6 +6,7 @@ use std::{
 };
 
 use async_channel::{Receiver, Sender};
+use async_walkdir::{DirEntry, WalkDir};
 use log::{debug, warn};
 use tokio::{
     fs::{self, File},
@@ -14,7 +15,6 @@ use tokio::{
     sync::Semaphore,
 };
 use tokio_stream::StreamExt;
-use walkdir::{DirEntry, WalkDir};
 
 use crate::{
     block,
@@ -37,10 +37,9 @@ pub async fn backup_recursive(
     sender: Sender<PendingUpload>,
     path: &Path,
 ) -> Result<()> {
-    let walker = WalkDir::new(path);
-    for entry_result in walker {
-        let entry = entry_result?;
-        if entry.file_type().is_dir() && entry.depth() == 0 {
+    let mut walker = WalkDir::new(path);
+    while let Some(entry) = walker.try_next().await? {
+        if entry.file_type().await?.is_dir() && entry.path() == path {
             continue;
         }
 
@@ -61,21 +60,21 @@ async fn backup_from_entry(
 ) -> Result<Option<PendingUpload>> {
     let local_path = entry.path();
     let archive_path = local_path.strip_prefix(base_path)?;
-    let file_type = entry.file_type();
+    let file_type = entry.file_type().await?;
     if file_type.is_file() {
         let pending_file = PendingUpload {
-            local_path: local_path.to_owned(),
+            local_path: local_path.clone(),
             archive_path: archive_path.to_owned(),
         };
         return Ok(Some(pending_file));
     } else if file_type.is_symlink() {
-        let metadata = read_metadata(local_path).await?;
-        let path = fs::read_link(local_path).await?;
+        let metadata = read_metadata(&local_path).await?;
+        let path = fs::read_link(&local_path).await?;
         let node = Node::Symlink { metadata, path };
         let archive = &mut state.archive.write().await;
         archive.insert(archive_path.to_owned(), node)?;
     } else if file_type.is_dir() {
-        let metadata = read_metadata(local_path).await?;
+        let metadata = read_metadata(&local_path).await?;
         let children = BTreeMap::new();
         let node = Node::Directory { metadata, children };
         let archive = &mut state.archive.write().await;

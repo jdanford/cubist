@@ -115,7 +115,7 @@ impl Block {
     }
 
     async fn branch_from_raw(level: u8, bytes: Vec<u8>) -> Result<Self> {
-        let size = bytes.len();
+        let size = bytes.len() as u64;
         assert_size_multiple_of_hash(size)?;
 
         let children = hash::split(&bytes).collect::<Vec<_>>();
