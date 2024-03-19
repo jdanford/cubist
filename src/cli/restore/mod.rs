@@ -16,7 +16,12 @@ use crate::{
     storage::BoxedStorage,
 };
 
-use super::{common::download_archive, storage::create_storage};
+use super::{
+    arc::{rwarc, unarc, unrwarc},
+    locks::BlockLocks,
+    ops::download_archive,
+    storage::create_storage,
+};
 
 use self::{
     blocks::LocalBlock,
@@ -27,37 +32,37 @@ use self::{
 struct Args {
     archive: Archive,
     paths: Vec<PathBuf>,
-    max_concurrency: u32,
+    jobs: u32,
 }
 
 #[derive(Debug)]
 struct State {
-    stats: CoreStats,
-    storage: BoxedStorage,
-    local_blocks: HashMap<Hash, LocalBlock>,
+    stats: Arc<RwLock<CoreStats>>,
+    storage: Arc<RwLock<BoxedStorage>>,
+    local_blocks: Arc<RwLock<HashMap<Hash, LocalBlock>>>,
+    block_locks: Arc<RwLock<BlockLocks>>,
 }
 
 pub async fn main(cli: cli::RestoreArgs) -> Result<()> {
-    let stats = CoreStats::new();
-    let storage = create_storage(&cli.global).await?;
-    let storage_arc = Arc::new(RwLock::new(storage));
-    let archive = download_archive(storage_arc.clone(), &cli.archive_name).await?;
+    let stats = rwarc(CoreStats::new());
+    let storage = rwarc(create_storage(&cli.global).await?);
+    let local_blocks = rwarc(HashMap::new());
+    let block_locks = rwarc(BlockLocks::new());
+
+    let archive = download_archive(storage.clone(), &cli.archive).await?;
 
     let args = Arc::new(Args {
-        max_concurrency: cli.max_concurrency,
+        jobs: cli.jobs,
         paths: cli.paths,
         archive,
     });
-
-    let storage = Arc::try_unwrap(storage_arc).unwrap().into_inner();
-    let local_blocks = HashMap::new();
-    let state = Arc::new(RwLock::new(State {
+    let state = Arc::new(State {
         stats,
         storage,
         local_blocks,
-    }));
-
-    let (sender, receiver) = async_channel::bounded(args.max_concurrency as usize);
+        block_locks,
+    });
+    let (sender, receiver) = async_channel::bounded(args.jobs as usize);
 
     let downloader_args = args.clone();
     let downloader_state = state.clone();
@@ -70,10 +75,11 @@ pub async fn main(cli: cli::RestoreArgs) -> Result<()> {
     sender.close();
     downloader_task.await?;
 
-    let State { stats, storage, .. } = Arc::try_unwrap(state).unwrap().into_inner();
+    let State { stats, storage, .. } = unarc(state);
+    let stats = unrwarc(stats);
 
     if cli.global.stats {
-        let full_stats = stats.finalize(storage.stats());
+        let full_stats = stats.finalize(storage.read().await.stats());
         info!(
             "content downloaded: {}",
             format_size(full_stats.content_bytes_downloaded)

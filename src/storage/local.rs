@@ -1,5 +1,5 @@
 use std::{
-    io,
+    mem::size_of_val,
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -37,21 +37,18 @@ impl LocalStorage {
 
     async fn create_parent_dirs(&self, path: &Path) -> Result<()> {
         let parent = path.parent().unwrap();
-        let result = fs::create_dir_all(parent).await;
-        match result {
-            Err(err) if err.kind() == io::ErrorKind::AlreadyExists => Ok(()),
-            result => result,
-        }?;
-
+        fs::create_dir_all(parent).await?;
         Ok(())
     }
 
     async fn simulate_latency(&self) {
-        if let Some(duration) = self.latency {
+        if let Some(latency) = self.latency {
             let distribution = LogNormal::new(0.0, 0.5).unwrap();
             let multiplier = distribution.sample(&mut rand::thread_rng());
-            let randomized_latency = duration.mul_f64(multiplier);
-            sleep(randomized_latency).await;
+            let randomized_latency = latency.mul_f64(multiplier);
+            if !randomized_latency.is_zero() {
+                sleep(randomized_latency).await;
+            }
         }
     }
 }
@@ -75,6 +72,8 @@ impl Storage for LocalStorage {
         let mut keys = vec![];
 
         while let Some(entry) = read_dir.next_entry().await? {
+            self.stats.bytes_downloaded += size_of_val(&entry) as u64;
+
             let name = entry.file_name();
             let key = name
                 .to_str()

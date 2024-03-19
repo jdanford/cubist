@@ -29,7 +29,7 @@ pub async fn main(cli: cli::ArchivesArgs) -> Result<()> {
     if cli.global.stats {
         let full_stats = stats.finalize(storage.stats());
         info!(
-            "bytes downloaded: {}",
+            "metadata downloaded: {}",
             format_size(full_stats.metadata_bytes_downloaded())
         );
         info!(

@@ -6,10 +6,7 @@ use std::{
 
 use async_channel::{Receiver, Sender};
 use log::debug;
-use tokio::{
-    fs, spawn,
-    sync::{RwLock, Semaphore},
-};
+use tokio::{fs, spawn, sync::Semaphore};
 
 use crate::{
     error::{Error, Result},
@@ -32,7 +29,7 @@ pub struct PendingDownload {
 
 pub async fn restore_recursive(
     args: Arc<Args>,
-    state: Arc<RwLock<State>>,
+    state: Arc<State>,
     sender: Sender<PendingDownload>,
 ) -> Result<()> {
     let root_paths = if args.paths.is_empty() {
@@ -73,7 +70,7 @@ fn walk<'a>(
 
 async fn restore_from_node(
     _args: Arc<Args>,
-    _state: Arc<RwLock<State>>,
+    _state: Arc<State>,
     path: &Path,
     node: &Node,
 ) -> Result<Option<PendingDownload>> {
@@ -105,10 +102,10 @@ async fn restore_from_node(
 
 pub async fn download_pending_files(
     args: Arc<Args>,
-    state: Arc<RwLock<State>>,
+    state: Arc<State>,
     receiver: Receiver<PendingDownload>,
 ) {
-    let permit_count = args.max_concurrency;
+    let permit_count = args.jobs;
     let semaphore = Arc::new(Semaphore::new(permit_count as usize));
 
     while let Ok(pending_file) = receiver.recv().await {
@@ -129,11 +126,11 @@ pub async fn download_pending_files(
 
 async fn download_pending_file(
     args: Arc<Args>,
-    state: Arc<RwLock<State>>,
+    state: Arc<State>,
     pending_file: PendingDownload,
 ) -> Result<()> {
     let mut file = ActiveDownload::new(&pending_file).await?;
-    state.write().await.stats.files_created += 1;
+    state.stats.write().await.files_created += 1;
 
     if let Some(hash) = pending_file.hash {
         download_block_recursive(args, state.clone(), &mut file, hash, None).await?;

@@ -16,6 +16,8 @@ use crate::{
     storage::{self, BoxedStorage},
 };
 
+use super::arc::rwarc;
+
 pub async fn download_archive(
     storage: Arc<RwLock<BoxedStorage>>,
     archive_name: &str,
@@ -29,10 +31,10 @@ pub async fn download_archive(
 pub async fn download_archives<S: ToString, I: IntoIterator<Item = S>>(
     storage: Arc<RwLock<BoxedStorage>>,
     names: I,
-    max_concurrency: u32,
+    jobs: u32,
 ) -> Result<Vec<Archive>> {
-    let semaphore = Arc::new(Semaphore::new(max_concurrency as usize));
-    let archives = Arc::new(RwLock::new(vec![]));
+    let semaphore = Arc::new(Semaphore::new(jobs as usize));
+    let archives = rwarc(vec![]);
 
     for name in names {
         let storage = storage.clone();
@@ -47,19 +49,19 @@ pub async fn download_archives<S: ToString, I: IntoIterator<Item = S>>(
         });
     }
 
-    let _ = semaphore.acquire_many(max_concurrency).await.unwrap();
-    let archives = Arc::try_unwrap(archives).unwrap().into_inner();
+    let _ = semaphore.acquire_many(jobs).await.unwrap();
+    let archives = Arc::into_inner(archives).unwrap().into_inner();
     Ok(archives)
 }
 
 pub async fn upload_archive(
     storage: Arc<RwLock<BoxedStorage>>,
-    archive: Arc<Archive>,
+    archive: Arc<RwLock<Archive>>,
     stats: &CoreStats,
 ) -> Result<()> {
     let timestamp = stats.start_time.format("%Y%m%d%H%M%S").to_string();
     let key = storage::archive_key(&timestamp);
-    let archive_bytes = spawn_blocking(move || serialize(archive.as_ref())).await??;
+    let archive_bytes = spawn_blocking(move || serialize(&*archive.blocking_read())).await??;
     storage.write().await.put(&key, archive_bytes).await?;
     Ok(())
 }
@@ -73,9 +75,9 @@ pub async fn delete_archive(storage: Arc<RwLock<BoxedStorage>>, name: &str) -> R
 pub async fn delete_archives<S: ToString, I: IntoIterator<Item = S>>(
     storage: Arc<RwLock<BoxedStorage>>,
     names: I,
-    max_concurrency: u32,
+    jobs: u32,
 ) -> Result<()> {
-    let semaphore = Arc::new(Semaphore::new(max_concurrency as usize));
+    let semaphore = Arc::new(Semaphore::new(jobs as usize));
 
     for name in names {
         let storage = storage.clone();
@@ -88,7 +90,7 @@ pub async fn delete_archives<S: ToString, I: IntoIterator<Item = S>>(
         });
     }
 
-    let _ = semaphore.acquire_many(max_concurrency).await.unwrap();
+    let _ = semaphore.acquire_many(jobs).await.unwrap();
     Ok(())
 }
 
@@ -109,9 +111,9 @@ pub async fn download_block_records(storage: Arc<RwLock<BoxedStorage>>) -> Resul
 
 pub async fn upload_block_records(
     storage: Arc<RwLock<BoxedStorage>>,
-    block_records: BlockRecords,
+    block_records: Arc<RwLock<BlockRecords>>,
 ) -> Result<()> {
-    let bytes = spawn_blocking(move || serialize(&block_records)).await??;
+    let bytes = spawn_blocking(move || serialize(&*block_records.blocking_read())).await??;
     storage
         .write()
         .await

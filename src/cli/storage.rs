@@ -25,7 +25,11 @@ pub async fn create_storage(args: &GlobalArgs) -> Result<BoxedStorage> {
             .ok_or_else(|| Error::Cli(format!("`{ENV_VAR_STORAGE}` must be set")))?
     };
 
-    let latency = get_env_latency()?.or(args.latency);
+    let latency = if let Some(latency) = args.latency {
+        Some(latency)
+    } else {
+        get_env_latency()?
+    };
 
     match storage_url {
         StorageUrl::S3(bucket) => {

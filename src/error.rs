@@ -12,7 +12,7 @@ use aws_sdk_s3::{
 };
 use humantime::DurationError;
 use thiserror::Error;
-use tokio::task::JoinError;
+use tokio::{sync::AcquireError, task::JoinError};
 
 use crate::hash::{self, Hash};
 
@@ -95,6 +95,12 @@ pub enum Error {
     Join {
         #[from]
         source: JoinError,
+    },
+
+    #[error("{source}")]
+    Acquire {
+        #[from]
+        source: AcquireError,
     },
 
     #[error("{source}")]

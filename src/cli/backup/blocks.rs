@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use tokio::sync::RwLock;
-
 use crate::{
     block::{Block, BlockRecord},
     error::{Error, Result},
@@ -13,12 +11,12 @@ use super::{Args, State};
 
 pub struct UploadTree {
     args: Arc<Args>,
-    state: Arc<RwLock<State>>,
+    state: Arc<State>,
     layers: Vec<Vec<Hash>>,
 }
 
 impl UploadTree {
-    pub fn new(args: Arc<Args>, state: Arc<RwLock<State>>) -> Self {
+    pub fn new(args: Arc<Args>, state: Arc<State>) -> Self {
         UploadTree {
             args,
             state,
@@ -78,8 +76,10 @@ impl UploadTree {
     }
 }
 
-async fn upload_block(args: Arc<Args>, state: Arc<RwLock<State>>, block: Block) -> Result<Hash> {
+async fn upload_block(args: Arc<Args>, state: Arc<State>, block: Block) -> Result<Hash> {
     let hash = block.hash().to_owned();
+    let semaphore = state.block_locks.write().await.semaphore(&hash);
+    let permit = semaphore.acquire().await?;
 
     if !block_exists(args.clone(), state.clone(), &hash).await {
         let key = storage::block_key(&hash);
@@ -87,18 +87,20 @@ async fn upload_block(args: Arc<Args>, state: Arc<RwLock<State>>, block: Block) 
         let size = bytes.len() as u64;
         let record = BlockRecord { ref_count: 1, size };
 
-        state.write().await.storage.put(&key, bytes).await?;
-        state.write().await.block_records.insert(hash, record);
-        state.write().await.stats.blocks_uploaded += 1;
-        state.write().await.stats.content_bytes_uploaded += size;
+        state.storage.write().await.put(&key, bytes).await?;
+        state.block_records.write().await.insert(hash, record);
+        state.stats.write().await.blocks_uploaded += 1;
+        state.stats.write().await.content_bytes_uploaded += size;
     }
 
-    state.write().await.archive.add_ref(&hash);
-    state.write().await.stats.blocks_referenced += 1;
+    state.archive.write().await.add_ref(&hash);
+    state.stats.write().await.blocks_referenced += 1;
+
+    drop(permit);
     Ok(hash)
 }
 
-async fn block_exists(_args: Arc<Args>, state: Arc<RwLock<State>>, hash: &Hash) -> bool {
-    state.read().await.archive.block_refs.contains(hash)
-        || state.read().await.block_records.contains(hash)
+async fn block_exists(_args: Arc<Args>, state: Arc<State>, hash: &Hash) -> bool {
+    state.archive.read().await.block_refs.contains(hash)
+        || state.block_records.read().await.contains(hash)
 }

@@ -3,7 +3,9 @@ mod backup;
 mod delete;
 mod restore;
 
-mod common;
+mod arc;
+mod locks;
+mod ops;
 mod storage;
 
 use std::{path::PathBuf, time::Duration};
@@ -49,14 +51,14 @@ struct BackupArgs {
     #[arg(required = true)]
     pub paths: Vec<PathBuf>,
 
-    #[arg(long, value_name = "LEVEL", default_value_t = DEFAULT_COMPRESSION_LEVEL)]
+    #[arg(short = 'l', long, value_name = "LEVEL", default_value_t = DEFAULT_COMPRESSION_LEVEL)]
     pub compression_level: u8,
 
-    #[arg(long, value_name = "SIZE", default_value_t = DEFAULT_TARGET_BLOCK_SIZE)]
+    #[arg(short = 'b', long, value_name = "SIZE", default_value_t = DEFAULT_TARGET_BLOCK_SIZE)]
     pub target_block_size: u32,
 
-    #[arg(long, value_name = "N", default_value_t = DEFAULT_MAX_CONCURRENCY)]
-    pub max_concurrency: u32,
+    #[arg(short, long, value_name = "N", default_value_t = DEFAULT_MAX_CONCURRENCY)]
+    pub jobs: u32,
 
     #[command(flatten)]
     pub global: GlobalArgs,
@@ -64,12 +66,12 @@ struct BackupArgs {
 
 #[derive(Args, Debug)]
 struct RestoreArgs {
-    pub archive_name: String,
+    pub archive: String,
 
     pub paths: Vec<PathBuf>,
 
-    #[arg(long, value_name = "N", default_value_t = DEFAULT_MAX_CONCURRENCY)]
-    pub max_concurrency: u32,
+    #[arg(short, long, value_name = "N", default_value_t = DEFAULT_MAX_CONCURRENCY)]
+    pub jobs: u32,
 
     #[command(flatten)]
     pub global: GlobalArgs,
@@ -77,10 +79,11 @@ struct RestoreArgs {
 
 #[derive(Args, Debug)]
 struct DeleteArgs {
-    pub archive_names: Vec<String>,
+    #[arg(required = true)]
+    pub archives: Vec<String>,
 
-    #[arg(long, value_name = "N", default_value_t = DEFAULT_MAX_CONCURRENCY)]
-    pub max_concurrency: u32,
+    #[arg(short, long, value_name = "N", default_value_t = DEFAULT_MAX_CONCURRENCY)]
+    pub jobs: u32,
 
     #[command(flatten)]
     pub global: GlobalArgs,
@@ -97,7 +100,7 @@ struct GlobalArgs {
     #[arg(short, long)]
     pub storage: Option<StorageUrl>,
 
-    #[arg(short, long, value_parser = parse_duration)]
+    #[arg(long, value_parser = parse_duration)]
     pub latency: Option<Duration>,
 
     #[arg(long, default_value_t = false)]

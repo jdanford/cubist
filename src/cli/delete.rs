@@ -1,8 +1,8 @@
-use std::{collections::HashSet, sync::Arc};
+use std::collections::HashSet;
 
 use humantime::format_duration;
 use log::info;
-use tokio::{sync::RwLock, try_join};
+use tokio::try_join;
 
 use crate::{
     cli,
@@ -11,7 +11,8 @@ use crate::{
 };
 
 use super::{
-    common::{
+    arc::rwarc,
+    ops::{
         delete_archives, delete_blocks, download_archives, download_block_records,
         upload_block_records,
     },
@@ -20,13 +21,12 @@ use super::{
 
 pub async fn main(cli: cli::DeleteArgs) -> Result<()> {
     let mut stats = CoreStats::new();
-    let storage = create_storage(&cli.global).await?;
-    let storage_arc = Arc::new(RwLock::new(storage));
-
-    let mut block_records = download_block_records(storage_arc.clone()).await?;
+    let storage = rwarc(create_storage(&cli.global).await?);
     let mut removed_blocks = HashSet::new();
-    let archives =
-        download_archives(storage_arc.clone(), &cli.archive_names, cli.max_concurrency).await?;
+    let (archives, mut block_records) = try_join!(
+        download_archives(storage.clone(), &cli.archives, cli.jobs),
+        download_block_records(storage.clone()),
+    )?;
 
     for archive in &archives {
         let archive_garbage_blocks = block_records.remove_refs(&archive.block_refs)?;
@@ -44,23 +44,23 @@ pub async fn main(cli: cli::DeleteArgs) -> Result<()> {
         blocks_deleted += 1;
     }
 
-    delete_blocks(storage_arc.clone(), removed_blocks.iter().by_ref()).await?;
+    delete_blocks(storage.clone(), removed_blocks.iter().by_ref()).await?;
     stats.bytes_deleted += bytes_deleted;
     stats.blocks_deleted += blocks_deleted;
 
     try_join!(
-        delete_archives(storage_arc.clone(), &cli.archive_names, cli.max_concurrency),
-        upload_block_records(storage_arc.clone(), block_records),
+        delete_archives(storage.clone(), &cli.archives, cli.jobs),
+        upload_block_records(storage.clone(), rwarc(block_records)),
     )?;
 
     if cli.global.stats {
-        let full_stats = stats.finalize(storage_arc.read().await.stats());
+        let full_stats = stats.finalize(storage.read().await.stats());
         info!(
-            "bytes downloaded: {}",
+            "metadata downloaded: {}",
             format_size(full_stats.metadata_bytes_downloaded())
         );
         info!(
-            "bytes uploaded: {}",
+            "metadata uploaded: {}",
             format_size(full_stats.metadata_bytes_uploaded())
         );
         info!("bytes deleted: {}", format_size(full_stats.bytes_deleted));

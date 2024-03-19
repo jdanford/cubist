@@ -8,7 +8,6 @@ use async_recursion::async_recursion;
 use tokio::{
     fs::File,
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, BufWriter},
-    sync::RwLock,
 };
 
 use crate::{
@@ -74,15 +73,18 @@ impl DerefMut for ActiveDownload {
 #[async_recursion]
 pub async fn download_block_recursive(
     args: Arc<Args>,
-    state: Arc<RwLock<State>>,
+    state: Arc<State>,
     file: &mut ActiveDownload,
     hash: Hash,
     level: Option<u8>,
 ) -> Result<()> {
-    state.write().await.stats.blocks_referenced += 1;
+    state.stats.write().await.blocks_referenced += 1;
 
-    // copied to avoid holding mutex lock
-    let maybe_block = state.read().await.local_blocks.get(&hash).copied();
+    let semaphore = state.block_locks.write().await.semaphore(&hash);
+    let permit = semaphore.acquire().await?;
+
+    // copied to avoid holding lock
+    let maybe_block = state.local_blocks.read().await.get(&hash).copied();
     if let Some(local_block) = maybe_block {
         assert_block_level_eq(hash, 0, level)?;
         let data = read_local_block(args, local_block).await?;
@@ -91,14 +93,14 @@ pub async fn download_block_recursive(
     }
 
     let key = storage::block_key(&hash);
-    let bytes = state.write().await.storage.get(&key).await?;
-    state.write().await.stats.content_bytes_downloaded += bytes.len() as u64;
+    let bytes = state.storage.write().await.get(&key).await?;
+    state.stats.write().await.content_bytes_downloaded += bytes.len() as u64;
 
     let block = Block::decode(hash, level, &bytes).await?;
     match block {
         Block::Leaf { data, .. } => {
             let local_block = write_local_block(state.clone(), file, &data).await?;
-            state.write().await.local_blocks.insert(hash, local_block);
+            state.local_blocks.write().await.insert(hash, local_block);
         }
         Block::Branch {
             level, children, ..
@@ -110,11 +112,12 @@ pub async fn download_block_recursive(
         }
     }
 
+    drop(permit);
     Ok(())
 }
 
 async fn write_local_block(
-    state: Arc<RwLock<State>>,
+    state: Arc<State>,
     file: &mut ActiveDownload,
     data: &[u8],
 ) -> Result<LocalBlock> {
@@ -125,7 +128,7 @@ async fn write_local_block(
     file.write_all(data).await?;
     file.offset += size as u64;
 
-    state.write().await.stats.bytes_written += size as u64;
+    state.stats.write().await.bytes_written += size as u64;
     Ok(local_block)
 }
 

@@ -11,7 +11,7 @@ use tokio::{
     fs::{self, File},
     io::BufReader,
     spawn,
-    sync::{RwLock, Semaphore},
+    sync::Semaphore,
 };
 use tokio_stream::StreamExt;
 use walkdir::{DirEntry, WalkDir};
@@ -33,7 +33,7 @@ pub struct PendingUpload {
 
 pub async fn backup_recursive(
     args: Arc<Args>,
-    state: Arc<RwLock<State>>,
+    state: Arc<State>,
     sender: Sender<PendingUpload>,
     path: &Path,
 ) -> Result<()> {
@@ -55,7 +55,7 @@ pub async fn backup_recursive(
 
 async fn backup_from_entry(
     _args: Arc<Args>,
-    state: Arc<RwLock<State>>,
+    state: Arc<State>,
     entry: DirEntry,
     base_path: &Path,
 ) -> Result<Option<PendingUpload>> {
@@ -72,13 +72,13 @@ async fn backup_from_entry(
         let metadata = read_metadata(local_path).await?;
         let path = fs::read_link(local_path).await?;
         let node = Node::Symlink { metadata, path };
-        let archive = &mut state.write().await.archive;
+        let archive = &mut state.archive.write().await;
         archive.insert(archive_path.to_owned(), node)?;
     } else if file_type.is_dir() {
         let metadata = read_metadata(local_path).await?;
         let children = BTreeMap::new();
         let node = Node::Directory { metadata, children };
-        let archive = &mut state.write().await.archive;
+        let archive = &mut state.archive.write().await;
         archive.insert(archive_path.to_owned(), node)?;
     } else {
         warn!("skipping special file `{}`", local_path.display());
@@ -89,10 +89,10 @@ async fn backup_from_entry(
 
 pub async fn upload_pending_files(
     args: Arc<Args>,
-    state: Arc<RwLock<State>>,
+    state: Arc<State>,
     receiver: Receiver<PendingUpload>,
 ) {
-    let permit_count = args.max_concurrency;
+    let permit_count = args.jobs;
     let semaphore = Arc::new(Semaphore::new(permit_count as usize));
 
     while let Ok(pending_file) = receiver.recv().await {
@@ -113,7 +113,7 @@ pub async fn upload_pending_files(
 
 async fn upload_pending_file(
     args: Arc<Args>,
-    state: Arc<RwLock<State>>,
+    state: Arc<State>,
     pending_file: PendingUpload,
 ) -> Result<()> {
     let metadata = read_metadata(&pending_file.local_path).await?;
@@ -122,9 +122,9 @@ async fn upload_pending_file(
     let node = Node::File { metadata, hash };
 
     state
+        .archive
         .write()
         .await
-        .archive
         .insert(pending_file.archive_path, node)?;
 
     let hash_str = hash::format(&hash);
@@ -135,7 +135,7 @@ async fn upload_pending_file(
 
 pub async fn upload_file(
     args: Arc<Args>,
-    state: Arc<RwLock<State>>,
+    state: Arc<State>,
     file: &mut File,
 ) -> Result<Option<Hash>> {
     let reader = BufReader::new(file);
@@ -144,11 +144,11 @@ pub async fn upload_file(
     let mut tree = UploadTree::new(args.clone(), state.clone());
 
     while let Some(chunk) = chunks.try_next().await? {
-        state.write().await.stats.bytes_read += chunk.data.len() as u64;
+        state.stats.write().await.bytes_read += chunk.data.len() as u64;
         tree.add_leaf(chunk.data).await?;
     }
 
-    state.write().await.stats.files_read += 1;
+    state.stats.write().await.files_read += 1;
     let hash = tree.finalize().await?;
     Ok(hash)
 }
