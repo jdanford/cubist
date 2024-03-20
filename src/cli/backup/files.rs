@@ -11,14 +11,14 @@ use log::{debug, warn};
 use tokio::{
     fs::{self, File},
     io::BufReader,
-    spawn,
     sync::Semaphore,
+    task::JoinSet,
 };
 use tokio_stream::StreamExt;
 
 use crate::{
     block,
-    error::Result,
+    error::{Error, Result, OK},
     file::{read_metadata, Node},
     hash::{self, Hash},
 };
@@ -87,23 +87,25 @@ pub async fn upload_pending_files(
     state: Arc<State>,
     receiver: Receiver<PendingUpload>,
 ) -> Result<()> {
-    let permit_count = args.jobs;
-    let semaphore = Arc::new(Semaphore::new(permit_count as usize));
+    let semaphore = Arc::new(Semaphore::new(args.jobs as usize));
+    let mut tasks = JoinSet::new();
 
     while let Ok(pending_file) = receiver.recv().await {
         let args = args.clone();
         let state = state.clone();
         let permit = semaphore.clone().acquire_owned().await?;
 
-        spawn(async move {
-            upload_pending_file(args, state, pending_file)
-                .await
-                .unwrap();
+        tasks.spawn(async move {
+            upload_pending_file(args, state, pending_file).await?;
             drop(permit);
+            OK
         });
     }
 
-    let _ = semaphore.acquire_many(permit_count).await?;
+    while let Some(result) = tasks.join_next().await {
+        result??;
+    }
+
     Ok(())
 }
 

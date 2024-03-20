@@ -6,13 +6,15 @@ use std::{
 
 use async_channel::{Receiver, Sender};
 use log::debug;
-use tokio::{fs, spawn, sync::Semaphore};
+use tokio::{fs, sync::Semaphore, task::JoinSet};
 
 use crate::{
-    error::{Error, Result},
-    file::{restore_metadata, restore_metadata_from_node, try_exists, FileType, Metadata, Node},
+    error::{Error, Result, OK},
+    file::{
+        restore_metadata, restore_metadata_from_node, try_exists, FileType, Metadata, Node,
+        WalkNode,
+    },
     hash::{self, Hash},
-    walk::WalkNode,
 };
 
 use super::{
@@ -96,23 +98,25 @@ pub async fn download_pending_files(
     state: Arc<State>,
     receiver: Receiver<PendingDownload>,
 ) -> Result<()> {
-    let permit_count = args.jobs;
-    let semaphore = Arc::new(Semaphore::new(permit_count as usize));
+    let semaphore = Arc::new(Semaphore::new(args.jobs as usize));
+    let mut tasks = JoinSet::new();
 
     while let Ok(pending_file) = receiver.recv().await {
         let args = args.clone();
         let state = state.clone();
         let permit = semaphore.clone().acquire_owned().await?;
 
-        spawn(async move {
-            download_pending_file(args, state, pending_file)
-                .await
-                .unwrap();
+        tasks.spawn(async move {
+            download_pending_file(args, state, pending_file).await?;
             drop(permit);
+            OK
         });
     }
 
-    let _ = semaphore.acquire_many(permit_count).await?;
+    while let Some(result) = tasks.join_next().await {
+        result??;
+    }
+
     Ok(())
 }
 

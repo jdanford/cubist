@@ -17,6 +17,8 @@ use crate::hash::{self, Hash};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+pub const OK: Result<()> = Ok(());
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("no item found for key `{0}`")]

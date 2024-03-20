@@ -11,10 +11,10 @@ use crate::{
     archive::Archive,
     cli,
     error::Result,
+    file::WalkOrder,
     hash::Hash,
     stats::{format_size, CoreStats},
     storage::BoxedStorage,
-    walk::WalkOrder,
 };
 
 use super::{
@@ -70,15 +70,13 @@ pub async fn main(cli: cli::RestoreArgs) -> Result<()> {
     let downloader_args = args.clone();
     let downloader_state = state.clone();
     let downloader_task = spawn(async move {
-        download_pending_files(downloader_args, downloader_state, receiver)
-            .await
-            .unwrap();
+        download_pending_files(downloader_args, downloader_state, receiver).await
     });
 
     restore_recursive(args, state.clone(), sender.clone()).await?;
 
     sender.close();
-    downloader_task.await?;
+    downloader_task.await??;
 
     let State { stats, storage, .. } = unarc(state);
     let stats = unrwarc(stats);

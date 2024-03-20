@@ -67,18 +67,15 @@ pub async fn main(cli: cli::BackupArgs) -> Result<()> {
 
     let uploader_args = args.clone();
     let uploader_state = state.clone();
-    let uploader_task = spawn(async move {
-        upload_pending_files(uploader_args, uploader_state, receiver)
-            .await
-            .unwrap();
-    });
+    let uploader_task =
+        spawn(async move { upload_pending_files(uploader_args, uploader_state, receiver).await });
 
     for path in &args.paths {
         backup_recursive(args.clone(), state.clone(), sender.clone(), path).await?;
     }
 
     sender.close();
-    uploader_task.await?;
+    uploader_task.await??;
 
     let State {
         stats,

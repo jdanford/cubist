@@ -9,8 +9,9 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::{
     error::{Error, Result},
     file::{Node, NodeChildren},
-    walk::{WalkNode, WalkOrder},
 };
+
+use super::walk::{WalkNode, WalkOrder};
 
 #[derive(Debug)]
 pub struct FileTree {

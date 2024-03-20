@@ -1,11 +1,11 @@
+mod bfs;
+mod dfs;
+
 use std::{fmt::Display, path::PathBuf};
 
 use clap::ValueEnum;
 
 use crate::file::{Node, NodeChildren};
-
-mod bfs;
-mod dfs;
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum WalkOrder {

@@ -1,6 +1,7 @@
 mod metadata;
 mod node;
 mod tree;
+mod walk;
 
 use std::{
     io,
@@ -16,6 +17,7 @@ pub use self::{
     metadata::Metadata,
     node::{FileType, Node, NodeChildren},
     tree::FileTree,
+    walk::{WalkNode, WalkOrder},
 };
 
 pub async fn read_metadata(path: &Path) -> Result<Metadata> {

@@ -3,13 +3,13 @@ use std::sync::Arc;
 use tokio::{
     spawn,
     sync::{RwLock, Semaphore},
-    task::spawn_blocking,
+    task::{spawn_blocking, JoinSet},
 };
 
 use crate::{
     archive::Archive,
     block::BlockRecords,
-    error::Result,
+    error::{Result, OK},
     hash::Hash,
     serde::{deserialize, serialize},
     stats::CoreStats,
@@ -35,6 +35,7 @@ pub async fn download_archives<S: ToString, I: IntoIterator<Item = S>>(
 ) -> Result<Vec<Archive>> {
     let archives = rwarc(vec![]);
     let semaphore = Arc::new(Semaphore::new(jobs as usize));
+    let mut tasks = JoinSet::new();
 
     for name in names {
         let storage = storage.clone();
@@ -42,14 +43,18 @@ pub async fn download_archives<S: ToString, I: IntoIterator<Item = S>>(
         let name = name.to_string();
         let permit = semaphore.clone().acquire_owned().await?;
 
-        spawn(async move {
-            let archive = download_archive(storage.clone(), &name).await.unwrap();
+        tasks.spawn(async move {
+            let archive = download_archive(storage.clone(), &name).await?;
             archives.write().await.push(archive);
             drop(permit);
+            OK
         });
     }
 
-    let _ = semaphore.acquire_many(jobs).await?;
+    while let Some(result) = tasks.join_next().await {
+        result??;
+    }
+
     Ok(unrwarc(archives))
 }
 
@@ -77,19 +82,24 @@ pub async fn delete_archives<S: ToString, I: IntoIterator<Item = S>>(
     jobs: u32,
 ) -> Result<()> {
     let semaphore = Arc::new(Semaphore::new(jobs as usize));
+    let mut tasks = JoinSet::new();
 
     for name in names {
         let storage = storage.clone();
         let name = name.to_string();
         let permit = semaphore.clone().acquire_owned().await?;
 
-        spawn(async move {
-            delete_archive(storage.clone(), &name).await.unwrap();
+        tasks.spawn(async move {
+            delete_archive(storage.clone(), &name).await?;
             drop(permit);
+            OK
         });
     }
 
-    let _ = semaphore.acquire_many(jobs).await?;
+    while let Some(result) = tasks.join_next().await {
+        result??;
+    }
+
     Ok(())
 }
 

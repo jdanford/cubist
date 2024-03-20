@@ -17,7 +17,7 @@ use clap::{
 use humantime::parse_duration;
 use log::error;
 
-use crate::{logger, storage::StorageUrl, walk::WalkOrder};
+use crate::{file::WalkOrder, logger, storage::StorageUrl};
 
 const DEFAULT_COMPRESSION_LEVEL: u8 = 3;
 const DEFAULT_TARGET_BLOCK_SIZE: u32 = 1024 * 1024;
