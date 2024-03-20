@@ -18,7 +18,7 @@ use tokio_stream::StreamExt;
 
 use crate::{
     block,
-    error::{Error, Result, OK},
+    error::{Result, OK},
     file::{read_metadata, Node},
     hash::{self, Hash},
 };

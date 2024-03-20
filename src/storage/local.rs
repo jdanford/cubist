@@ -6,7 +6,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use async_walkdir::{Filtering, WalkDir};
+use async_walkdir::{DirEntry, Filtering, WalkDir};
 use rand_distr::{Distribution, LogNormal};
 use tokio::{fs, time::sleep};
 use tokio_stream::StreamExt;
@@ -149,13 +149,17 @@ fn str_from_path(path: &Path) -> Result<&str> {
 
 fn walk_files(path: &Path) -> WalkDir {
     WalkDir::new(path).filter(|entry| async move {
-        let file_type = entry.file_type().await;
-        if file_type.as_ref().is_ok_and(FileType::is_file) {
+        if entry_is_file(entry).await {
             Filtering::Continue
         } else {
             Filtering::Ignore
         }
     })
+}
+
+async fn entry_is_file(entry: DirEntry) -> bool {
+    let file_type = entry.file_type().await;
+    file_type.as_ref().is_ok_and(FileType::is_file)
 }
 
 fn dirname_and_filename(path: &Path) -> Result<(&Path, &Path)> {
