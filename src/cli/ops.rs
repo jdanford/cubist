@@ -16,7 +16,7 @@ use crate::{
     storage::{self, BoxedStorage},
 };
 
-use super::arc::rwarc;
+use super::arc::{rwarc, unrwarc};
 
 pub async fn download_archive(
     storage: Arc<RwLock<BoxedStorage>>,
@@ -33,14 +33,14 @@ pub async fn download_archives<S: ToString, I: IntoIterator<Item = S>>(
     names: I,
     jobs: u32,
 ) -> Result<Vec<Archive>> {
-    let semaphore = Arc::new(Semaphore::new(jobs as usize));
     let archives = rwarc(vec![]);
+    let semaphore = Arc::new(Semaphore::new(jobs as usize));
 
     for name in names {
         let storage = storage.clone();
         let archives = archives.clone();
         let name = name.to_string();
-        let permit = semaphore.clone().acquire_owned().await.unwrap();
+        let permit = semaphore.clone().acquire_owned().await?;
 
         spawn(async move {
             let archive = download_archive(storage.clone(), &name).await.unwrap();
@@ -49,9 +49,8 @@ pub async fn download_archives<S: ToString, I: IntoIterator<Item = S>>(
         });
     }
 
-    let _ = semaphore.acquire_many(jobs).await.unwrap();
-    let archives = Arc::into_inner(archives).unwrap().into_inner();
-    Ok(archives)
+    let _ = semaphore.acquire_many(jobs).await?;
+    Ok(unrwarc(archives))
 }
 
 pub async fn upload_archive(
@@ -82,7 +81,7 @@ pub async fn delete_archives<S: ToString, I: IntoIterator<Item = S>>(
     for name in names {
         let storage = storage.clone();
         let name = name.to_string();
-        let permit = semaphore.clone().acquire_owned().await.unwrap();
+        let permit = semaphore.clone().acquire_owned().await?;
 
         spawn(async move {
             delete_archive(storage.clone(), &name).await.unwrap();
@@ -90,7 +89,7 @@ pub async fn delete_archives<S: ToString, I: IntoIterator<Item = S>>(
         });
     }
 
-    let _ = semaphore.acquire_many(jobs).await.unwrap();
+    let _ = semaphore.acquire_many(jobs).await?;
     Ok(())
 }
 
@@ -100,6 +99,7 @@ pub async fn download_block_records(storage: Arc<RwLock<BoxedStorage>>) -> Resul
         .await
         .try_get(storage::BLOCK_RECORDS_KEY)
         .await?;
+
     let block_records = if let Some(bytes) = maybe_bytes {
         spawn_blocking(move || deserialize(&bytes)).await??
     } else {

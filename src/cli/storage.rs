@@ -58,7 +58,7 @@ fn get_env_latency() -> Result<Option<Duration>> {
         .map_err(Error::from)
 }
 
-fn get_env_var<T: AsRef<OsStr>>(name: T) -> Result<Option<String>> {
+fn get_env_var<S: AsRef<OsStr>>(name: S) -> Result<Option<String>> {
     match env::var(name) {
         Ok(value) => Ok(Some(value)),
         Err(VarError::NotPresent) => Ok(None),

@@ -1,27 +1,23 @@
-use std::{
-    collections::{btree_map, BTreeMap},
-    ffi::OsString,
-    path::PathBuf,
-};
+use std::{collections::btree_map, ffi::OsString, path::PathBuf};
 
-use crate::file::Node;
+use crate::file::{Node, NodeChildren};
 
 #[derive(Debug)]
-pub struct FileWalker<'a> {
+pub struct WalkNode<'a> {
     path: PathBuf,
     layers: Vec<btree_map::Iter<'a, OsString, Node>>,
 }
 
-impl<'a> FileWalker<'a> {
-    pub fn new(root: &'a BTreeMap<OsString, Node>) -> FileWalker<'a> {
-        FileWalker {
+impl<'a> WalkNode<'a> {
+    pub fn new(children: &'a NodeChildren) -> WalkNode<'a> {
+        WalkNode {
             path: PathBuf::new(),
-            layers: vec![root.iter()],
+            layers: vec![children.iter()],
         }
     }
 }
 
-impl<'a> Iterator for FileWalker<'a> {
+impl<'a> Iterator for WalkNode<'a> {
     type Item = (PathBuf, &'a Node);
 
     fn next(&mut self) -> Option<Self::Item> {

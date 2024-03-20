@@ -10,18 +10,21 @@ mod storage;
 
 use std::{path::PathBuf, time::Duration};
 
-use clap::{ArgAction, Args, Parser, Subcommand};
+use clap::{
+    builder::{styling::AnsiColor, Styles},
+    ArgAction, Args, Parser, Subcommand,
+};
 use humantime::parse_duration;
 use log::error;
 
-use crate::{logger, storage::StorageUrl};
+use crate::{logger, storage::StorageUrl, walk::WalkOrder};
 
 const DEFAULT_COMPRESSION_LEVEL: u8 = 3;
 const DEFAULT_TARGET_BLOCK_SIZE: u32 = 1024 * 1024;
 const DEFAULT_MAX_CONCURRENCY: u32 = 64;
 
 #[derive(Parser, Debug)]
-#[command(version, about, long_about = None, propagate_version = true)]
+#[command(version, about, long_about = None, propagate_version = true, styles = cli_styles())]
 pub struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -69,6 +72,9 @@ struct RestoreArgs {
     pub archive: String,
 
     pub paths: Vec<PathBuf>,
+
+    #[arg(long, default_value_t = WalkOrder::DepthFirst)]
+    pub order: WalkOrder,
 
     #[arg(short, long, value_name = "N", default_value_t = DEFAULT_MAX_CONCURRENCY)]
     pub jobs: u32,
@@ -145,4 +151,12 @@ fn log_level_from_args(verbose: u8, quiet: u8) -> log::LevelFilter {
         1 => log::LevelFilter::Debug,
         _ => log::LevelFilter::Trace,
     }
+}
+
+fn cli_styles() -> Styles {
+    Styles::styled()
+        .header(AnsiColor::BrightMagenta.on_default())
+        .usage(AnsiColor::BrightMagenta.on_default())
+        .literal(AnsiColor::BrightBlue.on_default())
+        .placeholder(AnsiColor::BrightCyan.on_default())
 }

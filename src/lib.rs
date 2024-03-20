@@ -19,4 +19,4 @@ mod logger;
 mod serde;
 mod stats;
 mod storage;
-mod walker;
+mod walk;

@@ -2,7 +2,6 @@ use std::{
     env::VarError,
     fmt::Debug,
     path::{PathBuf, StripPrefixError},
-    string::FromUtf8Error,
 };
 
 use async_channel::SendError;
@@ -113,12 +112,6 @@ pub enum Error {
     ByteStream {
         #[from]
         source: ByteStreamError,
-    },
-
-    #[error("{source}")]
-    Utf {
-        #[from]
-        source: FromUtf8Error,
     },
 
     #[error("{source}")]

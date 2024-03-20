@@ -1,5 +1,5 @@
 use std::{
-    borrow::Borrow,
+    fs::FileType,
     mem::size_of_val,
     path::{Path, PathBuf},
     time::Duration,
@@ -45,13 +45,12 @@ impl LocalStorage {
     }
 
     async fn simulate_latency(&self) {
-        if let Some(latency) = self.latency {
+        let latency = self.latency.unwrap_or_default();
+        if !latency.is_zero() {
             let distribution = LogNormal::new(0.0, 0.5).unwrap();
             let multiplier = distribution.sample(&mut rand::thread_rng());
             let randomized_latency = latency.mul_f64(multiplier);
-            if !randomized_latency.is_zero() {
-                sleep(randomized_latency).await;
-            }
+            sleep(randomized_latency).await;
         }
     }
 }
@@ -72,34 +71,18 @@ impl Storage for LocalStorage {
         self.simulate_latency().await;
 
         let prefix_path = self.path.join(prefix.unwrap_or(""));
-        let (dirname, filename_prefix) = if prefix_path.to_str().is_some_and(|s| s.ends_with('/')) {
-            (prefix_path.borrow(), "")
-        } else {
-            let dirname = prefix_path.parent().unwrap();
-            let filename_prefix = prefix_path
-                .strip_prefix(dirname)?
-                .to_str()
-                .ok_or_else(|| invalid_key_error(&prefix_path))?;
-            (dirname, filename_prefix)
-        };
+        let (dirname, filename_prefix_path) = dirname_and_filename(&prefix_path)?;
+        let filename_prefix = str_from_path(filename_prefix_path)?;
 
+        let mut walker = walk_files(dirname);
         let mut keys = vec![];
-        let mut walker = WalkDir::new(dirname).filter(|entry| async move {
-            if let Ok(file_type) = entry.file_type().await {
-                if file_type.is_file() {
-                    return Filtering::Continue;
-                }
-            }
-
-            Filtering::Ignore
-        });
 
         while let Some(entry) = walker.try_next().await? {
             self.stats.bytes_downloaded += size_of_val(&entry) as u64;
 
             let absolute_path = entry.path();
             let path = absolute_path.strip_prefix(&self.path)?;
-            let full_key = path.to_str().ok_or_else(|| invalid_key_error(path))?;
+            let full_key = str_from_path(path)?;
             if let Some(key) = full_key.strip_prefix(filename_prefix) {
                 keys.push(key.to_owned());
             }
@@ -159,6 +142,30 @@ impl Storage for LocalStorage {
     }
 }
 
-fn invalid_key_error(path: &Path) -> Error {
-    Error::InvalidKey(path.to_string_lossy().into_owned())
+fn str_from_path(path: &Path) -> Result<&str> {
+    path.to_str()
+        .ok_or_else(|| Error::InvalidKey(path.to_string_lossy().into_owned()))
+}
+
+fn walk_files(path: &Path) -> WalkDir {
+    WalkDir::new(path).filter(|entry| async move {
+        let file_type = entry.file_type().await;
+        if file_type.as_ref().is_ok_and(FileType::is_file) {
+            Filtering::Continue
+        } else {
+            Filtering::Ignore
+        }
+    })
+}
+
+fn dirname_and_filename(path: &Path) -> Result<(&Path, &Path)> {
+    if path.to_str().is_some_and(|s| s.ends_with('/')) {
+        let dirname = path;
+        let filename = Path::new("");
+        Ok((dirname, filename))
+    } else {
+        let dirname = path.parent().unwrap();
+        let filename = path.strip_prefix(dirname)?;
+        Ok((dirname, filename))
+    }
 }

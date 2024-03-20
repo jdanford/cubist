@@ -37,13 +37,11 @@ impl UploadTree {
         }
 
         let bottom_layer = self.layers.first_mut().unwrap();
-        let hash = bottom_layer
-            .pop()
-            .expect("bottom layer should not be empty");
+        let hash = bottom_layer.pop().unwrap();
         self.add_inner(hash, true).await?;
 
         let top_layer = self.layers.last().unwrap();
-        let hash = *top_layer.first().expect("top layer should not be empty");
+        let hash = *top_layer.first().unwrap();
         Ok(Some(hash))
     }
 
@@ -57,7 +55,7 @@ impl UploadTree {
                 break;
             }
 
-            let layer = self.layers.get_mut(i).expect("layer should exist");
+            let layer = self.layers.get_mut(i).unwrap();
             layer.push(hash);
             let len = layer.len();
 

@@ -1,6 +1,6 @@
 use std::{
-    collections::{BTreeMap, HashMap},
-    ffi::{OsStr, OsString},
+    collections::HashMap,
+    ffi::OsStr,
     path::{Component, Path, PathBuf},
 };
 
@@ -8,36 +8,38 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{
     error::{Error, Result},
-    file::Node,
-    walker::FileWalker,
+    file::{Node, NodeChildren},
+    walk::{WalkNode, WalkOrder},
 };
 
 #[derive(Debug)]
-pub struct FileMap {
-    root: BTreeMap<OsString, Node>,
+pub struct FileTree {
+    children: NodeChildren,
     paths: HashMap<u64, PathBuf>,
 }
 
-impl FileMap {
+impl FileTree {
     pub fn new() -> Self {
-        FileMap {
-            root: BTreeMap::new(),
+        FileTree {
+            children: NodeChildren::new(),
             paths: HashMap::new(),
         }
     }
 
-    fn from_root(root: BTreeMap<OsString, Node>) -> Self {
+    fn from_children(children: NodeChildren) -> Self {
         let mut paths = HashMap::new();
-        for (path, node) in FileWalker::new(&root) {
+        let walker = WalkNode::from_children(&children, WalkOrder::DepthFirst);
+
+        for (path, node) in walker {
             paths.insert(node.metadata().inode, path);
         }
 
-        FileMap { root, paths }
+        FileTree { children, paths }
     }
 
     pub fn get(&self, path: &Path) -> Option<&Node> {
         let (keys, name) = path_keys(path).ok()?;
-        let mut subtree = &self.root;
+        let mut subtree = &self.children;
 
         for key in keys {
             match subtree.get(key) {
@@ -56,7 +58,7 @@ impl FileMap {
     pub fn insert(&mut self, path: PathBuf, node: Node) -> Result<()> {
         let (keys, name) = path_keys(&path)?;
         let mut current_path = PathBuf::new();
-        let mut subtree = &mut self.root;
+        let mut subtree = &mut self.children;
 
         for key in keys {
             current_path.push(key);
@@ -88,17 +90,17 @@ impl FileMap {
     }
 }
 
-impl Serialize for FileMap {
+impl Serialize for FileTree {
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
-        Serialize::serialize(&self.root, serializer)
+        Serialize::serialize(&self.children, serializer)
     }
 }
 
-impl<'de> Deserialize<'de> for FileMap {
+impl<'de> Deserialize<'de> for FileTree {
     fn deserialize<D: Deserializer<'de>>(
         deserializer: D,
-    ) -> std::result::Result<FileMap, D::Error> {
-        Deserialize::deserialize(deserializer).map(FileMap::from_root)
+    ) -> std::result::Result<FileTree, D::Error> {
+        Deserialize::deserialize(deserializer).map(FileTree::from_children)
     }
 }
 

@@ -12,7 +12,7 @@ use crate::{
     error::{Error, Result},
     file::{restore_metadata, restore_metadata_from_node, try_exists, FileType, Metadata, Node},
     hash::{self, Hash},
-    walker::FileWalker,
+    walk::WalkNode,
 };
 
 use super::{
@@ -39,7 +39,8 @@ pub async fn restore_recursive(
     };
 
     for root_path in root_paths.iter() {
-        for (path, node) in walk(args.as_ref(), root_path)? {
+        for (child_path, node) in walk(args.as_ref(), root_path)? {
+            let path = root_path.join(child_path);
             let maybe_file = restore_from_node(args.clone(), state.clone(), &path, node).await?;
             if let Some(pending_file) = maybe_file {
                 sender.send(pending_file).await?;
@@ -50,22 +51,12 @@ pub async fn restore_recursive(
     Ok(())
 }
 
-fn walk<'a>(
-    args: &'a Args,
-    path: &Path,
-) -> Result<Box<dyn Iterator<Item = (PathBuf, &'a Node)> + 'a>> {
+fn walk<'a>(args: &'a Args, path: &Path) -> Result<impl Iterator<Item = (PathBuf, &'a Node)> + 'a> {
     let node = args
         .archive
         .get(path)
         .ok_or(Error::FileDoesNotExist(path.to_owned()))?;
-
-    if let Node::Directory { children, .. } = node {
-        let walker = FileWalker::new(children);
-        Ok(Box::new(walker))
-    } else {
-        let singleton = vec![(path.to_owned(), node)].into_iter();
-        Ok(Box::new(singleton))
-    }
+    Ok(WalkNode::new(node, args.order))
 }
 
 async fn restore_from_node(
@@ -104,14 +95,14 @@ pub async fn download_pending_files(
     args: Arc<Args>,
     state: Arc<State>,
     receiver: Receiver<PendingDownload>,
-) {
+) -> Result<()> {
     let permit_count = args.jobs;
     let semaphore = Arc::new(Semaphore::new(permit_count as usize));
 
     while let Ok(pending_file) = receiver.recv().await {
         let args = args.clone();
         let state = state.clone();
-        let permit = semaphore.clone().acquire_owned().await.unwrap();
+        let permit = semaphore.clone().acquire_owned().await?;
 
         spawn(async move {
             download_pending_file(args, state, pending_file)
@@ -121,7 +112,8 @@ pub async fn download_pending_files(
         });
     }
 
-    let _ = semaphore.acquire_many(permit_count).await.unwrap();
+    let _ = semaphore.acquire_many(permit_count).await?;
+    Ok(())
 }
 
 async fn download_pending_file(

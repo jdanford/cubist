@@ -6,6 +6,8 @@ use crate::hash::Hash;
 
 use super::metadata::Metadata;
 
+pub type NodeChildren = BTreeMap<OsString, Node>;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Node {
     File {
@@ -18,7 +20,7 @@ pub enum Node {
     },
     Directory {
         metadata: Metadata,
-        children: BTreeMap<OsString, Node>,
+        children: NodeChildren,
     },
 }
 

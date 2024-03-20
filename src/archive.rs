@@ -1,23 +1,19 @@
-mod map;
-
 use std::ops::{Deref, DerefMut};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{block::BlockRefs, hash::Hash};
-
-use self::map::FileMap;
+use crate::{block::BlockRefs, file::FileTree, hash::Hash};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Archive {
-    files: FileMap,
+    files: FileTree,
     pub block_refs: BlockRefs,
 }
 
 impl Archive {
     pub fn new() -> Self {
         Archive {
-            files: FileMap::new(),
+            files: FileTree::new(),
             block_refs: BlockRefs::new(),
         }
     }
@@ -28,7 +24,7 @@ impl Archive {
 }
 
 impl Deref for Archive {
-    type Target = FileMap;
+    type Target = FileTree;
 
     fn deref(&self) -> &Self::Target {
         &self.files

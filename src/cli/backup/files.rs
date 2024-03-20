@@ -39,10 +39,6 @@ pub async fn backup_recursive(
 ) -> Result<()> {
     let mut walker = WalkDir::new(path);
     while let Some(entry) = walker.try_next().await? {
-        if entry.file_type().await?.is_dir() && entry.path() == path {
-            continue;
-        }
-
         let maybe_file = backup_from_entry(args.clone(), state.clone(), entry, path).await?;
         if let Some(pending_file) = maybe_file {
             sender.send(pending_file).await?;
@@ -59,12 +55,12 @@ async fn backup_from_entry(
     base_path: &Path,
 ) -> Result<Option<PendingUpload>> {
     let local_path = entry.path();
-    let archive_path = local_path.strip_prefix(base_path)?;
+    let archive_path = local_path.strip_prefix(base_path)?.to_owned();
     let file_type = entry.file_type().await?;
     if file_type.is_file() {
         let pending_file = PendingUpload {
-            local_path: local_path.clone(),
-            archive_path: archive_path.to_owned(),
+            local_path,
+            archive_path,
         };
         return Ok(Some(pending_file));
     } else if file_type.is_symlink() {
@@ -72,13 +68,13 @@ async fn backup_from_entry(
         let path = fs::read_link(&local_path).await?;
         let node = Node::Symlink { metadata, path };
         let archive = &mut state.archive.write().await;
-        archive.insert(archive_path.to_owned(), node)?;
+        archive.insert(archive_path, node)?;
     } else if file_type.is_dir() {
         let metadata = read_metadata(&local_path).await?;
         let children = BTreeMap::new();
         let node = Node::Directory { metadata, children };
         let archive = &mut state.archive.write().await;
-        archive.insert(archive_path.to_owned(), node)?;
+        archive.insert(archive_path, node)?;
     } else {
         warn!("skipping special file `{}`", local_path.display());
     };
@@ -90,14 +86,14 @@ pub async fn upload_pending_files(
     args: Arc<Args>,
     state: Arc<State>,
     receiver: Receiver<PendingUpload>,
-) {
+) -> Result<()> {
     let permit_count = args.jobs;
     let semaphore = Arc::new(Semaphore::new(permit_count as usize));
 
     while let Ok(pending_file) = receiver.recv().await {
         let args = args.clone();
         let state = state.clone();
-        let permit = semaphore.clone().acquire_owned().await.unwrap();
+        let permit = semaphore.clone().acquire_owned().await?;
 
         spawn(async move {
             upload_pending_file(args, state, pending_file)
@@ -107,7 +103,8 @@ pub async fn upload_pending_files(
         });
     }
 
-    let _ = semaphore.acquire_many(permit_count).await.unwrap();
+    let _ = semaphore.acquire_many(permit_count).await?;
+    Ok(())
 }
 
 async fn upload_pending_file(
@@ -119,12 +116,8 @@ async fn upload_pending_file(
     let mut file = File::open(&pending_file.local_path).await?;
     let hash = upload_file(args.clone(), state.clone(), &mut file).await?;
     let node = Node::File { metadata, hash };
-
-    state
-        .archive
-        .write()
-        .await
-        .insert(pending_file.archive_path, node)?;
+    let archive = &mut state.archive.write().await;
+    archive.insert(pending_file.archive_path, node)?;
 
     let hash_str = hash::format(&hash);
     let local_path = pending_file.local_path.display();

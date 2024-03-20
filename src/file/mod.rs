@@ -1,5 +1,6 @@
 mod metadata;
 mod node;
+mod tree;
 
 use std::{
     io,
@@ -13,7 +14,8 @@ use crate::error::Result;
 
 pub use self::{
     metadata::Metadata,
-    node::{FileType, Node},
+    node::{FileType, Node, NodeChildren},
+    tree::FileTree,
 };
 
 pub async fn read_metadata(path: &Path) -> Result<Metadata> {

@@ -76,8 +76,8 @@ impl Storage for S3Storage {
             .into_paginator()
             .send();
 
-        let mut keys = vec![];
         let mut charged = false;
+        let mut keys = vec![];
 
         while let Some(page) = stream.try_next().await? {
             charged = charged || page.request_charged.is_some();

@@ -68,7 +68,9 @@ pub async fn main(cli: cli::BackupArgs) -> Result<()> {
     let uploader_args = args.clone();
     let uploader_state = state.clone();
     let uploader_task = spawn(async move {
-        upload_pending_files(uploader_args, uploader_state, receiver).await;
+        upload_pending_files(uploader_args, uploader_state, receiver)
+            .await
+            .unwrap();
     });
 
     for path in &args.paths {
