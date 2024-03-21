@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use humantime::format_duration;
-use log::info;
+use log::{debug, info};
 use tokio::try_join;
 
 use crate::{
@@ -45,14 +45,23 @@ pub async fn main(cli: cli::DeleteArgs) -> Result<()> {
         blocks_deleted += 1;
     }
 
-    delete_blocks(storage.clone(), removed_blocks.iter().by_ref()).await?;
+    if !cli.dry_run {
+        delete_blocks(storage.clone(), removed_blocks.iter().by_ref()).await?;
+    }
+
+    for hash in removed_blocks {
+        debug!("deleted {hash}");
+    }
+
     stats.bytes_deleted += bytes_deleted;
     stats.blocks_deleted += blocks_deleted;
 
-    try_join!(
-        delete_archives(storage.clone(), &cli.archives, cli.tasks),
-        upload_block_records(storage.clone(), rwarc(block_records)),
-    )?;
+    if !cli.dry_run {
+        try_join!(
+            delete_archives(storage.clone(), &cli.archives, cli.tasks),
+            upload_block_records(storage.clone(), rwarc(block_records)),
+        )?;
+    }
 
     if cli.global.stats {
         let full_stats = stats.finalize(storage.read().await.stats());

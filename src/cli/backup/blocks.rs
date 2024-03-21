@@ -83,12 +83,15 @@ async fn upload_block(args: Arc<Args>, state: Arc<State>, block: Block) -> Resul
         let key = storage::block_key(&hash);
         let bytes = block.encode(args.compression_level).await?;
         let size = bytes.len() as u64;
-        let record = BlockRecord { ref_count: 1, size };
 
-        state.storage.write().await.put(&key, bytes).await?;
+        if !args.dry_run {
+            state.storage.write().await.put(&key, bytes).await?;
+            state.stats.write().await.blocks_uploaded += 1;
+            state.stats.write().await.content_bytes_uploaded += size;
+        }
+
+        let record = BlockRecord { ref_count: 1, size };
         state.block_records.write().await.insert(hash, record);
-        state.stats.write().await.blocks_uploaded += 1;
-        state.stats.write().await.content_bytes_uploaded += size;
     }
 
     state.archive.write().await.add_ref(&hash);

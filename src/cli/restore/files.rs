@@ -125,15 +125,19 @@ async fn download_pending_file(
     state: Arc<State>,
     pending_file: PendingDownload,
 ) -> Result<()> {
-    let mut file = ActiveDownload::new(&pending_file).await?;
-    state.stats.write().await.files_created += 1;
+    if !args.dry_run {
+        let mut file = ActiveDownload::new(&pending_file).await?;
 
-    if let Some(hash) = pending_file.hash {
-        download_block_recursive(args, state.clone(), &mut file, hash, None).await?;
-        file.sync_all().await?;
+        if let Some(hash) = pending_file.hash {
+            download_block_recursive(args.clone(), state.clone(), &mut file, hash, None).await?;
+            file.sync_all().await?;
+        }
+
+        restore_metadata(&pending_file.path, &pending_file.metadata, FileType::File).await?;
     }
 
-    restore_metadata(&pending_file.path, &pending_file.metadata, FileType::File).await?;
+    state.stats.write().await.files_created += 1;
+
     let hash_str = hash::format(&pending_file.hash);
     let local_path = pending_file.path.display();
     debug!("{hash_str} -> {local_path}");

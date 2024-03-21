@@ -31,6 +31,7 @@ struct Args {
     compression_level: u8,
     target_block_size: u32,
     tasks: usize,
+    dry_run: bool,
 }
 
 #[derive(Debug)]
@@ -51,10 +52,11 @@ pub async fn main(cli: cli::BackupArgs) -> Result<()> {
     let block_records = rwarc(download_block_records(storage.clone()).await?);
 
     let args = Arc::new(Args {
+        paths: cli.paths,
         compression_level: cli.compression_level,
         target_block_size: cli.target_block_size,
         tasks: cli.tasks,
-        paths: cli.paths,
+        dry_run: cli.dry_run,
     });
     let state = Arc::new(State {
         stats,
@@ -86,10 +88,12 @@ pub async fn main(cli: cli::BackupArgs) -> Result<()> {
     } = unarc(state);
     let stats = unrwarc(stats);
 
-    try_join!(
-        upload_archive(storage.clone(), archive.clone(), &stats),
-        upload_block_records(storage.clone(), block_records),
-    )?;
+    if !cli.dry_run {
+        try_join!(
+            upload_archive(storage.clone(), archive.clone(), &stats),
+            upload_block_records(storage.clone(), block_records),
+        )?;
+    }
 
     if cli.global.stats {
         let full_stats = stats.finalize(storage.read().await.stats());

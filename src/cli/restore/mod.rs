@@ -35,6 +35,7 @@ struct Args {
     paths: Vec<PathBuf>,
     order: WalkOrder,
     tasks: usize,
+    dry_run: bool,
 }
 
 #[derive(Debug)]
@@ -58,6 +59,7 @@ pub async fn main(cli: cli::RestoreArgs) -> Result<()> {
         paths: cli.paths,
         order: cli.order,
         tasks: cli.tasks,
+        dry_run: cli.dry_run,
     });
     let state = Arc::new(State {
         stats,

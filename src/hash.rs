@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 pub const SIZE: usize = blake3::OUT_LEN;
 
 const PLACEHOLDER: &str = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
@@ -34,6 +36,9 @@ pub fn split(bytes: &[u8]) -> impl Iterator<Item = Hash> + '_ {
         .map(|bytes| Hash::from_bytes(bytes.try_into().unwrap()))
 }
 
-pub fn format(maybe_hash: &Option<Hash>) -> String {
-    maybe_hash.map_or_else(|| PLACEHOLDER.to_string(), |hash| hash.to_string())
+pub fn format(maybe_hash: &Option<Hash>) -> Cow<str> {
+    maybe_hash.map_or_else(
+        || Cow::Borrowed(PLACEHOLDER),
+        |hash| Cow::Owned(hash.to_string()),
+    )
 }

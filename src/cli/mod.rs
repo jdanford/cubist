@@ -24,7 +24,13 @@ use crate::{file::WalkOrder, storage::StorageUrl};
 use self::parser::parse_range_inclusive;
 
 #[derive(Parser, Debug)]
-#[command(version, about, long_about = None, propagate_version = true, styles = cli_styles())]
+#[command(
+    version,
+    about,
+    long_about = None,
+    propagate_version = true,
+    styles = cli_styles(),
+)]
 pub struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -63,16 +69,38 @@ struct BackupArgs {
     pub paths: Vec<PathBuf>,
 
     /// Compression level (1-19)
-    #[arg(short = 'l', long, value_name = "NUM", default_value_t = DEFAULT_COMPRESSION_LEVEL, value_parser = parse_compression_level)]
+    #[arg(
+        short = 'l',
+        long,
+        value_name = "NUM",
+        default_value_t = DEFAULT_COMPRESSION_LEVEL,
+        value_parser = parse_compression_level,
+    )]
     pub compression_level: u8,
 
     /// Target size for blocks
-    #[arg(short = 'b', long, value_name = "NUM", default_value_t = DEFAULT_TARGET_BLOCK_SIZE, value_parser = parse_block_size)]
+    #[arg(
+        short = 'b',
+        long,
+        value_name = "NUM",
+        default_value_t = DEFAULT_TARGET_BLOCK_SIZE,
+        value_parser = parse_block_size,
+    )]
     pub target_block_size: u32,
 
     /// Number of background tasks to use
-    #[arg(short = 'j', long, value_name = "NUM", default_value_t = DEFAULT_TASK_COUNT, value_parser = parse_task_count)]
+    #[arg(
+        short = 'j',
+        long,
+        value_name = "NUM",
+        default_value_t = DEFAULT_TASK_COUNT,
+        value_parser = parse_task_count,
+    )]
     pub tasks: usize,
+
+    /// Show operations that would be performed without actually doing them
+    #[arg(short = 'n', long, default_value_t = false)]
+    pub dry_run: bool,
 
     #[command(flatten)]
     pub global: GlobalArgs,
@@ -91,8 +119,18 @@ struct RestoreArgs {
     pub order: WalkOrder,
 
     /// Number of background tasks to use
-    #[arg(short = 'j', long, value_name = "NUM", default_value_t = DEFAULT_TASK_COUNT, value_parser = parse_task_count)]
+    #[arg(
+        short = 'j',
+        long,
+        value_name = "NUM",
+        default_value_t = DEFAULT_TASK_COUNT,
+        value_parser = parse_task_count,
+    )]
     pub tasks: usize,
+
+    /// Show operations that would be performed without actually doing them
+    #[arg(short = 'n', long, default_value_t = false)]
+    pub dry_run: bool,
 
     #[command(flatten)]
     pub global: GlobalArgs,
@@ -105,8 +143,18 @@ struct DeleteArgs {
     pub archives: Vec<String>,
 
     /// Number of background tasks to use
-    #[arg(short = 'j', long, value_name = "NUM", default_value_t = DEFAULT_TASK_COUNT, value_parser = parse_task_count)]
+    #[arg(
+        short = 'j',
+        long,
+        value_name = "NUM",
+        default_value_t = DEFAULT_TASK_COUNT,
+        value_parser = parse_task_count,
+    )]
     pub tasks: usize,
+
+    /// Show operations that would be performed without actually doing them
+    #[arg(short = 'n', long, default_value_t = false)]
+    pub dry_run: bool,
 
     #[command(flatten)]
     pub global: GlobalArgs,
@@ -173,8 +221,8 @@ fn parse_compression_level(s: &str) -> Result<u8, String> {
     parse_range_inclusive(s, COMPRESSION_LEVEL_RANGE)
 }
 
-const DEFAULT_TARGET_BLOCK_SIZE: u32 = 1024 * 1024;
-const BLOCK_SIZE_RANGE: RangeInclusive<u32> = 1..=(10 * 1024 * 1024);
+const DEFAULT_TARGET_BLOCK_SIZE: u32 = 1 << 20;
+const BLOCK_SIZE_RANGE: RangeInclusive<u32> = 1..=u32::MAX;
 
 fn parse_block_size(s: &str) -> Result<u32, String> {
     parse_range_inclusive(s, BLOCK_SIZE_RANGE)
