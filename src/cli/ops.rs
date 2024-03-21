@@ -30,10 +30,10 @@ pub async fn download_archive(
 pub async fn download_archives<S: ToString, I: IntoIterator<Item = S>>(
     storage: Arc<RwLock<BoxedStorage>>,
     names: I,
-    jobs: u32,
+    tasks: usize,
 ) -> Result<Vec<Archive>> {
     let archives = rwarc(vec![]);
-    let semaphore = Arc::new(Semaphore::new(jobs as usize));
+    let semaphore = Arc::new(Semaphore::new(tasks));
     let mut tasks = JoinSet::new();
 
     for name in names {
@@ -78,9 +78,9 @@ pub async fn delete_archive(storage: Arc<RwLock<BoxedStorage>>, name: &str) -> R
 pub async fn delete_archives<S: ToString, I: IntoIterator<Item = S>>(
     storage: Arc<RwLock<BoxedStorage>>,
     names: I,
-    jobs: u32,
+    tasks: usize,
 ) -> Result<()> {
-    let semaphore = Arc::new(Semaphore::new(jobs as usize));
+    let semaphore = Arc::new(Semaphore::new(tasks));
     let mut tasks = JoinSet::new();
 
     for name in names {

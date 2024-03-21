@@ -12,7 +12,6 @@ mod block;
 mod error;
 mod file;
 mod hash;
-mod logger;
 mod serde;
 mod stats;
 mod storage;

@@ -34,7 +34,7 @@ struct Args {
     archive: Archive,
     paths: Vec<PathBuf>,
     order: WalkOrder,
-    jobs: u32,
+    tasks: usize,
 }
 
 #[derive(Debug)]
@@ -57,7 +57,7 @@ pub async fn main(cli: cli::RestoreArgs) -> Result<()> {
         archive,
         paths: cli.paths,
         order: cli.order,
-        jobs: cli.jobs,
+        tasks: cli.tasks,
     });
     let state = Arc::new(State {
         stats,
@@ -65,7 +65,7 @@ pub async fn main(cli: cli::RestoreArgs) -> Result<()> {
         local_blocks,
         block_locks,
     });
-    let (sender, receiver) = async_channel::bounded(args.jobs as usize);
+    let (sender, receiver) = async_channel::bounded(args.tasks);
 
     let downloader_args = args.clone();
     let downloader_state = state.clone();

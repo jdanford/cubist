@@ -98,7 +98,7 @@ pub async fn download_pending_files(
     state: Arc<State>,
     receiver: Receiver<PendingDownload>,
 ) -> Result<()> {
-    let semaphore = Arc::new(Semaphore::new(args.jobs as usize));
+    let semaphore = Arc::new(Semaphore::new(args.tasks));
     let mut tasks = JoinSet::new();
 
     while let Ok(pending_file) = receiver.recv().await {

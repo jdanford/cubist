@@ -25,7 +25,7 @@ pub async fn main(cli: cli::DeleteArgs) -> Result<()> {
     let mut removed_blocks = HashSet::new();
 
     let (archives, mut block_records) = try_join!(
-        download_archives(storage.clone(), &cli.archives, cli.jobs),
+        download_archives(storage.clone(), &cli.archives, cli.tasks),
         download_block_records(storage.clone()),
     )?;
 
@@ -50,7 +50,7 @@ pub async fn main(cli: cli::DeleteArgs) -> Result<()> {
     stats.blocks_deleted += blocks_deleted;
 
     try_join!(
-        delete_archives(storage.clone(), &cli.archives, cli.jobs),
+        delete_archives(storage.clone(), &cli.archives, cli.tasks),
         upload_block_records(storage.clone(), rwarc(block_records)),
     )?;
 

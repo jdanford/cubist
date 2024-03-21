@@ -30,7 +30,7 @@ struct Args {
     paths: Vec<PathBuf>,
     compression_level: u8,
     target_block_size: u32,
-    jobs: u32,
+    tasks: usize,
 }
 
 #[derive(Debug)]
@@ -53,7 +53,7 @@ pub async fn main(cli: cli::BackupArgs) -> Result<()> {
     let args = Arc::new(Args {
         compression_level: cli.compression_level,
         target_block_size: cli.target_block_size,
-        jobs: cli.jobs,
+        tasks: cli.tasks,
         paths: cli.paths,
     });
     let state = Arc::new(State {
@@ -63,7 +63,7 @@ pub async fn main(cli: cli::BackupArgs) -> Result<()> {
         block_records,
         block_locks,
     });
-    let (sender, receiver) = async_channel::bounded(args.jobs as usize);
+    let (sender, receiver) = async_channel::bounded(args.tasks);
 
     let uploader_args = args.clone();
     let uploader_state = state.clone();
