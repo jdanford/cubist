@@ -4,7 +4,6 @@ mod files;
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use humantime::format_duration;
-use log::info;
 use tokio::{spawn, sync::RwLock};
 
 use crate::{
@@ -21,6 +20,7 @@ use super::{
     arc::{rwarc, unarc, unrwarc},
     locks::BlockLocks,
     ops::download_archive,
+    print_stat,
     storage::create_storage,
 };
 
@@ -85,22 +85,19 @@ pub async fn main(cli: cli::RestoreArgs) -> Result<()> {
 
     if cli.global.stats {
         let full_stats = stats.finalize(storage.read().await.stats());
-        info!(
-            "content downloaded: {}",
-            format_size(full_stats.content_bytes_downloaded)
+        print_stat(
+            "content downloaded",
+            format_size(full_stats.content_bytes_downloaded),
         );
-        info!(
-            "metadata downloaded: {}",
-            format_size(full_stats.metadata_bytes_downloaded())
+        print_stat(
+            "metadata downloaded",
+            format_size(full_stats.metadata_bytes_downloaded()),
         );
-        info!("bytes written: {}", format_size(full_stats.bytes_written));
-        info!("files created: {}", full_stats.files_created);
-        info!("blocks downloaded: {}", full_stats.blocks_downloaded);
-        info!("blocks referenced: {}", full_stats.blocks_referenced);
-        info!(
-            "elapsed time: {}",
-            format_duration(full_stats.elapsed_time())
-        );
+        print_stat("bytes written", format_size(full_stats.bytes_written));
+        print_stat("files created", full_stats.files_created);
+        print_stat("blocks downloaded", full_stats.blocks_downloaded);
+        print_stat("blocks referenced", full_stats.blocks_referenced);
+        print_stat("elapsed time", format_duration(full_stats.elapsed_time()));
     }
 
     Ok(())

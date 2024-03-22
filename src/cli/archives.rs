@@ -8,7 +8,7 @@ use crate::{
     storage,
 };
 
-use super::storage::create_storage;
+use super::{print_stat, storage::create_storage};
 
 pub async fn main(cli: cli::ArchivesArgs) -> Result<()> {
     let stats = CoreStats::new();
@@ -28,14 +28,11 @@ pub async fn main(cli: cli::ArchivesArgs) -> Result<()> {
 
     if cli.global.stats {
         let full_stats = stats.finalize(storage.stats());
-        info!(
-            "metadata downloaded: {}",
-            format_size(full_stats.metadata_bytes_downloaded())
+        print_stat(
+            "metadata downloaded",
+            format_size(full_stats.metadata_bytes_downloaded()),
         );
-        info!(
-            "elapsed time: {}",
-            format_duration(full_stats.elapsed_time())
-        );
+        print_stat("elapsed time", format_duration(full_stats.elapsed_time()));
     }
 
     Ok(())

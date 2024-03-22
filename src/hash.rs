@@ -50,8 +50,8 @@ pub fn safe_prefix_length(block_count: usize) -> usize {
     // 2^(2N) = block_count
     // 2N = log2(block_count)
     // N = log2(block_count) / 2
-    let bits_partial = (block_count as f64).log2() / 2.0;
-    let chars_partial = bits_partial / 4.0;
-    let len = chars_partial.ceil() as usize;
+    let bits = (block_count as f64).log2() / 2.0;
+    let chars = bits / 4.0;
+    let len = chars.ceil() as usize;
     len.max(MIN_PREFIX_LENGTH)
 }

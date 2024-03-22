@@ -18,8 +18,8 @@ pub fn init(args: &LoggerArgs) {
 
 fn log_level_from_args(args: &LoggerArgs) -> log::LevelFilter {
     let base_verbosity: i8 = args.verbose.try_into().unwrap();
-    let quiet_verbosity: i8 = args.quiet.try_into().unwrap();
-    let verbosity = base_verbosity - quiet_verbosity;
+    let quietness: i8 = args.quiet.try_into().unwrap();
+    let verbosity = base_verbosity - quietness;
     match verbosity {
         -2 => log::LevelFilter::Error,
         -1 => log::LevelFilter::Warn,
@@ -29,25 +29,29 @@ fn log_level_from_args(args: &LoggerArgs) -> log::LevelFilter {
     }
 }
 
-fn format(f: &mut Formatter, record: &Record) -> io::Result<()> {
-    let level = record.level();
-    let prefix = level_prefix(level);
-    let prefix_style = f.default_level_style(level);
-    writeln!(f, "{prefix_style}{prefix}{prefix_style:#}{}", record.args())
-}
-
-fn level_prefix(level: Level) -> &'static str {
-    match level {
-        Level::Debug | Level::Trace | Level::Info => "",
-        Level::Warn => "warning: ",
-        Level::Error => "error: ",
-    }
-}
-
 fn write_style_from_color_choice(color: ColorChoice) -> WriteStyle {
     match color {
         ColorChoice::Auto => WriteStyle::Auto,
         ColorChoice::Always => WriteStyle::Always,
         ColorChoice::Never => WriteStyle::Never,
+    }
+}
+
+fn format(f: &mut Formatter, record: &Record) -> io::Result<()> {
+    let args = record.args();
+    let level = record.level();
+    if let Some(prefix) = level_prefix(level) {
+        let style = f.default_level_style(level);
+        writeln!(f, "{style}{prefix}{style:#}{args}")
+    } else {
+        writeln!(f, "{args}")
+    }
+}
+
+fn level_prefix(level: Level) -> Option<&'static str> {
+    match level {
+        Level::Debug | Level::Trace | Level::Info => None,
+        Level::Warn => Some("warning: "),
+        Level::Error => Some("error: "),
     }
 }

@@ -154,7 +154,7 @@ async fn download_pending_file(
     let formatted_path = format_path(&pending_file.path);
     let formatted_size = format_size(size);
     let msg_style = AnsiColor::Blue.on_default();
-    let size_style = AnsiColor::Green.on_default();
+    let size_style = AnsiColor::BrightBlack.on_default();
     debug!("{msg_style}downloaded file{msg_style:#} {formatted_path} {size_style}({formatted_size}){size_style:#}");
     Ok(())
 }

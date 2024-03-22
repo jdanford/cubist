@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use humantime::format_duration;
-use log::{debug, info};
+use log::debug;
 use tokio::try_join;
 
 use crate::{
@@ -16,6 +16,7 @@ use super::{
         delete_archives, delete_blocks, download_archives, download_block_records,
         upload_block_records,
     },
+    print_stat,
     storage::create_storage,
 };
 
@@ -65,20 +66,17 @@ pub async fn main(cli: cli::DeleteArgs) -> Result<()> {
 
     if cli.global.stats {
         let full_stats = stats.finalize(storage.read().await.stats());
-        info!(
-            "metadata downloaded: {}",
-            format_size(full_stats.metadata_bytes_downloaded())
+        print_stat(
+            "metadata downloaded",
+            format_size(full_stats.metadata_bytes_downloaded()),
         );
-        info!(
-            "metadata uploaded: {}",
-            format_size(full_stats.metadata_bytes_uploaded())
+        print_stat(
+            "metadata uploaded",
+            format_size(full_stats.metadata_bytes_uploaded()),
         );
-        info!("bytes deleted: {}", format_size(full_stats.bytes_deleted));
-        info!("blocks deleted: {}", full_stats.blocks_deleted);
-        info!(
-            "elapsed time: {}",
-            format_duration(full_stats.elapsed_time())
-        );
+        print_stat("bytes deleted", format_size(full_stats.bytes_deleted));
+        print_stat("blocks deleted", full_stats.blocks_deleted);
+        print_stat("elapsed time", format_duration(full_stats.elapsed_time()));
     }
 
     Ok(())

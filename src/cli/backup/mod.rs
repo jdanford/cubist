@@ -4,7 +4,6 @@ mod files;
 use std::{fmt::Debug, path::PathBuf, sync::Arc};
 
 use humantime::format_duration;
-use log::info;
 use tokio::{spawn, sync::RwLock, try_join};
 
 use crate::{
@@ -20,6 +19,7 @@ use super::{
     arc::{rwarc, unarc, unrwarc},
     locks::BlockLocks,
     ops::{download_block_records, upload_archive},
+    print_stat,
     storage::create_storage,
 };
 
@@ -97,26 +97,23 @@ pub async fn main(cli: cli::BackupArgs) -> Result<()> {
 
     if cli.global.stats {
         let full_stats = stats.finalize(storage.read().await.stats());
-        info!(
-            "metadata downloaded: {}",
-            format_size(full_stats.metadata_bytes_downloaded())
+        print_stat(
+            "metadata downloaded",
+            format_size(full_stats.metadata_bytes_downloaded()),
         );
-        info!(
-            "content uploaded: {}",
-            format_size(full_stats.content_bytes_uploaded)
+        print_stat(
+            "content uploaded",
+            format_size(full_stats.content_bytes_uploaded),
         );
-        info!(
-            "metadata uploaded: {}",
-            format_size(full_stats.metadata_bytes_uploaded())
+        print_stat(
+            "metadata uploaded",
+            format_size(full_stats.metadata_bytes_uploaded()),
         );
-        info!("bytes read: {}", format_size(full_stats.bytes_read));
-        info!("files read: {}", full_stats.files_read);
-        info!("blocks uploaded: {}", full_stats.blocks_uploaded);
-        info!("blocks referenced: {}", full_stats.blocks_referenced);
-        info!(
-            "elapsed time: {}",
-            format_duration(full_stats.elapsed_time())
-        );
+        print_stat("bytes read", format_size(full_stats.bytes_read));
+        print_stat("files read", full_stats.files_read);
+        print_stat("blocks uploaded", full_stats.blocks_uploaded);
+        print_stat("blocks referenced", full_stats.blocks_referenced);
+        print_stat("elapsed time", format_duration(full_stats.elapsed_time()));
     }
 
     Ok(())

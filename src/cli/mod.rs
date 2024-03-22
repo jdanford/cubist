@@ -11,7 +11,7 @@ mod ops;
 mod parse;
 mod storage;
 
-use std::{ops::RangeInclusive, path::PathBuf, time::Duration};
+use std::{fmt::Display, ops::RangeInclusive, path::PathBuf, time::Duration};
 
 use clap::{
     builder::{styling::AnsiColor, Styles},
@@ -247,4 +247,9 @@ const TASK_COUNT_RANGE: RangeInclusive<usize> = 1..=1024;
 
 fn parse_task_count(s: &str) -> Result<usize, String> {
     parse_range_inclusive(s, TASK_COUNT_RANGE)
+}
+
+pub fn print_stat<T: Display>(name: &str, value: T) {
+    let style = AnsiColor::Cyan.on_default();
+    println!("{style}{name}:{style:#} {value}");
 }
