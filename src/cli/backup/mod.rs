@@ -10,9 +10,9 @@ use tokio::{spawn, sync::RwLock, try_join};
 use crate::{
     archive::Archive,
     block::BlockRecords,
-    cli::{self, ops::upload_block_records},
+    cli::{self, format::format_size, ops::upload_block_records},
     error::Result,
-    stats::{format_size, CoreStats},
+    stats::CoreStats,
     storage::BoxedStorage,
 };
 

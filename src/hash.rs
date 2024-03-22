@@ -1,8 +1,4 @@
-use std::borrow::Cow;
-
 pub const SIZE: usize = blake3::OUT_LEN;
-
-const PLACEHOLDER: &str = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
 
 pub type Hash = blake3::Hash;
 
@@ -36,9 +32,26 @@ pub fn split(bytes: &[u8]) -> impl Iterator<Item = Hash> + '_ {
         .map(|bytes| Hash::from_bytes(bytes.try_into().unwrap()))
 }
 
-pub fn format(maybe_hash: &Option<Hash>) -> Cow<str> {
-    maybe_hash.map_or_else(
-        || Cow::Borrowed(PLACEHOLDER),
-        |hash| Cow::Owned(hash.to_string()),
-    )
+#[allow(dead_code)]
+pub fn format_short(hash: &Hash, block_count: usize) -> String {
+    let len = safe_prefix_length(block_count);
+    hash.to_hex()[..len].to_string()
+}
+
+const MIN_PREFIX_LENGTH: usize = 6;
+
+#[allow(
+    dead_code,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss
+)]
+pub fn safe_prefix_length(block_count: usize) -> usize {
+    // 2^(2N) = block_count
+    // 2N = log2(block_count)
+    // N = log2(block_count) / 2
+    let bits_partial = (block_count as f64).log2() / 2.0;
+    let chars_partial = bits_partial / 4.0;
+    let len = chars_partial.ceil() as usize;
+    len.max(MIN_PREFIX_LENGTH)
 }

@@ -5,16 +5,18 @@ use std::{
 };
 
 use async_channel::{Receiver, Sender};
+use clap::builder::styling::AnsiColor;
 use log::debug;
 use tokio::{fs, sync::Semaphore, task::JoinSet};
 
 use crate::{
+    cli::format::{format_path, format_size},
     error::{Error, Result, OK},
     file::{
         restore_metadata, restore_metadata_from_node, try_exists, FileType, Metadata, Node,
         WalkNode,
     },
-    hash::{self, Hash},
+    hash::Hash,
 };
 
 use super::{
@@ -83,10 +85,18 @@ async fn restore_from_node(
         Node::Symlink { path: src, .. } => {
             fs::symlink(src, path).await?;
             restore_metadata_from_node(path, node).await?;
+
+            let formatted_path = format_path(path);
+            let style = AnsiColor::Cyan.on_default();
+            debug!("{style}created symlink{style:#} {formatted_path}");
         }
         Node::Directory { .. } => {
             fs::create_dir(path).await?;
             restore_metadata_from_node(path, node).await?;
+
+            let formatted_path = format_path(path);
+            let style = AnsiColor::Magenta.on_default();
+            debug!("{style}created directory{style:#} {formatted_path}");
         }
     }
 
@@ -125,11 +135,14 @@ async fn download_pending_file(
     state: Arc<State>,
     pending_file: PendingDownload,
 ) -> Result<()> {
+    let mut size = 0;
+
     if !args.dry_run {
         let mut file = ActiveDownload::new(&pending_file).await?;
 
         if let Some(hash) = pending_file.hash {
-            download_block_recursive(args.clone(), state.clone(), &mut file, hash, None).await?;
+            size = download_block_recursive(args.clone(), state.clone(), &mut file, hash, None)
+                .await?;
             file.sync_all().await?;
         }
 
@@ -138,8 +151,10 @@ async fn download_pending_file(
 
     state.stats.write().await.files_created += 1;
 
-    let hash_str = hash::format(&pending_file.hash);
-    let local_path = pending_file.path.display();
-    debug!("{hash_str} -> {local_path}");
+    let formatted_path = format_path(&pending_file.path);
+    let formatted_size = format_size(size);
+    let msg_style = AnsiColor::Blue.on_default();
+    let size_style = AnsiColor::Green.on_default();
+    debug!("{msg_style}downloaded file{msg_style:#} {formatted_path} {size_style}({formatted_size}){size_style:#}");
     Ok(())
 }

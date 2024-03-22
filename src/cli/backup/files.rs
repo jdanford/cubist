@@ -7,6 +7,7 @@ use std::{
 
 use async_channel::{Receiver, Sender};
 use async_walkdir::{DirEntry, WalkDir};
+use clap::builder::styling::AnsiColor;
 use log::{debug, warn};
 use tokio::{
     fs::{self, File},
@@ -18,9 +19,10 @@ use tokio_stream::StreamExt;
 
 use crate::{
     block,
+    cli::format::{format_path, format_size},
     error::{Result, OK},
     file::{read_metadata, Node},
-    hash::{self, Hash},
+    hash::Hash,
 };
 
 use super::{blocks::UploadTree, Args, State};
@@ -56,6 +58,8 @@ async fn backup_from_entry(
 ) -> Result<Option<PendingUpload>> {
     let local_path = entry.path();
     let archive_path = local_path.strip_prefix(base_path)?.to_owned();
+    let formatted_path = format_path(&local_path);
+
     let file_type = entry.file_type().await?;
     if file_type.is_file() {
         let pending_file = PendingUpload {
@@ -69,14 +73,20 @@ async fn backup_from_entry(
         let node = Node::Symlink { metadata, path };
         let archive = &mut state.archive.write().await;
         archive.insert(archive_path, node)?;
+
+        let style = AnsiColor::Cyan.on_default();
+        debug!("{style}added symlink{style:#} {formatted_path}");
     } else if file_type.is_dir() {
         let metadata = read_metadata(&local_path).await?;
         let children = BTreeMap::new();
         let node = Node::Directory { metadata, children };
         let archive = &mut state.archive.write().await;
         archive.insert(archive_path, node)?;
+
+        let style = AnsiColor::Magenta.on_default();
+        debug!("{style}added directory{style:#} {formatted_path}");
     } else {
-        warn!("skipping special file `{}`", local_path.display());
+        warn!("skipped special file {formatted_path}");
     };
 
     Ok(None)
@@ -114,16 +124,23 @@ async fn upload_pending_file(
     state: Arc<State>,
     pending_file: PendingUpload,
 ) -> Result<()> {
-    let metadata = read_metadata(&pending_file.local_path).await?;
-    let mut file = File::open(&pending_file.local_path).await?;
-    let hash = upload_file(args.clone(), state.clone(), &mut file).await?;
+    let PendingUpload {
+        local_path,
+        archive_path,
+    } = pending_file;
+
+    let metadata = read_metadata(&local_path).await?;
+    let mut file = File::open(&local_path).await?;
+    let (hash, size) = upload_file(args.clone(), state.clone(), &mut file).await?;
     let node = Node::File { metadata, hash };
     let archive = &mut state.archive.write().await;
-    archive.insert(pending_file.archive_path, node)?;
+    archive.insert(archive_path, node)?;
 
-    let hash_str = hash::format(&hash);
-    let local_path = pending_file.local_path.display();
-    debug!("{hash_str} <- {local_path}");
+    let formatted_path = format_path(&local_path);
+    let formatted_size = format_size(size);
+    let msg_style = AnsiColor::Blue.on_default();
+    let size_style = AnsiColor::Green.on_default();
+    debug!("{msg_style}uploaded file{msg_style:#} {formatted_path} {size_style}({formatted_size}){size_style:#}");
     Ok(())
 }
 
@@ -131,18 +148,21 @@ pub async fn upload_file(
     args: Arc<Args>,
     state: Arc<State>,
     file: &mut File,
-) -> Result<Option<Hash>> {
+) -> Result<(Option<Hash>, u64)> {
     let reader = BufReader::new(file);
     let mut chunker = block::chunker(reader, args.target_block_size);
     let mut chunks = pin!(chunker.as_stream());
     let mut tree = UploadTree::new(args.clone(), state.clone());
+    let mut size = 0;
 
     while let Some(chunk) = chunks.try_next().await? {
-        state.stats.write().await.bytes_read += chunk.data.len() as u64;
+        size += chunk.data.len() as u64;
         tree.add_leaf(chunk.data).await?;
     }
 
+    state.stats.write().await.bytes_read += size;
     state.stats.write().await.files_read += 1;
+
     let hash = tree.finalize().await?;
-    Ok(hash)
+    Ok((hash, size))
 }

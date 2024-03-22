@@ -2,9 +2,9 @@ use humantime::format_duration;
 use log::info;
 
 use crate::{
-    cli,
+    cli::{self, format::format_size},
     error::Result,
-    stats::{format_size, CoreStats},
+    stats::CoreStats,
     storage,
 };
 

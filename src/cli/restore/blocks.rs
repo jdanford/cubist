@@ -77,7 +77,7 @@ pub async fn download_block_recursive(
     file: &mut ActiveDownload,
     hash: Hash,
     level: Option<u8>,
-) -> Result<()> {
+) -> Result<u64> {
     state.stats.write().await.blocks_referenced += 1;
 
     let semaphore = state.block_locks.write().await.semaphore(&hash);
@@ -89,7 +89,8 @@ pub async fn download_block_recursive(
         assert_block_level_eq(hash, 0, level)?;
         let data = read_local_block(args, local_block).await?;
         write_local_block(state.clone(), file, &data).await?;
-        return Ok(());
+        let size = file.offset;
+        return Ok(size);
     }
 
     let key = storage::block_key(&hash);
@@ -113,7 +114,8 @@ pub async fn download_block_recursive(
     }
 
     drop(permit);
-    Ok(())
+    let size = file.offset;
+    Ok(size)
 }
 
 async fn write_local_block(

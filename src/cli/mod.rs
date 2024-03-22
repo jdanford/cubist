@@ -4,10 +4,11 @@ mod delete;
 mod restore;
 
 mod arc;
+mod format;
 mod locks;
 mod logger;
 mod ops;
-mod parser;
+mod parse;
 mod storage;
 
 use std::{ops::RangeInclusive, path::PathBuf, time::Duration};
@@ -16,13 +17,15 @@ use clap::{
     builder::{styling::AnsiColor, Styles},
     ArgAction, Args, Parser, Subcommand,
 };
+use concolor_clap::{color_choice, ColorChoice};
 use humantime::parse_duration;
 use log::error;
 
 use crate::{file::WalkOrder, storage::StorageUrl};
 
-use self::parser::parse_range_inclusive;
+use self::parse::parse_range_inclusive;
 
+/// Fast deduplicated backups on top of S3
 #[derive(Parser, Debug)]
 #[command(
     version,
@@ -30,6 +33,7 @@ use self::parser::parse_range_inclusive;
     long_about = None,
     propagate_version = true,
     styles = cli_styles(),
+    color = color_choice(),
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -180,6 +184,16 @@ struct GlobalArgs {
     #[arg(long, default_value_t = false)]
     pub stats: bool,
 
+    #[command(flatten)]
+    pub logger: LoggerArgs,
+}
+
+#[derive(Args, Debug)]
+struct LoggerArgs {
+    /// When to use color in output
+    #[arg(short, long, default_value_t = ColorChoice::Auto)]
+    pub color: ColorChoice,
+
     /// Print more output
     #[arg(short, long, action = ArgAction::Count, group = "verbosity")]
     pub verbose: u8,
@@ -192,7 +206,7 @@ struct GlobalArgs {
 pub async fn main() {
     let cli = Cli::parse();
     let global = cli.command.global();
-    logger::init(global.verbose, global.quiet);
+    logger::init(&global.logger);
 
     let result = match cli.command {
         Command::Backup(args) => backup::main(args).await,
@@ -208,10 +222,10 @@ pub async fn main() {
 
 fn cli_styles() -> Styles {
     Styles::styled()
-        .header(AnsiColor::BrightMagenta.on_default())
-        .usage(AnsiColor::BrightMagenta.on_default())
+        .usage(AnsiColor::BrightCyan.on_default().underline())
+        .header(AnsiColor::BrightCyan.on_default().underline())
         .literal(AnsiColor::BrightBlue.on_default())
-        .placeholder(AnsiColor::BrightCyan.on_default())
+        .placeholder(AnsiColor::BrightMagenta.on_default())
 }
 
 const DEFAULT_COMPRESSION_LEVEL: u8 = 3;

@@ -1,7 +1,6 @@
 use std::{ops::Deref, time::Duration};
 
 use chrono::{DateTime, Utc};
-use humansize::{ToF64, Unsigned, DECIMAL};
 
 #[derive(Debug)]
 pub struct CoreStats {
@@ -98,8 +97,4 @@ impl Deref for FinalizedStats {
     fn deref(&self) -> &Self::Target {
         &self.core
     }
-}
-
-pub fn format_size<T: ToF64 + Unsigned>(input: T) -> String {
-    humansize::format_size(input, DECIMAL)
 }

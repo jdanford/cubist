@@ -9,11 +9,11 @@ use tokio::{spawn, sync::RwLock};
 
 use crate::{
     archive::Archive,
-    cli,
+    cli::{self, format::format_size},
     error::Result,
     file::WalkOrder,
     hash::Hash,
-    stats::{format_size, CoreStats},
+    stats::CoreStats,
     storage::BoxedStorage,
 };
 

@@ -5,9 +5,9 @@ use log::{debug, info};
 use tokio::try_join;
 
 use crate::{
-    cli,
+    cli::{self, format::format_size},
     error::{Error, Result},
-    stats::{format_size, CoreStats},
+    stats::CoreStats,
 };
 
 use super::{

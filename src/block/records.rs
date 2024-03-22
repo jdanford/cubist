@@ -22,6 +22,11 @@ impl BlockRefs {
         }
     }
 
+    #[allow(dead_code)]
+    pub fn unique_count(&self) -> usize {
+        self.map.len()
+    }
+
     pub fn contains(&self, hash: &Hash) -> bool {
         self.map.contains_key(hash)
     }
