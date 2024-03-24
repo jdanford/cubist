@@ -7,21 +7,17 @@ use humantime::format_duration;
 use tokio::{spawn, sync::RwLock, try_join};
 
 use crate::{
+    arc::{rwarc, unarc, unrwarc},
     archive::Archive,
     block::BlockRecords,
-    cli::{self, format::format_size, ops::upload_block_records},
     error::Result,
+    locks::BlockLocks,
+    ops::{download_block_records, upload_archive, upload_block_records},
     stats::CoreStats,
     storage::BoxedStorage,
 };
 
-use super::{
-    arc::{rwarc, unarc, unrwarc},
-    locks::BlockLocks,
-    ops::{download_block_records, upload_archive},
-    print_stat,
-    storage::create_storage,
-};
+use super::{format::format_size, print_stat, storage::create_storage, BackupArgs};
 
 use self::files::{backup_recursive, upload_pending_files};
 
@@ -43,7 +39,7 @@ struct State {
     block_locks: Arc<RwLock<BlockLocks>>,
 }
 
-pub async fn main(cli: cli::BackupArgs) -> Result<()> {
+pub async fn main(cli: BackupArgs) -> Result<()> {
     let stats = rwarc(CoreStats::new());
     let storage = rwarc(create_storage(&cli.global).await?);
     let archive = rwarc(Archive::new());

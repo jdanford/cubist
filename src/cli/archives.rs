@@ -1,16 +1,13 @@
 use humantime::format_duration;
 use log::info;
 
-use crate::{
-    cli::{self, format::format_size},
-    error::Result,
-    stats::CoreStats,
-    storage,
-};
+use crate::{error::Result, stats::CoreStats, storage};
 
-use super::{print_stat, storage::create_storage};
+use super::format::format_size;
 
-pub async fn main(cli: cli::ArchivesArgs) -> Result<()> {
+use super::{print_stat, storage::create_storage, ArchivesArgs};
+
+pub async fn main(cli: ArchivesArgs) -> Result<()> {
     let stats = CoreStats::new();
     let mut storage = create_storage(&cli.global).await?;
 

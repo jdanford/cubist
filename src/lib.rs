@@ -7,11 +7,14 @@
 
 pub mod cli;
 
+mod arc;
 mod archive;
 mod block;
 mod error;
 mod file;
 mod hash;
+mod locks;
+mod ops;
 mod serde;
 mod stats;
 mod storage;

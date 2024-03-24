@@ -5,22 +5,18 @@ use log::debug;
 use tokio::try_join;
 
 use crate::{
-    cli::{self, format::format_size},
-    error::{Error, Result},
-    stats::CoreStats,
-};
-
-use super::{
     arc::rwarc,
+    error::{Error, Result},
     ops::{
         delete_archives, delete_blocks, download_archives, download_block_records,
         upload_block_records,
     },
-    print_stat,
-    storage::create_storage,
+    stats::CoreStats,
 };
 
-pub async fn main(cli: cli::DeleteArgs) -> Result<()> {
+use super::{format::format_size, print_stat, storage::create_storage, DeleteArgs};
+
+pub async fn main(cli: DeleteArgs) -> Result<()> {
     let mut stats = CoreStats::new();
     let storage = rwarc(create_storage(&cli.global).await?);
     let mut removed_blocks = HashSet::new();

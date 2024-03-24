@@ -76,8 +76,8 @@ impl UploadTree {
 
 async fn upload_block(args: Arc<Args>, state: Arc<State>, block: Block) -> Result<Hash> {
     let hash = block.hash().to_owned();
-    let semaphore = state.block_locks.write().await.semaphore(&hash);
-    let permit = semaphore.acquire().await?;
+    let lock = state.block_locks.write().await.lock(&hash);
+    let permit = lock.acquire().await?;
 
     if !block_exists(args.clone(), state.clone(), &hash).await {
         let key = storage::block_key(&hash);

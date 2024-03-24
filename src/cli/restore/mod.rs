@@ -7,22 +7,18 @@ use humantime::format_duration;
 use tokio::{spawn, sync::RwLock};
 
 use crate::{
+    arc::{rwarc, unarc, unrwarc},
     archive::Archive,
-    cli::{self, format::format_size},
     error::Result,
     file::WalkOrder,
     hash::Hash,
+    locks::BlockLocks,
+    ops::download_archive,
     stats::CoreStats,
     storage::BoxedStorage,
 };
 
-use super::{
-    arc::{rwarc, unarc, unrwarc},
-    locks::BlockLocks,
-    ops::download_archive,
-    print_stat,
-    storage::create_storage,
-};
+use super::{format::format_size, print_stat, storage::create_storage, RestoreArgs};
 
 use self::{
     blocks::LocalBlock,
@@ -46,7 +42,7 @@ struct State {
     block_locks: Arc<RwLock<BlockLocks>>,
 }
 
-pub async fn main(cli: cli::RestoreArgs) -> Result<()> {
+pub async fn main(cli: RestoreArgs) -> Result<()> {
     let stats = rwarc(CoreStats::new());
     let storage = rwarc(create_storage(&cli.global).await?);
     let local_blocks = rwarc(HashMap::new());

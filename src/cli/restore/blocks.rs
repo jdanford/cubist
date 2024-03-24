@@ -80,8 +80,8 @@ pub async fn download_block_recursive(
 ) -> Result<u64> {
     state.stats.write().await.blocks_referenced += 1;
 
-    let semaphore = state.block_locks.write().await.semaphore(&hash);
-    let permit = semaphore.acquire().await?;
+    let lock = state.block_locks.write().await.lock(&hash);
+    let permit = lock.acquire().await?;
 
     // copied to avoid holding lock
     let maybe_block = state.local_blocks.read().await.get(&hash).copied();

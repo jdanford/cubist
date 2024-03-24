@@ -6,18 +6,18 @@ use crate::hash::Hash;
 
 #[derive(Debug)]
 pub struct BlockLocks {
-    semaphores: HashMap<Hash, Arc<Semaphore>>,
+    locks: HashMap<Hash, Arc<Semaphore>>,
 }
 
 impl BlockLocks {
     pub fn new() -> Self {
         BlockLocks {
-            semaphores: HashMap::new(),
+            locks: HashMap::new(),
         }
     }
 
-    pub fn semaphore(&mut self, hash: &Hash) -> Arc<Semaphore> {
-        self.semaphores
+    pub fn lock(&mut self, hash: &Hash) -> Arc<Semaphore> {
+        self.locks
             .entry(*hash)
             .or_insert_with(|| Arc::new(Semaphore::new(1)))
             .clone()

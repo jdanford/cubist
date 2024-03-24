@@ -3,11 +3,8 @@ mod backup;
 mod delete;
 mod restore;
 
-mod arc;
 mod format;
-mod locks;
 mod logger;
-mod ops;
 mod parse;
 mod storage;
 

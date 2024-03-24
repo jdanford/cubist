@@ -6,6 +6,7 @@ use tokio::{
 };
 
 use crate::{
+    arc::{rwarc, unrwarc},
     archive::Archive,
     block::BlockRecords,
     error::{Result, OK},
@@ -14,8 +15,6 @@ use crate::{
     stats::CoreStats,
     storage::{self, BoxedStorage},
 };
-
-use super::arc::{rwarc, unrwarc};
 
 pub async fn download_archive(
     storage: Arc<RwLock<BoxedStorage>>,
