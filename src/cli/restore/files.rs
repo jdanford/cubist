@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -12,10 +11,7 @@ use tokio::{fs, sync::Semaphore, task::JoinSet};
 use crate::{
     cli::format::{format_path, format_size},
     error::{Error, Result, OK},
-    file::{
-        restore_metadata, restore_metadata_from_node, try_exists, FileType, Metadata, Node,
-        WalkNode,
-    },
+    file::{restore_metadata, restore_metadata_from_node, try_exists, FileType, Metadata, Node},
     hash::Hash,
 };
 
@@ -37,14 +33,23 @@ pub async fn restore_recursive(
     sender: Sender<PendingDownload>,
 ) -> Result<()> {
     let root_paths = if args.paths.is_empty() {
-        Cow::Owned(vec![PathBuf::new()])
+        vec![None]
     } else {
-        Cow::Borrowed(&args.paths)
+        args.paths
+            .iter()
+            .map(|path| Option::Some(path.as_path()))
+            .collect()
     };
 
-    for root_path in root_paths.iter() {
-        for (child_path, node) in walk(args.as_ref(), root_path)? {
-            let path = root_path.join(child_path);
+    for root_path in root_paths {
+        let walker = args.archive.walk(root_path, args.order)?;
+        for (child_path, node) in walker {
+            let path = if let Some(path) = root_path {
+                path.join(&child_path)
+            } else {
+                child_path
+            };
+
             let maybe_file = restore_from_node(args.clone(), state.clone(), &path, node).await?;
             if let Some(pending_file) = maybe_file {
                 sender.send(pending_file).await?;
@@ -55,16 +60,8 @@ pub async fn restore_recursive(
     Ok(())
 }
 
-fn walk<'a>(args: &'a Args, path: &Path) -> Result<impl Iterator<Item = (PathBuf, &'a Node)> + 'a> {
-    let node = args
-        .archive
-        .get(path)
-        .ok_or(Error::FileDoesNotExist(path.to_owned()))?;
-    Ok(WalkNode::new(node, args.order))
-}
-
 async fn restore_from_node(
-    _args: Arc<Args>,
+    args: Arc<Args>,
     _state: Arc<State>,
     path: &Path,
     node: &Node,
@@ -83,16 +80,20 @@ async fn restore_from_node(
             return Ok(Some(pending_file));
         }
         Node::Symlink { path: src, .. } => {
-            fs::symlink(src, path).await?;
-            restore_metadata_from_node(path, node).await?;
+            if !args.dry_run {
+                fs::symlink(src, path).await?;
+                restore_metadata_from_node(path, node).await?;
+            }
 
             let formatted_path = format_path(path);
             let style = AnsiColor::Cyan.on_default();
             debug!("{style}created symlink{style:#} {formatted_path}");
         }
         Node::Directory { .. } => {
-            fs::create_dir(path).await?;
-            restore_metadata_from_node(path, node).await?;
+            if !args.dry_run {
+                fs::create_dir(path).await?;
+                restore_metadata_from_node(path, node).await?;
+            }
 
             let formatted_path = format_path(path);
             let style = AnsiColor::Magenta.on_default();

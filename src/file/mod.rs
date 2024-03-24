@@ -17,7 +17,7 @@ pub use self::{
     metadata::Metadata,
     node::{FileType, Node, NodeChildren},
     tree::FileTree,
-    walk::{WalkNode, WalkOrder},
+    walk::WalkOrder,
 };
 
 pub async fn read_metadata(path: &Path) -> Result<Metadata> {

@@ -38,6 +38,18 @@ impl FileTree {
         FileTree { children, paths }
     }
 
+    pub fn walk(&self, maybe_path: Option<&Path>, order: WalkOrder) -> Result<WalkNode> {
+        let walker = if let Some(path) = maybe_path {
+            let node = self
+                .get(path)
+                .ok_or(Error::FileDoesNotExist(path.to_owned()))?;
+            WalkNode::new(node, order)
+        } else {
+            WalkNode::from_children(&self.children, order)
+        };
+        Ok(walker)
+    }
+
     pub fn get(&self, path: &Path) -> Option<&Node> {
         let (keys, name) = path_keys(path).ok()?;
         let mut subtree = &self.children;
@@ -54,6 +66,10 @@ impl FileTree {
         }
 
         subtree.get(name)
+    }
+
+    pub fn path(&self, inode: u64) -> Option<&Path> {
+        self.paths.get(&inode).map(PathBuf::as_path)
     }
 
     pub fn insert(&mut self, path: PathBuf, node: Node) -> Result<()> {
@@ -84,10 +100,6 @@ impl FileTree {
         self.paths.insert(node.metadata().inode, path);
         subtree.insert(name, node);
         Ok(())
-    }
-
-    pub fn path(&self, inode: u64) -> Option<&Path> {
-        self.paths.get(&inode).map(PathBuf::as_path)
     }
 }
 
