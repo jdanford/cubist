@@ -2,13 +2,13 @@ mod local;
 mod s3;
 mod url;
 
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 use async_trait::async_trait;
 
 use crate::{
     error::{Error, Result},
-    hash::Hash,
+    prefix::{find_one_by_prefix, longest_common_prefix},
     stats::StorageStats,
 };
 
@@ -34,16 +34,40 @@ pub trait Storage: Debug {
             Err(err) => Err(err),
         }
     }
+
+    async fn expand_key(&mut self, prefix: &str) -> Result<String> {
+        let keys = self.keys(Some(prefix)).await?;
+        match &keys[..] {
+            [key] => Ok(key.clone()),
+            [] => Err(Error::NoItemForPrefix(prefix.to_owned())),
+            _ => Err(Error::MultipleItemsForPrefix(prefix.to_owned())),
+        }
+    }
+
+    async fn expand_keys(&mut self, prefixes: &[&str]) -> Result<Vec<String>> {
+        let common_prefix = longest_common_prefix(prefixes);
+        let keys = self.keys(common_prefix).await?;
+        let mut matching_keys = vec![];
+
+        for prefix in prefixes {
+            let matching_key = find_one_by_prefix(&keys, prefix)?;
+            matching_keys.push(matching_key.to_owned());
+        }
+
+        Ok(matching_keys)
+    }
 }
 
 pub const ARCHIVE_KEY_PREFIX: &str = "archives/";
 pub const BLOCK_KEY_PREFIX: &str = "blocks/";
+
+pub const ARCHIVE_RECORDS_KEY: &str = "metadata/archives";
 pub const BLOCK_RECORDS_KEY: &str = "metadata/blocks";
 
-pub fn archive_key(name: &str) -> String {
-    format!("{ARCHIVE_KEY_PREFIX}{name}")
+pub fn archive_key<T: Display>(hash: &T) -> String {
+    format!("{ARCHIVE_KEY_PREFIX}{hash}")
 }
 
-pub fn block_key(hash: &Hash) -> String {
+pub fn block_key<T: Display>(hash: &T) -> String {
     format!("{BLOCK_KEY_PREFIX}{hash}")
 }

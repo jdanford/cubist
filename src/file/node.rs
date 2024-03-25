@@ -8,7 +8,7 @@ use super::metadata::Metadata;
 
 pub type NodeChildren = BTreeMap<OsString, Node>;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Node {
     File {
         metadata: Metadata,

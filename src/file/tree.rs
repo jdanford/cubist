@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     ffi::OsStr,
+    hash::Hash,
     path::{Component, Path, PathBuf},
 };
 
@@ -9,33 +10,40 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::{
     error::{Error, Result},
     file::{Node, NodeChildren},
+    hash,
 };
 
 use super::walk::{WalkNode, WalkOrder};
 
 #[derive(Debug)]
 pub struct FileTree {
+    pub hash: hash::Hash,
     children: NodeChildren,
     paths: HashMap<u64, PathBuf>,
 }
 
 impl FileTree {
-    pub fn new() -> Self {
-        FileTree {
-            children: NodeChildren::new(),
-            paths: HashMap::new(),
-        }
+    pub fn builder() -> FileTreeBuilder {
+        FileTreeBuilder::new()
     }
 
     fn from_children(children: NodeChildren) -> Self {
+        let mut hasher = hash::Hasher::new();
         let mut paths = HashMap::new();
         let walker = WalkNode::from_children(&children, WalkOrder::DepthFirst);
 
         for (path, node) in walker {
+            path.hash(&mut hasher);
+            node.hash(&mut hasher);
             paths.insert(node.metadata().inode, path);
         }
 
-        FileTree { children, paths }
+        let hash = hasher.finalize();
+        FileTree {
+            hash,
+            children,
+            paths,
+        }
     }
 
     pub fn walk(&self, maybe_path: Option<&Path>, order: WalkOrder) -> Result<WalkNode> {
@@ -71,6 +79,23 @@ impl FileTree {
     pub fn path(&self, inode: u64) -> Option<&Path> {
         self.paths.get(&inode).map(PathBuf::as_path)
     }
+}
+
+#[derive(Debug)]
+pub struct FileTreeBuilder {
+    hasher: hash::Hasher,
+    children: NodeChildren,
+    paths: HashMap<u64, PathBuf>,
+}
+
+impl FileTreeBuilder {
+    pub fn new() -> Self {
+        FileTreeBuilder {
+            hasher: hash::Hasher::new(),
+            children: NodeChildren::new(),
+            paths: HashMap::new(),
+        }
+    }
 
     pub fn insert(&mut self, path: PathBuf, node: Node) -> Result<()> {
         let (keys, name) = path_keys(&path)?;
@@ -96,10 +121,23 @@ impl FileTree {
             return Err(Error::PathAlreadyArchived(path));
         }
 
+        path.hash(&mut self.hasher);
+        node.hash(&mut self.hasher);
+
         let name = name.to_owned();
         self.paths.insert(node.metadata().inode, path);
         subtree.insert(name, node);
+
         Ok(())
+    }
+
+    pub fn finalize(self) -> FileTree {
+        let hash = self.hasher.finalize();
+        FileTree {
+            hash,
+            children: self.children,
+            paths: self.paths,
+        }
     }
 }
 

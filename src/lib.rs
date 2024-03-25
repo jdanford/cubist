@@ -15,6 +15,7 @@ mod file;
 mod hash;
 mod locks;
 mod ops;
+mod prefix;
 mod serde;
 mod stats;
 mod storage;

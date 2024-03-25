@@ -8,8 +8,8 @@ use crate::{
     arc::rwarc,
     error::{Error, Result},
     ops::{
-        delete_archives, delete_blocks, download_archives, download_block_records,
-        upload_block_records,
+        delete_archives, delete_blocks, download_archive_records, download_archives,
+        download_block_records, find_archive_hashes, upload_archive_records, upload_block_records,
     },
     stats::CoreStats,
 };
@@ -21,12 +21,18 @@ pub async fn main(cli: DeleteArgs) -> Result<()> {
     let storage = rwarc(create_storage(&cli.global).await?);
     let mut removed_blocks = HashSet::new();
 
-    let (archives, mut block_records) = try_join!(
-        download_archives(storage.clone(), &cli.archives, cli.tasks),
+    let (mut archive_records, mut block_records) = try_join!(
+        download_archive_records(storage.clone()),
         download_block_records(storage.clone()),
     )?;
 
+    let archive_prefixes = &cli.archives.iter().collect::<Vec<_>>();
+    let archive_hashes = find_archive_hashes(storage.clone(), archive_prefixes).await?;
+    let archives = download_archives(storage.clone(), &archive_hashes, cli.tasks).await?;
+
     for archive in &archives {
+        archive_records.remove(&archive.hash)?;
+
         let archive_garbage_blocks = block_records.remove_refs(&archive.block_refs)?;
         removed_blocks.extend(archive_garbage_blocks);
     }
@@ -55,7 +61,8 @@ pub async fn main(cli: DeleteArgs) -> Result<()> {
 
     if !cli.dry_run {
         try_join!(
-            delete_archives(storage.clone(), &cli.archives, cli.tasks),
+            delete_archives(storage.clone(), &archive_hashes, cli.tasks),
+            upload_archive_records(storage.clone(), rwarc(archive_records)),
             upload_block_records(storage.clone(), rwarc(block_records)),
         )?;
     }

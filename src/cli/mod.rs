@@ -18,7 +18,7 @@ use concolor_clap::{color_choice, ColorChoice};
 use humantime::parse_duration;
 use log::error;
 
-use crate::{file::WalkOrder, storage::StorageUrl};
+use crate::{file::WalkOrder, hash::ShortHash, storage::StorageUrl};
 
 use self::parse::parse_range_inclusive;
 
@@ -110,7 +110,7 @@ struct BackupArgs {
 #[derive(Args, Debug)]
 struct RestoreArgs {
     /// Archive to restore from
-    pub archive: String,
+    pub archive: ShortHash,
 
     /// Files to restore (or all files if empty)
     pub paths: Vec<PathBuf>,
@@ -141,7 +141,7 @@ struct RestoreArgs {
 struct DeleteArgs {
     /// Archive(s) to delete
     #[arg(required = true)]
-    pub archives: Vec<String>,
+    pub archives: Vec<ShortHash>,
 
     /// Number of background tasks to use
     #[arg(

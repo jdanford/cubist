@@ -1,18 +1,24 @@
 mod blocks;
 mod files;
 
-use std::{fmt::Debug, path::PathBuf, sync::Arc};
+use std::{collections::HashSet, fmt::Debug, path::PathBuf, sync::Arc};
 
+use clap::builder::styling::AnsiColor;
 use humantime::format_duration;
+use log::info;
 use tokio::{spawn, sync::RwLock, try_join};
 
 use crate::{
     arc::{rwarc, unarc, unrwarc},
-    archive::Archive,
+    archive::{ArchiveBuilder, ArchiveRecord},
     block::BlockRecords,
     error::Result,
+    hash,
     locks::BlockLocks,
-    ops::{download_block_records, upload_archive, upload_block_records},
+    ops::{
+        download_archive_records, download_block_records, upload_archive, upload_archive_records,
+        upload_block_records,
+    },
     stats::CoreStats,
     storage::BoxedStorage,
 };
@@ -34,7 +40,7 @@ struct Args {
 struct State {
     stats: Arc<RwLock<CoreStats>>,
     storage: Arc<RwLock<BoxedStorage>>,
-    archive: Arc<RwLock<Archive>>,
+    archive_builder: Arc<RwLock<ArchiveBuilder>>,
     block_records: Arc<RwLock<BlockRecords>>,
     block_locks: Arc<RwLock<BlockLocks>>,
 }
@@ -42,10 +48,14 @@ struct State {
 pub async fn main(cli: BackupArgs) -> Result<()> {
     let stats = rwarc(CoreStats::new());
     let storage = rwarc(create_storage(&cli.global).await?);
-    let archive = rwarc(Archive::new());
+    let archive_builder = rwarc(ArchiveBuilder::new());
     let block_locks = rwarc(BlockLocks::new());
 
-    let block_records = rwarc(download_block_records(storage.clone()).await?);
+    let (mut archive_records, block_records) = try_join!(
+        download_archive_records(storage.clone()),
+        download_block_records(storage.clone()),
+    )?;
+    let block_records = rwarc(block_records);
 
     let args = Arc::new(Args {
         paths: cli.paths,
@@ -57,7 +67,7 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
     let state = Arc::new(State {
         stats,
         storage,
-        archive,
+        archive_builder,
         block_records,
         block_locks,
     });
@@ -78,18 +88,35 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
     let State {
         stats,
         storage,
-        archive,
+        archive_builder,
         block_records,
         ..
     } = unarc(state);
     let stats = unrwarc(stats);
+    let archive_builder = unrwarc(archive_builder);
+    let archive = rwarc(archive_builder.finalize());
+
+    let hash = *archive.read().await.hash();
+    let archive_record = ArchiveRecord {
+        hash,
+        created: stats.start_time,
+        tags: HashSet::new(),
+    };
+    archive_records.insert(archive_record);
 
     if !cli.dry_run {
         try_join!(
-            upload_archive(storage.clone(), archive.clone(), &stats),
-            upload_block_records(storage.clone(), block_records),
+            upload_archive(storage.clone(), archive.clone()),
+            upload_block_records(storage.clone(), block_records.clone()),
+            upload_archive_records(storage.clone(), rwarc(archive_records)),
         )?;
     }
+
+    let archive = unrwarc(archive);
+    let block_records = unrwarc(block_records);
+    let archive_short_hash = hash::format_short(archive.hash(), block_records.unique_count());
+    let style = AnsiColor::Green.on_default();
+    info!("{style}created archive{style:#} {archive_short_hash}");
 
     if cli.global.stats {
         let full_stats = stats.finalize(storage.read().await.stats());

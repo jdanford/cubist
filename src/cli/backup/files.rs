@@ -71,7 +71,7 @@ async fn backup_from_entry(
         let metadata = read_metadata(&local_path).await?;
         let path = fs::read_link(&local_path).await?;
         let node = Node::Symlink { metadata, path };
-        let archive = &mut state.archive.write().await;
+        let archive = &mut state.archive_builder.write().await;
         archive.insert(archive_path, node)?;
 
         let style = AnsiColor::Cyan.on_default();
@@ -80,7 +80,7 @@ async fn backup_from_entry(
         let metadata = read_metadata(&local_path).await?;
         let children = BTreeMap::new();
         let node = Node::Directory { metadata, children };
-        let archive = &mut state.archive.write().await;
+        let archive = &mut state.archive_builder.write().await;
         archive.insert(archive_path, node)?;
 
         let style = AnsiColor::Magenta.on_default();
@@ -133,7 +133,7 @@ async fn upload_pending_file(
     let mut file = File::open(&local_path).await?;
     let (hash, size) = upload_file(args.clone(), state.clone(), &mut file).await?;
     let node = Node::File { metadata, hash };
-    let archive = &mut state.archive.write().await;
+    let archive = &mut state.archive_builder.write().await;
     archive.insert(archive_path, node)?;
 
     let formatted_path = format_path(&local_path);

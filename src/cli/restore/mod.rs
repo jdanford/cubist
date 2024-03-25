@@ -13,7 +13,7 @@ use crate::{
     file::WalkOrder,
     hash::Hash,
     locks::BlockLocks,
-    ops::download_archive,
+    ops::{download_archive, find_archive_hash},
     stats::CoreStats,
     storage::BoxedStorage,
 };
@@ -48,7 +48,8 @@ pub async fn main(cli: RestoreArgs) -> Result<()> {
     let local_blocks = rwarc(HashMap::new());
     let block_locks = rwarc(BlockLocks::new());
 
-    let archive = download_archive(storage.clone(), &cli.archive).await?;
+    let archive_hash = find_archive_hash(storage.clone(), &cli.archive).await?;
+    let archive = download_archive(storage.clone(), &archive_hash).await?;
 
     let args = Arc::new(Args {
         archive,

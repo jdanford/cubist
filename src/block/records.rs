@@ -12,27 +12,22 @@ use crate::{
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BlockRefs {
-    map: HashMap<Hash, u64>,
+    refs: HashMap<Hash, u64>,
 }
 
 impl BlockRefs {
     pub fn new() -> Self {
         BlockRefs {
-            map: HashMap::new(),
+            refs: HashMap::new(),
         }
     }
 
-    #[allow(dead_code)]
-    pub fn unique_count(&self) -> usize {
-        self.map.len()
-    }
-
     pub fn contains(&self, hash: &Hash) -> bool {
-        self.map.contains_key(hash)
+        self.refs.contains_key(hash)
     }
 
     pub fn add_count(&mut self, hash: &Hash, count: u64) {
-        self.map
+        self.refs
             .entry(*hash)
             .and_modify(|lhs_count| *lhs_count += count)
             .or_insert(count);
@@ -47,36 +42,40 @@ pub struct BlockRecord {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BlockRecords {
-    map: HashMap<Hash, BlockRecord>,
+    records: HashMap<Hash, BlockRecord>,
 }
 
 impl BlockRecords {
     pub fn new() -> Self {
         BlockRecords {
-            map: HashMap::new(),
+            records: HashMap::new(),
         }
     }
 
-    pub fn get(&self, hash: &Hash) -> Option<&BlockRecord> {
-        self.map.get(hash)
-    }
-
-    pub fn get_mut(&mut self, hash: &Hash) -> Option<&mut BlockRecord> {
-        self.map.get_mut(hash)
-    }
-
-    pub fn insert(&mut self, hash: Hash, record: BlockRecord) {
-        self.map.insert(hash, record);
+    pub fn unique_count(&self) -> usize {
+        self.records.len()
     }
 
     pub fn contains(&self, hash: &Hash) -> bool {
-        self.map.contains_key(hash)
+        self.records.contains_key(hash)
+    }
+
+    pub fn get(&self, hash: &Hash) -> Option<&BlockRecord> {
+        self.records.get(hash)
+    }
+
+    pub fn get_mut(&mut self, hash: &Hash) -> Option<&mut BlockRecord> {
+        self.records.get_mut(hash)
+    }
+
+    pub fn insert(&mut self, hash: Hash, record: BlockRecord) {
+        self.records.insert(hash, record);
     }
 
     pub fn remove_refs(&mut self, refs: &BlockRefs) -> Result<HashSet<Hash>> {
         let mut removed = HashSet::new();
 
-        for (&hash, &ref_count) in &refs.map {
+        for (&hash, &ref_count) in &refs.refs {
             let record = self
                 .get_mut(&hash)
                 .ok_or_else(|| Error::BlockRecordNotFound(hash))?;
@@ -85,7 +84,7 @@ impl BlockRecords {
                     record.ref_count -= ref_count;
                 }
                 Ordering::Equal => {
-                    self.map.remove(&hash);
+                    self.records.remove(&hash);
                     removed.insert(hash);
                 }
                 Ordering::Less => {

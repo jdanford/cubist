@@ -30,6 +30,15 @@ pub enum Error {
     #[error("key `{0}` is invalid")]
     InvalidKey(String),
 
+    #[error("hash `{0}` is invalid")]
+    InvalidHash(String),
+
+    #[error("no item found for prefix `{0}`")]
+    NoItemForPrefix(String),
+
+    #[error("multiple items found for prefix `{0}`")]
+    MultipleItemsForPrefix(String),
+
     #[error("`{0}` is not a directory")]
     FileIsNotDirectory(PathBuf),
 

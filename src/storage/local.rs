@@ -89,6 +89,8 @@ impl Storage for LocalStorage {
         }
 
         self.stats.get_requests += 1;
+
+        keys.sort();
         Ok(keys)
     }
 
