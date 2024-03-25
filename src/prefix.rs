@@ -57,7 +57,7 @@ fn find_prefix_range_start<S: AsRef<str>>(values: &[S], prefix: &str) -> Option<
     let mut d = values.len() - 1;
 
     loop {
-        let (oa, od) = compare_prefixes(prefix, values[a].as_ref(), values[d].as_ref());
+        let (oa, od) = compare_prefixes(prefix, values, a, d);
         match (oa, od) {
             (Less, Less) => return None,
             (Less, Equal) => {
@@ -67,7 +67,7 @@ fn find_prefix_range_start<S: AsRef<str>>(values: &[S], prefix: &str) -> Option<
 
                 let c = midpoint(a, d);
                 let b = c.saturating_sub(1).max(a);
-                let (ob, oc) = compare_prefixes(prefix, values[b].as_ref(), values[c].as_ref());
+                let (ob, oc) = compare_prefixes(prefix, values, b, c);
                 match (ob, oc) {
                     (Less, Less) => {
                         a = c;
@@ -85,7 +85,7 @@ fn find_prefix_range_start<S: AsRef<str>>(values: &[S], prefix: &str) -> Option<
             (Less, Greater) => {
                 let c = midpoint(a, d);
                 let b = c.saturating_sub(1).max(a);
-                let (ob, oc) = compare_prefixes(prefix, values[b].as_ref(), values[c].as_ref());
+                let (ob, oc) = compare_prefixes(prefix, values, b, c);
                 match (ob, oc) {
                     (Less, Less) => {
                         a = c;
@@ -118,7 +118,7 @@ fn find_prefix_range_end<S: AsRef<str>>(values: &[S], prefix: &str) -> Option<us
     let mut d = values.len() - 1;
 
     loop {
-        let (oa, od) = compare_prefixes(prefix, values[a].as_ref(), values[d].as_ref());
+        let (oa, od) = compare_prefixes(prefix, values, a, d);
         match (oa, od) {
             (Less, Less) => return None,
             (Less, Equal) => return Some(d),
@@ -130,7 +130,7 @@ fn find_prefix_range_end<S: AsRef<str>>(values: &[S], prefix: &str) -> Option<us
 
                 let b = midpoint(a, d);
                 let c = b.saturating_add(1).min(d);
-                let (ob, oc) = compare_prefixes(prefix, values[b].as_ref(), values[c].as_ref());
+                let (ob, oc) = compare_prefixes(prefix, values, b, c);
                 match (ob, oc) {
                     (Equal, Equal) => {
                         a = b;
@@ -146,7 +146,7 @@ fn find_prefix_range_end<S: AsRef<str>>(values: &[S], prefix: &str) -> Option<us
             (Less, Greater) => {
                 let b = midpoint(a, d);
                 let c = b.saturating_add(1).min(d);
-                let (ob, oc) = compare_prefixes(prefix, values[b].as_ref(), values[c].as_ref());
+                let (ob, oc) = compare_prefixes(prefix, values, b, c);
                 match (ob, oc) {
                     (Less, Less) => {
                         a = c;
@@ -174,9 +174,16 @@ fn midpoint(start: usize, end: usize) -> usize {
     start + distance / 2
 }
 
-fn compare_prefixes(needle: &str, a: &str, b: &str) -> (Ordering, Ordering) {
-    let oa = compare_prefix(needle, a);
-    let ob = compare_prefix(needle, b);
+fn compare_prefixes<S: AsRef<str>>(
+    needle: &str,
+    haystacks: &[S],
+    a: usize,
+    b: usize,
+) -> (Ordering, Ordering) {
+    let haystack_a = haystacks[a].as_ref();
+    let haystack_b = haystacks[b].as_ref();
+    let oa = compare_prefix(needle, haystack_a);
+    let ob = compare_prefix(needle, haystack_b);
     (oa, ob)
 }
 

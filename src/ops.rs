@@ -26,7 +26,7 @@ pub async fn download_archives<'a, I: IntoIterator<Item = &'a Hash>>(
     storage: Arc<RwLock<BoxedStorage>>,
     hashes: I,
     tasks: usize,
-) -> Result<Vec<Archive>> {
+) -> Result<Vec<(Hash, Archive)>> {
     let archives = rwarc(vec![]);
     let semaphore = Arc::new(Semaphore::new(tasks));
     let mut tasks = JoinSet::new();
@@ -39,7 +39,7 @@ pub async fn download_archives<'a, I: IntoIterator<Item = &'a Hash>>(
 
         tasks.spawn(async move {
             let archive = download_archive(storage.clone(), &hash).await?;
-            archives.write().await.push(archive);
+            archives.write().await.push((hash, archive));
             drop(permit);
             OK
         });
@@ -54,9 +54,10 @@ pub async fn download_archives<'a, I: IntoIterator<Item = &'a Hash>>(
 
 pub async fn upload_archive(
     storage: Arc<RwLock<BoxedStorage>>,
+    hash: &Hash,
     archive: Arc<RwLock<Archive>>,
 ) -> Result<()> {
-    let key = storage::archive_key(&archive.read().await.hash());
+    let key = storage::archive_key(hash);
     let archive_bytes = spawn_blocking(move || serialize(&*archive.blocking_read())).await??;
     storage.write().await.put(&key, archive_bytes).await?;
     Ok(())

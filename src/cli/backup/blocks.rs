@@ -94,7 +94,7 @@ async fn upload_block(args: Arc<Args>, state: Arc<State>, block: Block) -> Resul
         state.block_records.write().await.insert(hash, record);
     }
 
-    state.archive_builder.write().await.add_ref(&hash);
+    state.archive.write().await.add_ref(&hash);
     state.stats.write().await.blocks_referenced += 1;
 
     drop(permit);
@@ -102,6 +102,6 @@ async fn upload_block(args: Arc<Args>, state: Arc<State>, block: Block) -> Resul
 }
 
 async fn block_exists(_args: Arc<Args>, state: Arc<State>, hash: &Hash) -> bool {
-    state.archive_builder.read().await.block_refs.contains(hash)
+    state.archive.read().await.block_refs.contains(hash)
         || state.block_records.read().await.contains(hash)
 }

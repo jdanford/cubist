@@ -8,7 +8,6 @@ use crate::error::{Error, Result};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ArchiveRecord {
-    pub hash: Hash,
     pub created: DateTime<Utc>,
     pub tags: HashSet<String>,
 }
@@ -30,25 +29,18 @@ impl ArchiveRecords {
     }
 
     #[allow(dead_code)]
-    pub fn contains(&self, hash: &Hash) -> bool {
-        self.records.contains_key(hash)
-    }
-
-    #[allow(dead_code)]
     pub fn get(&self, hash: &Hash) -> Option<&ArchiveRecord> {
         self.records.get(hash)
     }
 
-    pub fn insert(&mut self, record: ArchiveRecord) {
-        let key = record.hash;
-        self.by_created.insert(record.created, key);
-
+    pub fn insert(&mut self, hash: Hash, record: ArchiveRecord) {
         for tag in &record.tags {
             let entry = self.by_tag.entry(tag.clone()).or_default();
-            entry.insert(key);
+            entry.insert(hash);
         }
 
-        self.records.insert(key, record);
+        self.by_created.insert(record.created, hash);
+        self.records.insert(hash, record);
     }
 
     pub fn remove(&mut self, hash: &Hash) -> Result<()> {
@@ -56,6 +48,7 @@ impl ArchiveRecords {
             .records
             .remove(hash)
             .ok_or_else(|| Error::ItemNotFound(hash.to_string()))?;
+
         self.by_created.remove(&record.created);
 
         for tag in record.tags {
@@ -69,9 +62,10 @@ impl ArchiveRecords {
         Ok(())
     }
 
-    pub fn iter_by_created(&self) -> impl Iterator<Item = &ArchiveRecord> {
-        self.by_created
-            .values()
-            .map(|hash| self.records.get(hash).unwrap())
+    pub fn iter_by_created(&self) -> impl Iterator<Item = (&Hash, &ArchiveRecord)> {
+        self.by_created.values().map(|hash| {
+            let record = self.records.get(hash).unwrap();
+            (hash, record)
+        })
     }
 }

@@ -10,7 +10,7 @@ use tokio::{spawn, sync::RwLock, try_join};
 
 use crate::{
     arc::{rwarc, unarc, unrwarc},
-    archive::{ArchiveBuilder, ArchiveRecord},
+    archive::{Archive, ArchiveRecord},
     block::BlockRecords,
     error::Result,
     hash,
@@ -40,7 +40,7 @@ struct Args {
 struct State {
     stats: Arc<RwLock<CoreStats>>,
     storage: Arc<RwLock<BoxedStorage>>,
-    archive_builder: Arc<RwLock<ArchiveBuilder>>,
+    archive: Arc<RwLock<Archive>>,
     block_records: Arc<RwLock<BlockRecords>>,
     block_locks: Arc<RwLock<BlockLocks>>,
 }
@@ -48,7 +48,7 @@ struct State {
 pub async fn main(cli: BackupArgs) -> Result<()> {
     let stats = rwarc(CoreStats::new());
     let storage = rwarc(create_storage(&cli.global).await?);
-    let archive_builder = rwarc(ArchiveBuilder::new());
+    let archive = rwarc(Archive::new());
     let block_locks = rwarc(BlockLocks::new());
 
     let (mut archive_records, block_records) = try_join!(
@@ -67,7 +67,7 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
     let state = Arc::new(State {
         stats,
         storage,
-        archive_builder,
+        archive,
         block_records,
         block_locks,
     });
@@ -88,35 +88,31 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
     let State {
         stats,
         storage,
-        archive_builder,
+        archive,
         block_records,
         ..
     } = unarc(state);
     let stats = unrwarc(stats);
-    let archive_builder = unrwarc(archive_builder);
-    let archive = rwarc(archive_builder.finalize());
 
-    let hash = *archive.read().await.hash();
+    let archive_hash = hash::random();
     let archive_record = ArchiveRecord {
-        hash,
         created: stats.start_time,
         tags: HashSet::new(),
     };
-    archive_records.insert(archive_record);
+    archive_records.insert(archive_hash, archive_record);
 
     if !cli.dry_run {
         try_join!(
-            upload_archive(storage.clone(), archive.clone()),
+            upload_archive(storage.clone(), &archive_hash, archive.clone()),
             upload_block_records(storage.clone(), block_records.clone()),
             upload_archive_records(storage.clone(), rwarc(archive_records)),
         )?;
     }
 
-    let archive = unrwarc(archive);
-    let block_records = unrwarc(block_records);
-    let archive_short_hash = hash::format_short(archive.hash(), block_records.unique_count());
+    let block_count = block_records.read().await.unique_count();
+    let short_hash = hash::format_short(&archive_hash, block_count);
     let style = AnsiColor::Green.on_default();
-    info!("{style}created archive{style:#} {archive_short_hash}");
+    info!("{style}created archive{style:#} {short_hash}");
 
     if cli.global.stats {
         let full_stats = stats.finalize(storage.read().await.stats());

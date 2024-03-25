@@ -1,8 +1,6 @@
-use std::{
-    fmt::Display,
-    ops::{Deref, DerefMut, RangeInclusive},
-    str::FromStr,
-};
+use std::{fmt::Display, ops::RangeInclusive, str::FromStr};
+
+use rand::RngCore;
 
 use crate::error::Error;
 
@@ -45,37 +43,10 @@ impl Display for ShortHash {
     }
 }
 
-#[derive(Debug)]
-pub struct Hasher(blake3::Hasher);
-
-impl Hasher {
-    pub fn new() -> Self {
-        Hasher(blake3::Hasher::new())
-    }
-}
-
-impl Deref for Hasher {
-    type Target = blake3::Hasher;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for Hasher {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl std::hash::Hasher for Hasher {
-    fn write(&mut self, bytes: &[u8]) {
-        self.0.update(bytes);
-    }
-
-    fn finish(&self) -> u64 {
-        unimplemented!()
-    }
+pub fn random() -> Hash {
+    let mut bytes = [0; SIZE];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    Hash::from_bytes(bytes)
 }
 
 pub fn leaf(data: &[u8]) -> Hash {
@@ -83,7 +54,7 @@ pub fn leaf(data: &[u8]) -> Hash {
 }
 
 pub fn branch(children: &[Hash]) -> Hash {
-    let mut hasher = Hasher::new();
+    let mut hasher = blake3::Hasher::new();
 
     for hash in children {
         hasher.update(hash.as_bytes());

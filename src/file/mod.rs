@@ -16,7 +16,7 @@ use crate::error::Result;
 pub use self::{
     metadata::Metadata,
     node::{FileType, Node, NodeChildren},
-    tree::{FileTree, FileTreeBuilder},
+    tree::FileTree,
     walk::WalkOrder,
 };
 

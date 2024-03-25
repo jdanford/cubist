@@ -30,8 +30,8 @@ pub async fn main(cli: DeleteArgs) -> Result<()> {
     let archive_hashes = find_archive_hashes(storage.clone(), archive_prefixes).await?;
     let archives = download_archives(storage.clone(), &archive_hashes, cli.tasks).await?;
 
-    for archive in &archives {
-        archive_records.remove(&archive.hash)?;
+    for (hash, archive) in &archives {
+        archive_records.remove(hash)?;
 
         let archive_garbage_blocks = block_records.remove_refs(&archive.block_refs)?;
         removed_blocks.extend(archive_garbage_blocks);
