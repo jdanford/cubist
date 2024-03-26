@@ -1,4 +1,6 @@
 mod records;
+#[cfg(test)]
+mod tests;
 
 use fastcdc::v2020::AsyncStreamCDC;
 use tokio::{
@@ -13,7 +15,7 @@ use crate::{
 
 pub use self::records::{BlockRecord, BlockRecords, BlockRefs};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Block {
     Leaf {
         hash: Hash,
@@ -28,6 +30,10 @@ pub enum Block {
 
 impl Block {
     pub async fn leaf(data: Vec<u8>) -> Result<Self> {
+        if data.is_empty() {
+            return Err(Error::EmptyBlock);
+        }
+
         let (data, hash) = spawn_blocking(move || {
             let hash = hash::leaf(&data);
             (data, hash)
@@ -38,6 +44,14 @@ impl Block {
     }
 
     pub async fn branch(level: u8, children: Vec<Hash>) -> Result<Self> {
+        if level == 0 {
+            return Err(Error::BranchLevelZero);
+        }
+
+        if children.is_empty() {
+            return Err(Error::EmptyBlock);
+        }
+
         let (children, hash) = spawn_blocking(move || {
             let hash = hash::branch(&children);
             (children, hash)
@@ -49,6 +63,14 @@ impl Block {
             level,
             children,
         })
+    }
+
+    #[allow(dead_code)]
+    pub fn level(&self) -> u8 {
+        match self {
+            Block::Leaf { .. } => 0,
+            Block::Branch { level, .. } => *level,
+        }
     }
 
     pub fn hash(&self) -> &Hash {
@@ -66,15 +88,15 @@ impl Block {
     }
 
     pub async fn decode(
-        expected_hash: Hash,
+        expected_hash: &Hash,
         expected_level: Option<u8>,
         bytes: &[u8],
     ) -> Result<Self> {
         let (&level, bytes) = bytes
             .split_first()
             .ok_or_else(|| Error::InvalidBlockSize(0))?;
-        assert_block_level_eq(expected_hash, level, expected_level)?;
-        Block::from_raw(&expected_hash, level, bytes.to_owned()).await
+        assert_block_level_eq(*expected_hash, level, expected_level)?;
+        Block::from_raw(expected_hash, level, bytes.to_owned()).await
     }
 
     async fn into_raw(self, compression_level: u8) -> Result<(u8, Vec<u8>)> {

@@ -5,7 +5,7 @@ use std::{fmt::Display, path::PathBuf};
 
 use clap::ValueEnum;
 
-use crate::file::{Node, NodeChildren};
+use super::{Node, NodeChildren};
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum WalkOrder {

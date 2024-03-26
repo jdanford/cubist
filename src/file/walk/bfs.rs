@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, path::PathBuf};
 
-use crate::file::{Node, NodeChildren};
+use super::{Node, NodeChildren};
 
 #[derive(Debug)]
 pub struct WalkNode<'a> {

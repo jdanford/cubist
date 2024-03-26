@@ -1,5 +1,5 @@
 use bincode::{DefaultOptions, Options};
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Serialize};
 
 use crate::error::Result;
 
@@ -8,7 +8,7 @@ pub fn serialize<T: Serialize>(value: &T) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-pub fn deserialize<'de, T: Deserialize<'de>>(bytes: &'de [u8]) -> Result<T> {
+pub fn deserialize<T: DeserializeOwned>(bytes: &[u8]) -> Result<T> {
     let value = bincode_options().deserialize(bytes)?;
     Ok(value)
 }

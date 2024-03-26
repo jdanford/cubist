@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use blake3::Hash;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::error::{Error, Result};
 
@@ -12,7 +12,7 @@ pub struct ArchiveRecord {
     pub tags: HashSet<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct ArchiveRecords {
     records: HashMap<Hash, ArchiveRecord>,
     by_created: BTreeMap<DateTime<Utc>, Hash>,
@@ -28,17 +28,29 @@ impl ArchiveRecords {
         }
     }
 
+    pub fn from_records(records: HashMap<Hash, ArchiveRecord>) -> Self {
+        let mut by_created = BTreeMap::new();
+        let mut by_tag = HashMap::new();
+
+        for (hash, record) in &records {
+            insert_tags(&mut by_tag, *hash, &record.tags);
+            by_created.insert(record.created, *hash);
+        }
+
+        ArchiveRecords {
+            records,
+            by_created,
+            by_tag,
+        }
+    }
+
     #[allow(dead_code)]
     pub fn get(&self, hash: &Hash) -> Option<&ArchiveRecord> {
         self.records.get(hash)
     }
 
     pub fn insert(&mut self, hash: Hash, record: ArchiveRecord) {
-        for tag in &record.tags {
-            let entry = self.by_tag.entry(tag.clone()).or_default();
-            entry.insert(hash);
-        }
-
+        insert_tags(&mut self.by_tag, hash, &record.tags);
         self.by_created.insert(record.created, hash);
         self.records.insert(hash, record);
     }
@@ -48,14 +60,17 @@ impl ArchiveRecords {
             .records
             .remove(hash)
             .ok_or_else(|| Error::ItemNotFound(hash.to_string()))?;
-
         self.by_created.remove(&record.created);
+        self.remove_tags(hash, &record.tags)?;
+        Ok(())
+    }
 
-        for tag in record.tags {
+    fn remove_tags(&mut self, hash: &Hash, tags: &HashSet<String>) -> Result<()> {
+        for tag in tags {
             let hashes = self
                 .by_tag
-                .get_mut(&tag)
-                .ok_or_else(|| Error::ItemNotFound(tag.clone()))?;
+                .get_mut(tag.as_str())
+                .ok_or_else(|| Error::ItemNotFound(tag.to_string()))?;
             hashes.remove(hash);
         }
 
@@ -67,5 +82,26 @@ impl ArchiveRecords {
             let record = self.records.get(hash).unwrap();
             (hash, record)
         })
+    }
+}
+
+impl Serialize for ArchiveRecords {
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        Serialize::serialize(&self.records, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ArchiveRecords {
+    fn deserialize<D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<ArchiveRecords, D::Error> {
+        Deserialize::deserialize(deserializer).map(ArchiveRecords::from_records)
+    }
+}
+
+fn insert_tags(by_tag: &mut HashMap<String, HashSet<Hash>>, hash: Hash, tags: &HashSet<String>) {
+    for tag in tags {
+        let entry = by_tag.entry(tag.clone()).or_default();
+        entry.insert(hash);
     }
 }

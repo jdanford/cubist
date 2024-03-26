@@ -80,8 +80,14 @@ pub enum Error {
     #[error("block has invalid size {0}")]
     InvalidBlockSize(u64),
 
+    #[error("branch block level is 0")]
+    BranchLevelZero,
+
     #[error("too many block levels")]
     TooManyBlockLevels,
+
+    #[error("block is empty")]
+    EmptyBlock,
 
     #[error("{source}")]
     Io {
