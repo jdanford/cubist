@@ -161,6 +161,10 @@ where
             }
             (Greater, Greater) => return None,
             (Less, Greater) => {
+                if a + 1 == d {
+                    return None;
+                }
+
                 let (b, c) = midpoints(a, d);
                 let ob = cmp(values[b].as_ref(), prefix);
                 let oc = cmp(values[c].as_ref(), prefix);
