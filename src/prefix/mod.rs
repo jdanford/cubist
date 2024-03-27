@@ -94,7 +94,7 @@ where
                     (Less, Less) => a = c,
                     (Less, Equal) => return Some(c),
                     (Equal, Equal) => d = b,
-                    _ => unreachable!(),
+                    _ => panic!("array is not sorted"),
                 }
             }
             (Equal, Equal) => return Some(a),
@@ -115,10 +115,10 @@ where
                     (Equal, Greater) => d = b,
                     (Greater, Greater) => d = b,
                     (Less, Greater) => return None,
-                    _ => unreachable!(),
+                    _ => panic!("array is not sorted"),
                 }
             }
-            _ => unreachable!(),
+            _ => panic!("array is not sorted"),
         }
     }
 }
@@ -156,7 +156,7 @@ where
                     (Equal, Equal) => a = c,
                     (Equal, Greater) => return Some(b),
                     (Greater, Greater) => d = b,
-                    _ => unreachable!(),
+                    _ => panic!("array is not sorted"),
                 }
             }
             (Greater, Greater) => return None,
@@ -175,10 +175,10 @@ where
                     (Equal, Greater) => return Some(b),
                     (Greater, Greater) => d = b,
                     (Less, Greater) => return None,
-                    _ => unreachable!(),
+                    _ => panic!("array is not sorted"),
                 }
             }
-            _ => unreachable!(),
+            _ => panic!("array is not sorted"),
         }
     }
 }
