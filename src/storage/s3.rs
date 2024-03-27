@@ -60,7 +60,7 @@ impl Storage for S3Storage {
                 self.stats.get_requests += 1;
                 Ok(false)
             }
-            Err(err) => Err(Error::Sdk(err.to_string())),
+            Err(err) => Err(Error::other(err)),
         }?;
 
         Ok(exists)
@@ -111,7 +111,7 @@ impl Storage for S3Storage {
             .await
             .map_err(|err| match err.into_service_error() {
                 GetObjectError::NoSuchKey(_) => Error::ItemNotFound(key.to_owned()),
-                err => Error::Sdk(err.to_string()),
+                err => Error::other(err),
             })?;
 
         let bytes = response.body.collect().await?.to_vec();

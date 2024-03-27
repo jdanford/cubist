@@ -4,7 +4,7 @@ use concolor_clap::ColorChoice;
 use env_logger::{fmt::Formatter, WriteStyle};
 use log::{Level, Record};
 
-use super::LoggerArgs;
+use super::args::LoggerArgs;
 
 pub fn init(args: &LoggerArgs) {
     let level = log_level_from_args(args);

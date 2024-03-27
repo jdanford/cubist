@@ -5,6 +5,7 @@ use std::{
     time::Duration,
 };
 
+use anyhow::anyhow;
 use humantime::parse_duration;
 
 use crate::{
@@ -21,8 +22,7 @@ pub async fn create_storage(args: &GlobalArgs) -> Result<BoxedStorage> {
     let storage_url = if let Some(storage_url) = &args.storage {
         storage_url.to_owned()
     } else {
-        get_env_storage_url()?
-            .ok_or_else(|| Error::Cli(format!("`{ENV_VAR_STORAGE}` must be set")))?
+        get_env_storage_url()?.ok_or_else(|| anyhow!("`{ENV_VAR_STORAGE}` must be set"))?
     };
 
     let latency = if let Some(latency) = args.latency {

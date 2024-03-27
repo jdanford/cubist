@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.81"
+anyhow = "1.0"
 async-channel = "2.2"
 async-recursion = "1.0"
 async-trait = "0.1"
@@ -19,7 +19,7 @@ clap = { version = "4.5", features = ["derive", "wrap_help"] }
 concolor-clap = "0.1"
 env_logger = { version = "0.11", features = ["color"] }
 fastcdc = { version = "3.1", features = ["tokio"] }
-hex = "0.4.3"
+hex = "0.4"
 humansize = "2.1"
 humantime = "2.1"
 log = "0.4"
