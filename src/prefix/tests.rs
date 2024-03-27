@@ -140,6 +140,8 @@ fn find_3_c() {
     assert_eq!(find(&words("a a b"), "c", &cmp), None);
     assert_eq!(find(&words("a a c"), "c", &cmp), Some(2..=2));
     assert_eq!(find(&words("a b b"), "c", &cmp), None);
+    assert_eq!(find(&words("a b c"), "c", &cmp), Some(2..=2));
+    assert_eq!(find(&words("a c c"), "c", &cmp), Some(1..=2));
     assert_eq!(find(&words("b b b"), "c", &cmp), None);
     assert_eq!(find(&words("b b c"), "c", &cmp), Some(2..=2));
     assert_eq!(find(&words("b c c"), "c", &cmp), Some(1..=2));
