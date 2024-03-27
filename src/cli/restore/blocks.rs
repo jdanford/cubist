@@ -14,7 +14,7 @@ use crate::{
     block::Block,
     error::{assert_block_level_eq, Error, Result},
     hash::Hash,
-    storage,
+    keys,
 };
 
 use super::{files::PendingDownload, Args, State};
@@ -93,7 +93,7 @@ pub async fn download_block_recursive(
         return Ok(size);
     }
 
-    let key = storage::block_key(&hash);
+    let key = keys::block(&hash);
     let bytes = state.storage.write().await.get(&key).await?;
     state.stats.write().await.content_bytes_downloaded += bytes.len() as u64;
 

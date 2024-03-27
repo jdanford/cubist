@@ -4,7 +4,7 @@ use crate::{
     block::{Block, BlockRecord},
     error::{Error, Result},
     hash::{self, Hash},
-    storage,
+    keys,
 };
 
 use super::{Args, State};
@@ -80,7 +80,7 @@ async fn upload_block(args: Arc<Args>, state: Arc<State>, block: Block) -> Resul
     let permit = lock.acquire().await?;
 
     if !block_exists(args.clone(), state.clone(), &hash).await {
-        let key = storage::block_key(&hash);
+        let key = keys::block(&hash);
         let bytes = block.encode(args.compression_level).await?;
         let size = bytes.len() as u64;
 

@@ -13,6 +13,7 @@ mod block;
 mod error;
 mod file;
 mod hash;
+mod keys;
 mod locks;
 mod ops;
 mod prefix;

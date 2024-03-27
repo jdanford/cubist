@@ -2,7 +2,7 @@ mod local;
 mod s3;
 mod url;
 
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 
 use async_trait::async_trait;
 
@@ -56,18 +56,4 @@ pub trait Storage: Debug {
 
         Ok(matching_keys)
     }
-}
-
-pub const ARCHIVE_KEY_PREFIX: &str = "archives/";
-pub const BLOCK_KEY_PREFIX: &str = "blocks/";
-
-pub const ARCHIVE_RECORDS_KEY: &str = "metadata/archives";
-pub const BLOCK_RECORDS_KEY: &str = "metadata/blocks";
-
-pub fn archive_key<T: Display>(hash: &T) -> String {
-    format!("{ARCHIVE_KEY_PREFIX}{hash}")
-}
-
-pub fn block_key<T: Display>(hash: &T) -> String {
-    format!("{BLOCK_KEY_PREFIX}{hash}")
 }
