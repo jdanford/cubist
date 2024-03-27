@@ -22,6 +22,7 @@ impl BlockRefs {
         }
     }
 
+    #[allow(dead_code)]
     pub fn contains(&self, hash: &Hash) -> bool {
         self.refs.contains_key(hash)
     }
@@ -56,6 +57,7 @@ impl BlockRecords {
         self.records.len()
     }
 
+    #[allow(dead_code)]
     pub fn contains(&self, hash: &Hash) -> bool {
         self.records.contains_key(hash)
     }

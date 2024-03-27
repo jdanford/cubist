@@ -1,5 +1,6 @@
 use crate::{
     block::Block,
+    error::Error,
     hash::{self, Hash},
 };
 
@@ -15,20 +16,21 @@ async fn roundtrip_block(block: &Block) -> Block {
 
 #[tokio::test]
 async fn block_leaf_roundtrip() {
-    let block = Block::leaf(vec![0; 1024]).await.unwrap();
+    let block = Block::leaf(vec![0; 32]).await.unwrap();
     assert_eq!(block, roundtrip_block(&block).await);
 }
 
 #[tokio::test]
 async fn block_leaf_empty_error() {
-    // Error::EmptyBlock
-    assert!(Block::leaf(vec![]).await.is_err());
+    assert_eq!(Block::leaf(vec![]).await, Err(Error::EmptyBlock));
 }
 
 #[tokio::test]
 async fn block_branch_0_error() {
-    // Error::BranchLevelZero
-    assert!(Block::branch(0, vec![NULL_HASH]).await.is_err());
+    assert_eq!(
+        Block::branch(0, vec![NULL_HASH]).await,
+        Err(Error::BranchLevelZero)
+    );
 }
 
 #[tokio::test]
@@ -39,8 +41,7 @@ async fn block_branch_1_roundtrip() {
 
 #[tokio::test]
 async fn block_branch_1_empty_error() {
-    // Error::EmptyBlock
-    assert!(Block::branch(1, vec![]).await.is_err());
+    assert_eq!(Block::branch(1, vec![]).await, Err(Error::EmptyBlock));
 }
 
 #[tokio::test]

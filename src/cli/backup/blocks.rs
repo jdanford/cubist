@@ -26,7 +26,7 @@ impl UploadTree {
 
     pub async fn add_leaf(&mut self, data: Vec<u8>) -> Result<()> {
         let block = Block::leaf(data).await?;
-        let hash = upload_block(self.args.clone(), self.state.clone(), block).await?;
+        let hash = self.upload_block(block).await?;
         self.add_inner(hash, false).await?;
         Ok(())
     }
@@ -67,41 +67,41 @@ impl UploadTree {
             let range = if finalize { ..len } else { ..(len - 1) };
             let children = layer.drain(range).collect();
             let block = Block::branch(level, children).await?;
-            hash = upload_block(self.args.clone(), self.state.clone(), block).await?;
+            hash = self.upload_block(block).await?;
         }
 
         Ok(())
     }
-}
 
-async fn upload_block(args: Arc<Args>, state: Arc<State>, block: Block) -> Result<Hash> {
-    let hash = block.hash().to_owned();
-    let lock = state.block_locks.write().await.lock(&hash);
-    let permit = lock.acquire().await?;
+    async fn upload_block(&mut self, block: Block) -> Result<Hash> {
+        let hash = block.hash().to_owned();
+        let lock = self.state.block_locks.write().await.lock(&hash);
+        let permit = lock.acquire().await?;
 
-    if !block_exists(args.clone(), state.clone(), &hash).await {
-        let key = keys::block(&hash);
-        let bytes = block.encode(args.compression_level).await?;
-        let size = bytes.len() as u64;
+        let block_exists = self.state.block_records.read().await.contains(&hash);
+        if block_exists {
+            let mut block_records = self.state.block_records.write().await;
+            let record = block_records.get_mut(&hash).unwrap();
+            record.ref_count += 1;
+        } else {
+            let key = keys::block(&hash);
+            let bytes = block.encode(self.args.compression_level).await?;
+            let size = bytes.len() as u64;
 
-        if !args.dry_run {
-            state.storage.write().await.put(&key, bytes).await?;
-            state.stats.write().await.blocks_uploaded += 1;
-            state.stats.write().await.content_bytes_uploaded += size;
+            if !self.args.dry_run {
+                self.state.storage.write().await.put(&key, bytes).await?;
+                self.state.stats.write().await.blocks_uploaded += 1;
+                self.state.stats.write().await.content_bytes_uploaded += size;
+            }
+
+            let record = BlockRecord { ref_count: 1, size };
+            self.state.block_records.write().await.insert(hash, record);
         }
 
-        let record = BlockRecord { ref_count: 1, size };
-        state.block_records.write().await.insert(hash, record);
+        self.state.archive.write().await.add_ref(&hash);
+        self.state.stats.write().await.blocks_referenced += 1;
+
+        drop(permit);
+        Ok(hash)
     }
-
-    state.archive.write().await.add_ref(&hash);
-    state.stats.write().await.blocks_referenced += 1;
-
-    drop(permit);
-    Ok(hash)
-}
-
-async fn block_exists(_args: Arc<Args>, state: Arc<State>, hash: &Hash) -> bool {
-    state.archive.read().await.block_refs.contains(hash)
-        || state.block_records.read().await.contains(hash)
 }

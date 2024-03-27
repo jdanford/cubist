@@ -1,7 +1,7 @@
 mod bfs;
 mod dfs;
 
-use std::{fmt::Display, path::PathBuf};
+use std::{fmt, path::PathBuf};
 
 use clap::ValueEnum;
 
@@ -13,8 +13,8 @@ pub enum WalkOrder {
     BreadthFirst,
 }
 
-impl Display for WalkOrder {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for WalkOrder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             WalkOrder::DepthFirst => write!(f, "depth-first"),
             WalkOrder::BreadthFirst => write!(f, "breadth-first"),

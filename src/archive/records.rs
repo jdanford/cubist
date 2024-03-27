@@ -67,10 +67,13 @@ impl ArchiveRecords {
 
     fn remove_tags(&mut self, hash: &Hash, tags: &HashSet<String>) -> Result<()> {
         for tag in tags {
-            let hashes = self
-                .by_tag
-                .get_mut(tag.as_str())
-                .ok_or_else(|| Error::ItemNotFound(tag.to_string()))?;
+            let hashes =
+                self.by_tag
+                    .get_mut(tag.as_str())
+                    .ok_or_else(|| Error::NoTagForArchive {
+                        hash: hash.to_string(),
+                        tag: tag.to_string(),
+                    })?;
             hashes.remove(hash);
         }
 

@@ -2,7 +2,7 @@ use std::io::{self, Write};
 
 use concolor_clap::ColorChoice;
 use env_logger::{fmt::Formatter, WriteStyle};
-use log::{Level, Record};
+use log::{Level, LevelFilter, Record};
 
 use super::args::LoggerArgs;
 
@@ -16,16 +16,16 @@ pub fn init(args: &LoggerArgs) {
         .init();
 }
 
-fn log_level_from_args(args: &LoggerArgs) -> log::LevelFilter {
+fn log_level_from_args(args: &LoggerArgs) -> LevelFilter {
     let base_verbosity: i8 = args.verbose.try_into().unwrap();
     let quietness: i8 = args.quiet.try_into().unwrap();
     let verbosity = base_verbosity - quietness;
     match verbosity {
-        -2 => log::LevelFilter::Error,
-        -1 => log::LevelFilter::Warn,
-        0 => log::LevelFilter::Info,
-        1 => log::LevelFilter::Debug,
-        _ => log::LevelFilter::Trace,
+        -2 => LevelFilter::Error,
+        -1 => LevelFilter::Warn,
+        0 => LevelFilter::Info,
+        1 => LevelFilter::Debug,
+        _ => LevelFilter::Trace,
     }
 }
 

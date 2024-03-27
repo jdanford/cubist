@@ -86,7 +86,7 @@ fn cli_styles() -> Styles {
         .placeholder(AnsiColor::BrightMagenta.on_default())
 }
 
-pub fn print_stat<T: Display>(name: &str, value: T) {
+fn print_stat<T: Display>(name: &str, value: T) {
     let style = AnsiColor::Cyan.on_default();
     println!("{style}{name}:{style:#} {value}");
 }

@@ -1,4 +1,4 @@
-use std::{fmt::Display, ops::RangeInclusive, str::FromStr};
+use std::{fmt, ops::RangeInclusive, str::FromStr};
 
 use rand::RngCore;
 
@@ -37,8 +37,8 @@ impl FromStr for ShortHash {
     }
 }
 
-impl Display for ShortHash {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for ShortHash {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", hex::encode(self.as_bytes()))
     }
 }

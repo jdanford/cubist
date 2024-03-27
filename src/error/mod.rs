@@ -1,7 +1,7 @@
 mod assert;
 mod from;
 
-use std::{fmt::Display, path::PathBuf};
+use std::{fmt, path::PathBuf};
 
 use thiserror::Error;
 
@@ -51,6 +51,9 @@ pub enum Error {
     #[error("`{0}` already exists")]
     FileAlreadyExists(PathBuf),
 
+    #[error("archive `{hash}` does not have tag `{tag}`")]
+    NoTagForArchive { hash: String, tag: String },
+
     #[error("no block record found for {0}")]
     BlockRecordNotFound(Hash),
 
@@ -90,8 +93,8 @@ pub enum Error {
 #[derive(Error, Debug)]
 pub struct AnyError(anyhow::Error);
 
-impl Display for AnyError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for AnyError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
