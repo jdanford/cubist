@@ -9,7 +9,7 @@ use crate::{
     arc::{rwarc, unrwarc},
     archive::Archive,
     compression::{compress, decompress},
-    error::{Result, OK},
+    error::Result,
     hash::Hash,
     keys,
     serde::{deserialize, serialize},
@@ -48,7 +48,7 @@ pub async fn download_archives<'a, I: IntoIterator<Item = &'a Hash>>(
             let archive = download_archive(storage.clone(), &hash).await?;
             archives.write().await.push((hash, archive));
             drop(permit);
-            OK
+            Result::Ok(())
         });
     }
 
@@ -97,7 +97,7 @@ pub async fn delete_archives<'a, I: IntoIterator<Item = &'a Hash>>(
         tasks.spawn(async move {
             delete_archive(storage.clone(), &hash).await?;
             drop(permit);
-            OK
+            Result::Ok(())
         });
     }
 

@@ -11,8 +11,6 @@ pub use assert::{assert_block_level_eq, assert_hash_eq, assert_size_multiple_of_
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-pub const OK: Result<()> = Ok(());
-
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("no item found for key `{0}`")]
@@ -88,6 +86,9 @@ pub enum Error {
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
+
+    #[error(transparent)]
+    WalkDir(#[from] async_walkdir::Error),
 
     #[error(transparent)]
     Other(anyhow::Error),

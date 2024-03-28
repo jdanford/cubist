@@ -21,7 +21,7 @@ use tokio_stream::StreamExt;
 use crate::{
     block,
     cli::format::{format_path, format_size},
-    error::{Error, Result, OK},
+    error::{Error, Result},
     file::{read_metadata, Node},
     hash::Hash,
 };
@@ -52,7 +52,8 @@ pub async fn backup_recursive(
             }
             Ok(None) => break,
             Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
-                warn!("skipped file (?) (permission denied)");
+                let formatted_path = format_path(error.path());
+                warn!("skipped {formatted_path} (permission denied)");
             }
             Err(error) => return Err(error.into()),
         }
@@ -97,7 +98,7 @@ async fn backup_from_entry(
         let style = AnsiColor::Magenta.on_default();
         debug!("{style}added directory{style:#} {formatted_path}");
     } else {
-        warn!("skipped special file {formatted_path}");
+        warn!("skipped {formatted_path} (special file)");
     };
 
     Ok(None)
@@ -117,15 +118,16 @@ pub async fn upload_pending_files(
         let permit = semaphore.clone().acquire_owned().await?;
 
         tasks.spawn(async move {
-            if let Err(Error::Io(inner)) = upload_pending_file(args, state, &pending_file).await {
+            if let Err(Error::WalkDir(inner)) = upload_pending_file(args, state, pending_file).await
+            {
                 if inner.kind() == io::ErrorKind::PermissionDenied {
-                    let formatted_path = format_path(&pending_file.local_path);
-                    warn!("skipped file {formatted_path} (permission denied)");
+                    let formatted_path = format_path(inner.path());
+                    warn!("skipped {formatted_path} (permission denied)");
                 }
             }
 
             drop(permit);
-            OK
+            Result::Ok(())
         });
     }
 
@@ -139,16 +141,21 @@ pub async fn upload_pending_files(
 async fn upload_pending_file(
     args: Arc<Args>,
     state: Arc<State>,
-    pending_file: &PendingUpload,
+    pending_file: PendingUpload,
 ) -> Result<()> {
-    let metadata = read_metadata(&pending_file.local_path).await?;
-    let mut file = File::open(&pending_file.local_path).await?;
+    let PendingUpload {
+        local_path,
+        archive_path,
+    } = pending_file;
+
+    let metadata = read_metadata(&local_path).await?;
+    let mut file = File::open(&local_path).await?;
     let (hash, size) = upload_file(args.clone(), state.clone(), &mut file).await?;
     let node = Node::File { metadata, hash };
     let archive = &mut state.archive.write().await;
-    archive.insert(pending_file.archive_path.clone(), node)?;
+    archive.insert(archive_path, node)?;
 
-    let formatted_path = format_path(&pending_file.local_path);
+    let formatted_path = format_path(&local_path);
     let formatted_size = format_size(size);
     let msg_style = AnsiColor::Blue.on_default();
     let size_style = AnsiColor::BrightBlack.on_default();

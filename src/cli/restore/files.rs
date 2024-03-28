@@ -10,7 +10,7 @@ use tokio::{fs, sync::Semaphore, task::JoinSet};
 
 use crate::{
     cli::format::{format_path, format_size},
-    error::{Error, Result, OK},
+    error::{Error, Result},
     file::{restore_metadata, restore_metadata_from_node, try_exists, FileType, Metadata, Node},
     hash::Hash,
 };
@@ -120,7 +120,7 @@ pub async fn download_pending_files(
         tasks.spawn(async move {
             download_pending_file(args, state, pending_file).await?;
             drop(permit);
-            OK
+            Result::Ok(())
         });
     }
 

@@ -8,7 +8,7 @@ anyhow = "1.0"
 async-channel = "2.2"
 async-recursion = "1.0"
 async-trait = "0.1"
-async-walkdir = "1.0"
+async-walkdir = { git = "https://github.com/jdanford/async-walkdir.git", branch = "richer-errors" }
 aws-config = { version = "1.1", features = ["behavior-version-latest"] }
 aws-sdk-s3 = "1.16"
 base64 = "0.22"

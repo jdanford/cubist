@@ -1,3 +1,4 @@
+#![deny(unsafe_code)]
 #![warn(clippy::pedantic)]
 #![allow(
     clippy::missing_panics_doc,
