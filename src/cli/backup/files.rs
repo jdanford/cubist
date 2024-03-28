@@ -1,5 +1,6 @@
 use std::{
     collections::BTreeMap,
+    io,
     path::{Path, PathBuf},
     pin::pin,
     sync::Arc,
@@ -20,7 +21,7 @@ use tokio_stream::StreamExt;
 use crate::{
     block,
     cli::format::{format_path, format_size},
-    error::{Result, OK},
+    error::{Error, Result, OK},
     file::{read_metadata, Node},
     hash::Hash,
 };
@@ -40,10 +41,20 @@ pub async fn backup_recursive(
     path: &Path,
 ) -> Result<()> {
     let mut walker = WalkDir::new(path);
-    while let Some(entry) = walker.try_next().await? {
-        let maybe_file = backup_from_entry(args.clone(), state.clone(), entry, path).await?;
-        if let Some(pending_file) = maybe_file {
-            sender.send(pending_file).await?;
+    loop {
+        match walker.try_next().await {
+            Ok(Some(entry)) => {
+                let maybe_file =
+                    backup_from_entry(args.clone(), state.clone(), entry, path).await?;
+                if let Some(pending_file) = maybe_file {
+                    sender.send(pending_file).await?;
+                }
+            }
+            Ok(None) => break,
+            Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
+                warn!("skipped file (?) (permission denied)");
+            }
+            Err(error) => return Err(error.into()),
         }
     }
 
@@ -106,7 +117,13 @@ pub async fn upload_pending_files(
         let permit = semaphore.clone().acquire_owned().await?;
 
         tasks.spawn(async move {
-            upload_pending_file(args, state, pending_file).await?;
+            if let Err(Error::Io(inner)) = upload_pending_file(args, state, &pending_file).await {
+                if inner.kind() == io::ErrorKind::PermissionDenied {
+                    let formatted_path = format_path(&pending_file.local_path);
+                    warn!("skipped file {formatted_path} (permission denied)");
+                }
+            }
+
             drop(permit);
             OK
         });
@@ -122,21 +139,16 @@ pub async fn upload_pending_files(
 async fn upload_pending_file(
     args: Arc<Args>,
     state: Arc<State>,
-    pending_file: PendingUpload,
+    pending_file: &PendingUpload,
 ) -> Result<()> {
-    let PendingUpload {
-        local_path,
-        archive_path,
-    } = pending_file;
-
-    let metadata = read_metadata(&local_path).await?;
-    let mut file = File::open(&local_path).await?;
+    let metadata = read_metadata(&pending_file.local_path).await?;
+    let mut file = File::open(&pending_file.local_path).await?;
     let (hash, size) = upload_file(args.clone(), state.clone(), &mut file).await?;
     let node = Node::File { metadata, hash };
     let archive = &mut state.archive.write().await;
-    archive.insert(archive_path, node)?;
+    archive.insert(pending_file.archive_path.clone(), node)?;
 
-    let formatted_path = format_path(&local_path);
+    let formatted_path = format_path(&pending_file.local_path);
     let formatted_size = format_size(size);
     let msg_style = AnsiColor::Blue.on_default();
     let size_style = AnsiColor::BrightBlack.on_default();

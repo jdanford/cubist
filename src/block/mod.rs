@@ -9,6 +9,7 @@ use tokio::{
 };
 
 use crate::{
+    compression::{compress, decompress},
     error::{assert_block_level_eq, assert_hash_eq, assert_size_multiple_of_hash, Error, Result},
     hash::{self, Hash},
 };
@@ -153,16 +154,6 @@ impl Block {
             children,
         })
     }
-}
-
-fn compress(data: &[u8], level: u8) -> Result<Vec<u8>> {
-    let compressed_data = zstd::encode_all(data, level.into())?;
-    Ok(compressed_data)
-}
-
-fn decompress(compressed_data: &[u8]) -> Result<Vec<u8>> {
-    let data = zstd::decode_all(compressed_data)?;
-    Ok(data)
 }
 
 pub fn chunker<R: AsyncRead + Unpin>(reader: R, target_size: u32) -> AsyncStreamCDC<R> {

@@ -8,6 +8,7 @@ use tokio::{
 use crate::{
     arc::{rwarc, unrwarc},
     archive::Archive,
+    compression::{compress, decompress},
     error::{Result, OK},
     hash::Hash,
     keys,
@@ -15,10 +16,16 @@ use crate::{
     storage::BoxedStorage,
 };
 
+const COMPRESSION_LEVEL: u8 = 3;
+
 pub async fn download_archive(storage: Arc<RwLock<BoxedStorage>>, hash: &Hash) -> Result<Archive> {
     let key = keys::archive(hash);
-    let archive_bytes = storage.write().await.get(&key).await?;
-    let archive = spawn_blocking(move || deserialize(&archive_bytes)).await??;
+    let compressed_bytes = storage.write().await.get(&key).await?;
+    let archive = spawn_blocking(move || {
+        let bytes = decompress(&compressed_bytes)?;
+        deserialize(&bytes)
+    })
+    .await??;
     Ok(archive)
 }
 
@@ -58,7 +65,12 @@ pub async fn upload_archive(
     archive: Arc<RwLock<Archive>>,
 ) -> Result<()> {
     let key = keys::archive(hash);
-    let archive_bytes = spawn_blocking(move || serialize(&*archive.blocking_read())).await??;
+    let archive_bytes = spawn_blocking(move || {
+        let bytes = serialize(&*archive.blocking_read())?;
+        let compressed_bytes = compress(&bytes, COMPRESSION_LEVEL)?;
+        Result::Ok(compressed_bytes)
+    })
+    .await??;
     storage.write().await.put(&key, archive_bytes).await?;
     Ok(())
 }

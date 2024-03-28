@@ -10,12 +10,6 @@ use tokio::{sync::AcquireError, task::JoinError};
 
 use super::Error;
 
-impl From<std::io::Error> for Error {
-    fn from(error: std::io::Error) -> Self {
-        Error::other(error)
-    }
-}
-
 impl From<VarError> for Error {
     fn from(error: VarError) -> Self {
         Error::other(error)

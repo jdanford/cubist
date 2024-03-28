@@ -10,6 +10,7 @@ pub mod cli;
 mod arc;
 mod archive;
 mod block;
+mod compression;
 mod error;
 mod file;
 mod hash;
