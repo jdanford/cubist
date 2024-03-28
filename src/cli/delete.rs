@@ -11,13 +11,13 @@ use crate::{
         delete_archives, delete_blocks, download_archive_records, download_archives,
         download_block_records, find_archive_hashes, upload_archive_records, upload_block_records,
     },
-    stats::CoreStats,
+    stats::CommandStats,
 };
 
 use super::{format::format_size, print_stat, storage::create_storage, DeleteArgs};
 
 pub async fn main(cli: DeleteArgs) -> Result<()> {
-    let mut stats = CoreStats::new();
+    let mut stats = CommandStats::new();
     let storage = rwarc(create_storage(&cli.global).await?);
     let mut removed_blocks = HashSet::new();
 

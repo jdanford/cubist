@@ -88,6 +88,13 @@ impl ArchiveRecords {
     }
 }
 
+fn insert_tags(by_tag: &mut HashMap<String, HashSet<Hash>>, hash: Hash, tags: &HashSet<String>) {
+    for tag in tags {
+        let entry = by_tag.entry(tag.clone()).or_default();
+        entry.insert(hash);
+    }
+}
+
 impl Serialize for ArchiveRecords {
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
         Serialize::serialize(&self.records, serializer)
@@ -99,12 +106,5 @@ impl<'de> Deserialize<'de> for ArchiveRecords {
         deserializer: D,
     ) -> std::result::Result<ArchiveRecords, D::Error> {
         Deserialize::deserialize(deserializer).map(ArchiveRecords::from_records)
-    }
-}
-
-fn insert_tags(by_tag: &mut HashMap<String, HashSet<Hash>>, hash: Hash, tags: &HashSet<String>) {
-    for tag in tags {
-        let entry = by_tag.entry(tag.clone()).or_default();
-        entry.insert(hash);
     }
 }

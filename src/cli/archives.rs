@@ -1,15 +1,8 @@
 use clap::builder::styling::AnsiColor;
 use humantime::format_duration;
 use log::info;
-use tokio::try_join;
 
-use crate::{
-    arc::rwarc,
-    error::Result,
-    hash,
-    ops::{download_archive_records, download_block_records},
-    stats::CoreStats,
-};
+use crate::{arc::rwarc, error::Result, ops::download_archive_records, stats::CommandStats};
 
 use super::{
     format::{format_size, format_time},
@@ -19,19 +12,14 @@ use super::{
 };
 
 pub async fn main(cli: ArchivesArgs) -> Result<()> {
-    let stats = CoreStats::new();
+    let stats = CommandStats::new();
     let storage = rwarc(create_storage(&cli.global).await?);
-
-    let (archive_records, block_records) = try_join!(
-        download_archive_records(storage.clone()),
-        download_block_records(storage.clone()),
-    )?;
+    let archive_records = download_archive_records(storage.clone()).await?;
 
     for (hash, archive_record) in archive_records.iter_by_created() {
         let formatted_time = format_time(&archive_record.created);
-        let short_hash = hash::format_short(hash, block_records.unique_count());
         let time_style = AnsiColor::Blue.on_default();
-        info!("{time_style}{formatted_time}{time_style:#} {short_hash}");
+        info!("{time_style}{formatted_time}{time_style:#} {hash}");
     }
 
     if cli.global.stats {

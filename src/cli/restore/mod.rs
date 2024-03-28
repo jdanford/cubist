@@ -14,7 +14,7 @@ use crate::{
     hash::Hash,
     locks::BlockLocks,
     ops::{download_archive, find_archive_hash},
-    stats::CoreStats,
+    stats::CommandStats,
     storage::BoxedStorage,
 };
 
@@ -36,14 +36,14 @@ struct Args {
 
 #[derive(Debug)]
 struct State {
-    stats: Arc<RwLock<CoreStats>>,
+    stats: Arc<RwLock<CommandStats>>,
     storage: Arc<RwLock<BoxedStorage>>,
     local_blocks: Arc<RwLock<HashMap<Hash, LocalBlock>>>,
     block_locks: Arc<RwLock<BlockLocks>>,
 }
 
 pub async fn main(cli: RestoreArgs) -> Result<()> {
-    let stats = rwarc(CoreStats::new());
+    let stats = rwarc(CommandStats::new());
     let storage = rwarc(create_storage(&cli.global).await?);
     let local_blocks = rwarc(HashMap::new());
     let block_locks = rwarc(BlockLocks::new());

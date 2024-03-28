@@ -19,7 +19,7 @@ use crate::{
         download_archive_records, download_block_records, upload_archive, upload_archive_records,
         upload_block_records,
     },
-    stats::CoreStats,
+    stats::CommandStats,
     storage::BoxedStorage,
 };
 
@@ -38,7 +38,7 @@ struct Args {
 
 #[derive(Debug)]
 struct State {
-    stats: Arc<RwLock<CoreStats>>,
+    stats: Arc<RwLock<CommandStats>>,
     storage: Arc<RwLock<BoxedStorage>>,
     archive: Arc<RwLock<Archive>>,
     block_records: Arc<RwLock<BlockRecords>>,
@@ -46,7 +46,7 @@ struct State {
 }
 
 pub async fn main(cli: BackupArgs) -> Result<()> {
-    let stats = rwarc(CoreStats::new());
+    let stats = rwarc(CommandStats::new());
     let storage = rwarc(create_storage(&cli.global).await?);
     let archive = rwarc(Archive::new());
     let block_locks = rwarc(BlockLocks::new());

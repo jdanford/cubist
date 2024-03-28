@@ -1,10 +1,6 @@
 #![deny(unsafe_code)]
 #![warn(clippy::pedantic)]
-#![allow(
-    clippy::missing_panics_doc,
-    clippy::module_name_repetitions,
-    clippy::similar_names
-)]
+#![allow(clippy::module_name_repetitions, clippy::similar_names)]
 
 pub mod cli;
 

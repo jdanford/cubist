@@ -3,7 +3,7 @@ use std::{ops::Deref, time::Duration};
 use chrono::{DateTime, Utc};
 
 #[derive(Debug)]
-pub struct CoreStats {
+pub struct CommandStats {
     pub start_time: DateTime<Utc>,
     pub content_bytes_downloaded: u64,
     pub content_bytes_uploaded: u64,
@@ -18,9 +18,9 @@ pub struct CoreStats {
     pub blocks_referenced: u64,
 }
 
-impl CoreStats {
+impl CommandStats {
     pub fn new() -> Self {
-        CoreStats {
+        CommandStats {
             start_time: Utc::now(),
             content_bytes_downloaded: 0,
             content_bytes_uploaded: 0,
@@ -36,10 +36,10 @@ impl CoreStats {
         }
     }
 
-    pub fn finalize(self, storage: &StorageStats) -> FinalizedStats {
+    pub fn finalize(self, storage: &StorageStats) -> FinalizedCommandStats {
         let end_time = Utc::now();
         let storage = storage.to_owned();
-        FinalizedStats {
+        FinalizedCommandStats {
             core: self,
             storage,
             end_time,
@@ -69,13 +69,13 @@ impl StorageStats {
 }
 
 #[derive(Debug)]
-pub struct FinalizedStats {
-    pub core: CoreStats,
+pub struct FinalizedCommandStats {
+    pub core: CommandStats,
     pub storage: StorageStats,
     pub end_time: DateTime<Utc>,
 }
 
-impl FinalizedStats {
+impl FinalizedCommandStats {
     pub fn elapsed_time(&self) -> Duration {
         let delta = self.end_time - self.core.start_time;
         let ms = delta.num_milliseconds().try_into().unwrap();
@@ -91,8 +91,8 @@ impl FinalizedStats {
     }
 }
 
-impl Deref for FinalizedStats {
-    type Target = CoreStats;
+impl Deref for FinalizedCommandStats {
+    type Target = CommandStats;
 
     fn deref(&self) -> &Self::Target {
         &self.core
