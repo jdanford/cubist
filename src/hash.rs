@@ -79,18 +79,16 @@ pub fn split(bytes: &[u8]) -> impl Iterator<Item = Hash> + '_ {
         .map(|bytes| Hash::from_bytes(bytes.try_into().unwrap()))
 }
 
-#[allow(dead_code)]
 pub fn format_short(hash: &Hash, block_count: usize) -> String {
     let len = safe_prefix_length(block_count);
     hash.to_hex()[..len].to_string()
 }
 
-pub const MIN_PREFIX_LENGTH: usize = 6;
-pub const MAX_PREFIX_LENGTH: usize = SIZE * 2;
+const MIN_PREFIX_LENGTH: usize = 6;
+const MAX_PREFIX_LENGTH: usize = SIZE * 2;
 pub const PREFIX_LENGTH_RANGE: RangeInclusive<usize> = MIN_PREFIX_LENGTH..=MAX_PREFIX_LENGTH;
 
 #[allow(
-    dead_code,
     clippy::cast_sign_loss,
     clippy::cast_possible_truncation,
     clippy::cast_precision_loss

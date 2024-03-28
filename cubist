@@ -1,2 +1,2 @@
-#!/bin/bash
+#!/usr/bin/env bash
 exec cargo run -q --release -- $@

@@ -50,7 +50,10 @@ pub enum Error {
     FileAlreadyExists(PathBuf),
 
     #[error("archive `{hash}` does not have tag `{tag}`")]
-    NoTagForArchive { hash: String, tag: String },
+    NoTagForArchive { hash: Hash, tag: String },
+
+    #[error("no archive record found for {0}")]
+    ArchiveRecordNotFound(Hash),
 
     #[error("no block record found for {0}")]
     BlockRecordNotFound(Hash),
@@ -119,7 +122,7 @@ impl PartialEq for Error {
             (ItemNotFound(key_l), ItemNotFound(key_r)) => key_l == key_r,
             (InvalidStorageUrl(url_l), InvalidStorageUrl(url_r)) => url_l == url_r,
             (InvalidKey(key_l), InvalidKey(key_r)) => key_l == key_r,
-            (InvalidHash(str_l), InvalidHash(str_r)) => str_l == str_r,
+            (InvalidHash(hash_l), InvalidHash(hash_r)) => hash_l == hash_r,
             (NoItemForPrefix(prefix_l), NoItemForPrefix(prefix_r)) => prefix_l == prefix_r,
             (MultipleItemsForPrefix(prefix_l), MultipleItemsForPrefix(prefix_r)) => {
                 prefix_l == prefix_r

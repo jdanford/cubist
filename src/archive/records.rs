@@ -59,7 +59,7 @@ impl ArchiveRecords {
         let record = self
             .records
             .remove(hash)
-            .ok_or_else(|| Error::ItemNotFound(hash.to_string()))?;
+            .ok_or_else(|| Error::ArchiveRecordNotFound(*hash))?;
         self.by_created.remove(&record.created);
         self.remove_tags(hash, &record.tags)?;
         Ok(())
@@ -71,7 +71,7 @@ impl ArchiveRecords {
                 self.by_tag
                     .get_mut(tag.as_str())
                     .ok_or_else(|| Error::NoTagForArchive {
-                        hash: hash.to_string(),
+                        hash: *hash,
                         tag: tag.to_string(),
                     })?;
             hashes.remove(hash);

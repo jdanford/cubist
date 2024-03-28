@@ -51,11 +51,11 @@ pub async fn backup_recursive(
                 }
             }
             Ok(None) => break,
-            Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
-                let formatted_path = format_path(error.path());
+            Err(err) if err.kind() == io::ErrorKind::PermissionDenied => {
+                let formatted_path = format_path(err.path());
                 warn!("skipped {formatted_path} (permission denied)");
             }
-            Err(error) => return Err(error.into()),
+            Err(err) => return Err(err.into()),
         }
     }
 
@@ -118,8 +118,8 @@ pub async fn upload_pending_files(
         let permit = semaphore.clone().acquire_owned().await?;
 
         tasks.spawn(async move {
-            if let Err(Error::WalkDir(inner)) = upload_pending_file(args, state, pending_file).await
-            {
+            let result = upload_pending_file(args, state, pending_file).await;
+            if let Err(Error::WalkDir(inner)) = result {
                 if inner.kind() == io::ErrorKind::PermissionDenied {
                     let formatted_path = format_path(inner.path());
                     warn!("skipped {formatted_path} (permission denied)");

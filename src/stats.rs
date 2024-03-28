@@ -36,13 +36,11 @@ impl CommandStats {
         }
     }
 
-    pub fn finalize(self, storage: &StorageStats) -> FinalizedCommandStats {
-        let end_time = Utc::now();
-        let storage = storage.to_owned();
+    pub fn finalize(self, storage_stats: &StorageStats) -> FinalizedCommandStats {
         FinalizedCommandStats {
-            core: self,
-            storage,
-            end_time,
+            command: self,
+            storage: storage_stats.to_owned(),
+            end_time: Utc::now(),
         }
     }
 }
@@ -70,24 +68,24 @@ impl StorageStats {
 
 #[derive(Debug)]
 pub struct FinalizedCommandStats {
-    pub core: CommandStats,
+    command: CommandStats,
     pub storage: StorageStats,
     pub end_time: DateTime<Utc>,
 }
 
 impl FinalizedCommandStats {
     pub fn elapsed_time(&self) -> Duration {
-        let delta = self.end_time - self.core.start_time;
+        let delta = self.end_time - self.command.start_time;
         let ms = delta.num_milliseconds().try_into().unwrap();
         Duration::from_millis(ms)
     }
 
     pub fn metadata_bytes_downloaded(&self) -> u64 {
-        self.storage.bytes_downloaded - self.core.content_bytes_downloaded
+        self.storage.bytes_downloaded - self.command.content_bytes_downloaded
     }
 
     pub fn metadata_bytes_uploaded(&self) -> u64 {
-        self.storage.bytes_uploaded - self.core.content_bytes_uploaded
+        self.storage.bytes_uploaded - self.command.content_bytes_uploaded
     }
 }
 
@@ -95,6 +93,6 @@ impl Deref for FinalizedCommandStats {
     type Target = CommandStats;
 
     fn deref(&self) -> &Self::Target {
-        &self.core
+        &self.command
     }
 }
