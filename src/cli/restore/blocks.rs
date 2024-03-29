@@ -95,6 +95,7 @@ pub async fn download_block_recursive(
 
     let key = keys::block(&hash);
     let bytes = state.storage.write().await.get(&key).await?;
+    state.stats.write().await.blocks_downloaded += 1;
     state.stats.write().await.content_bytes_downloaded += bytes.len() as u64;
 
     let block = Block::decode(&hash, level, &bytes).await?;
