@@ -45,6 +45,12 @@ pub trait Storage: Debug {
     }
 
     async fn expand_keys(&mut self, prefixes: &[&str]) -> Result<Vec<String>> {
+        match prefixes {
+            [prefix] => return self.expand_key(prefix).await.map(|key| vec![key]),
+            [] => return Ok(vec![]),
+            _ => {}
+        };
+
         let common_prefix = longest_common_prefix(prefixes);
         let keys = self.keys(common_prefix).await?;
         let mut matching_keys = vec![];

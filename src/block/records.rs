@@ -1,7 +1,4 @@
-use std::{
-    cmp::Ordering,
-    collections::{HashMap, HashSet},
-};
+use std::{cmp::Ordering, collections::HashMap};
 
 use serde::{Deserialize, Serialize};
 
@@ -62,6 +59,7 @@ impl BlockRecords {
         self.records.contains_key(hash)
     }
 
+    #[allow(dead_code)]
     pub fn get(&self, hash: &Hash) -> Option<&BlockRecord> {
         self.records.get(hash)
     }
@@ -74,8 +72,8 @@ impl BlockRecords {
         self.records.insert(hash, record);
     }
 
-    pub fn remove_refs(&mut self, refs: &BlockRefs) -> Result<HashSet<Hash>> {
-        let mut removed = HashSet::new();
+    pub fn remove_refs(&mut self, refs: &BlockRefs) -> Result<Vec<(Hash, BlockRecord)>> {
+        let mut removed = vec![];
 
         for (&hash, &ref_count) in &refs.refs {
             let record = self
@@ -86,8 +84,8 @@ impl BlockRecords {
                     record.ref_count -= ref_count;
                 }
                 Ordering::Equal => {
-                    self.records.remove(&hash);
-                    removed.insert(hash);
+                    let record = self.records.remove(&hash).unwrap();
+                    removed.push((hash, record));
                 }
                 Ordering::Less => {
                     return Err(Error::WrongRefCount {

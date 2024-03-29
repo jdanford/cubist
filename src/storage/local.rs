@@ -1,4 +1,5 @@
 use std::{
+    ffi::OsStr,
     fs::FileType,
     mem::size_of_val,
     path::{Path, PathBuf},
@@ -82,8 +83,10 @@ impl Storage for LocalStorage {
 
             let absolute_path = entry.path();
             let path = absolute_path.strip_prefix(&self.path)?;
-            let full_key = str_from_path(path)?;
-            if let Some(key) = full_key.strip_prefix(filename_prefix) {
+            let filename = str_from_os_str(path.file_name().unwrap())?;
+            if filename.starts_with(filename_prefix) {
+                let key = str_from_path(path)?;
+                println!("{key}");
                 keys.push(key.to_owned());
             }
         }
@@ -147,6 +150,11 @@ impl Storage for LocalStorage {
 fn str_from_path(path: &Path) -> Result<&str> {
     path.to_str()
         .ok_or_else(|| Error::InvalidKey(path.to_string_lossy().into_owned()))
+}
+
+fn str_from_os_str(s: &OsStr) -> Result<&str> {
+    s.to_str()
+        .ok_or_else(|| Error::InvalidKey(s.to_string_lossy().into_owned()))
 }
 
 fn walk_files(path: &Path) -> WalkDir {
