@@ -1,12 +1,11 @@
 use std::{
-    fs::FileType,
     mem::size_of_val,
     path::{Path, PathBuf},
     time::Duration,
 };
 
 use async_trait::async_trait;
-use async_walkdir::{DirEntry, Filtering, WalkDir};
+use async_walkdir::WalkDir;
 use rand_distr::{Distribution, LogNormal};
 use tokio::{fs, time::sleep};
 use tokio_stream::StreamExt;
@@ -76,10 +75,14 @@ impl Storage for LocalStorage {
             .to_str()
             .ok_or_else(|| invalid_key(&prefix_path))?;
 
-        let mut walker = walk_files(dirname);
+        let mut walker = WalkDir::new(dirname);
         let mut keys = vec![];
 
         while let Some(entry) = walker.try_next().await? {
+            if entry.file_type().await?.is_dir() {
+                continue;
+            }
+
             self.stats.bytes_downloaded += size_of_val(&entry) as u64;
 
             let absolute_path = entry.path();
@@ -149,21 +152,6 @@ impl Storage for LocalStorage {
     fn stats(&self) -> &StorageStats {
         &self.stats
     }
-}
-
-fn walk_files(path: &Path) -> WalkDir {
-    WalkDir::new(path).filter(|entry| async move {
-        if entry_is_file(entry).await {
-            Filtering::Continue
-        } else {
-            Filtering::Ignore
-        }
-    })
-}
-
-async fn entry_is_file(entry: DirEntry) -> bool {
-    let file_type = entry.file_type().await;
-    file_type.as_ref().is_ok_and(FileType::is_file)
 }
 
 fn dirname_and_filename(path: &Path) -> Result<(&Path, &Path)> {
