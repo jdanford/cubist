@@ -6,7 +6,7 @@ use humantime::parse_duration;
 
 use crate::{file::WalkOrder, hash::ShortHash, storage::StorageUrl};
 
-use super::parse::parse_range_inclusive;
+use super::parse::{parse_range_inclusive, parse_short_hash};
 
 const DEFAULT_COMPRESSION_LEVEL: u8 = 3;
 const COMPRESSION_LEVEL_RANGE: RangeInclusive<u8> = 1..=19;
@@ -76,6 +76,7 @@ pub struct BackupArgs {
 #[derive(Args, Debug)]
 pub struct RestoreArgs {
     /// Archive to restore from
+    #[arg(value_parser = parse_short_hash)]
     pub archive: ShortHash,
 
     /// Files to restore (or all files if empty)
@@ -106,7 +107,7 @@ pub struct RestoreArgs {
 #[derive(Args, Debug)]
 pub struct DeleteArgs {
     /// Archive(s) to delete
-    #[arg(required = true)]
+    #[arg(required = true, value_parser = parse_short_hash)]
     pub archives: Vec<ShortHash>,
 
     /// Number of background tasks to use

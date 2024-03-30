@@ -12,15 +12,19 @@ pub type Hash = blake3::Hash;
 pub struct ShortHash(Vec<u8>);
 
 impl ShortHash {
+    pub fn from_bytes(bytes: Vec<u8>) -> Self {
+        ShortHash(bytes)
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0[..]
+    }
+
     #[allow(dead_code)]
     pub fn matches(&self, hash: &Hash) -> bool {
         let short_bytes = self.as_bytes();
         let long_bytes = hash.as_bytes();
         short_bytes == &long_bytes[..short_bytes.len()]
-    }
-
-    pub fn as_bytes(&self) -> &[u8] {
-        &self.0[..]
     }
 }
 

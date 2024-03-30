@@ -9,7 +9,7 @@ mod logger;
 mod parse;
 mod storage;
 
-use std::fmt::Display;
+use std::{fmt::Display, process::exit};
 
 use clap::{
     builder::{styling::AnsiColor, Styles},
@@ -75,6 +75,7 @@ pub async fn main() {
 
     if let Err(err) = result {
         error!("{err}");
+        exit(1);
     }
 }
 

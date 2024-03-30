@@ -1,5 +1,7 @@
 use std::{fmt::Display, ops::RangeInclusive, str::FromStr};
 
+use crate::hash::{self, ShortHash};
+
 pub fn parse_range_inclusive<N: PartialEq + PartialOrd + FromStr + Display>(
     s: &str,
     range: RangeInclusive<N>,
@@ -13,6 +15,22 @@ pub fn parse_range_inclusive<N: PartialEq + PartialOrd + FromStr + Display>(
             value,
             range.start(),
             range.end(),
+        ))
+    }
+}
+
+pub fn parse_short_hash(s: &str) -> Result<ShortHash, String> {
+    let len_range = hash::PREFIX_LENGTH_RANGE;
+    let len = s.len();
+    if len_range.contains(&len) {
+        let bytes = hex::decode(s).map_err(|_| "invalid characters in hash")?;
+        Ok(ShortHash::from_bytes(bytes))
+    } else {
+        Err(format!(
+            "hash has {} characters, expected {}-{}",
+            len,
+            len_range.start(),
+            len_range.end(),
         ))
     }
 }
