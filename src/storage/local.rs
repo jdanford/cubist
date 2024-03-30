@@ -1,5 +1,4 @@
 use std::{
-    ffi::OsStr,
     fs::FileType,
     mem::size_of_val,
     path::{Path, PathBuf},
@@ -73,7 +72,9 @@ impl Storage for LocalStorage {
 
         let prefix_path = self.path.join(prefix.unwrap_or(""));
         let (dirname, filename_prefix_path) = dirname_and_filename(&prefix_path)?;
-        let filename_prefix = str_from_path(filename_prefix_path)?;
+        let filename_prefix = filename_prefix_path
+            .to_str()
+            .ok_or_else(|| invalid_key(&prefix_path))?;
 
         let mut walker = walk_files(dirname);
         let mut keys = vec![];
@@ -83,10 +84,13 @@ impl Storage for LocalStorage {
 
             let absolute_path = entry.path();
             let path = absolute_path.strip_prefix(&self.path)?;
-            let filename = str_from_os_str(path.file_name().unwrap())?;
+            let filename = path
+                .file_name()
+                .unwrap()
+                .to_str()
+                .ok_or_else(|| invalid_key(path))?;
             if filename.starts_with(filename_prefix) {
-                let key = str_from_path(path)?;
-                println!("{key}");
+                let key = path.to_str().ok_or_else(|| invalid_key(path))?;
                 keys.push(key.to_owned());
             }
         }
@@ -147,16 +151,6 @@ impl Storage for LocalStorage {
     }
 }
 
-fn str_from_path(path: &Path) -> Result<&str> {
-    path.to_str()
-        .ok_or_else(|| Error::InvalidKey(path.to_string_lossy().into_owned()))
-}
-
-fn str_from_os_str(s: &OsStr) -> Result<&str> {
-    s.to_str()
-        .ok_or_else(|| Error::InvalidKey(s.to_string_lossy().into_owned()))
-}
-
 fn walk_files(path: &Path) -> WalkDir {
     WalkDir::new(path).filter(|entry| async move {
         if entry_is_file(entry).await {
@@ -182,4 +176,8 @@ fn dirname_and_filename(path: &Path) -> Result<(&Path, &Path)> {
         let filename = path.strip_prefix(dirname)?;
         Ok((dirname, filename))
     }
+}
+
+fn invalid_key(path: &Path) -> Error {
+    Error::InvalidKey(path.to_string_lossy().into_owned())
 }
