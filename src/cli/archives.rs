@@ -2,7 +2,12 @@ use clap::builder::styling::AnsiColor;
 use humantime::format_duration;
 use log::info;
 
-use crate::{arc::rwarc, error::Result, ops::download_archive_records, stats::CommandStats};
+use crate::{
+    arc::{rwarc, unrwarc},
+    error::Result,
+    ops::download_archive_records,
+    stats::CommandStats,
+};
 
 use super::{
     format::{format_size, format_time},
@@ -23,7 +28,8 @@ pub async fn main(cli: ArchivesArgs) -> Result<()> {
     }
 
     if cli.global.stats {
-        let full_stats = stats.finalize(storage.read().await.stats());
+        let storage = unrwarc(storage);
+        let full_stats = stats.finalize(storage);
         print_stat(
             "metadata downloaded",
             format_size(full_stats.metadata_bytes_downloaded()),

@@ -1,3 +1,8 @@
+use std::{
+    sync::{Arc, Mutex, MutexGuard},
+    time::Instant,
+};
+
 use async_trait::async_trait;
 use aws_sdk_s3::{
     error::SdkError,
@@ -8,25 +13,22 @@ use aws_sdk_s3::{
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
 use tokio::task::spawn_blocking;
 
-use crate::{
-    error::{Error, Result},
-    stats::StorageStats,
-};
+use crate::error::{Error, Result};
 
-use super::Storage;
+use super::{Storage, StorageStats};
 
 #[derive(Debug)]
 pub struct S3Storage {
     client: Client,
     bucket: String,
-    stats: StorageStats,
+    stats: Arc<Mutex<StorageStats>>,
 }
 
 impl S3Storage {
     pub async fn new(bucket: String) -> Self {
         let s3_config = aws_config::load_from_env().await;
         let client = Client::new(&s3_config);
-        let stats = StorageStats::new();
+        let stats = Arc::new(Mutex::new(StorageStats::new()));
 
         S3Storage {
             client,
@@ -38,7 +40,8 @@ impl S3Storage {
 
 #[async_trait]
 impl Storage for S3Storage {
-    async fn exists(&mut self, key: &str) -> Result<bool> {
+    async fn exists(&self, key: &str) -> Result<bool> {
+        let start_time = Instant::now();
         let response_result = self
             .client
             .head_object()
@@ -49,25 +52,20 @@ impl Storage for S3Storage {
             .map_err(SdkError::into_service_error);
 
         let exists = match response_result {
-            Ok(response) => {
-                if response.request_charged.is_some() {
-                    self.stats.get_requests += 1;
-                }
-
-                Ok(true)
-            }
-            Err(HeadObjectError::NotFound(_)) => {
-                self.stats.get_requests += 1;
-                Ok(false)
-            }
+            Ok(_) => Ok(true),
+            Err(HeadObjectError::NotFound(_)) => Ok(false),
             Err(err) => Err(Error::other(err)),
         }?;
 
+        let end_time = Instant::now();
+        self.stats.lock().unwrap().add_get(start_time, end_time, 0);
         Ok(exists)
     }
 
-    async fn keys(&mut self, prefix: Option<&str>) -> Result<Vec<String>> {
+    async fn keys(&self, prefix: Option<&str>) -> Result<Vec<String>> {
         let prefix_owned = prefix.map(ToOwned::to_owned);
+
+        let start_time = Instant::now();
         let mut stream = self
             .client
             .list_objects_v2()
@@ -76,17 +74,14 @@ impl Storage for S3Storage {
             .into_paginator()
             .send();
 
-        let mut charged = false;
         let mut keys = vec![];
+        let mut size = 0;
 
         while let Some(page) = stream.try_next().await? {
-            charged = charged || page.request_charged.is_some();
             let contents = page.contents.unwrap_or(vec![]);
-
             for object in contents {
                 if let Some(size_signed) = object.size {
-                    let size = u64::try_from(size_signed).unwrap();
-                    self.stats.bytes_downloaded += size;
+                    size += u32::try_from(size_signed).unwrap();
                 }
 
                 let key = object.key.ok_or_else(|| Error::InvalidKey(String::new()))?;
@@ -94,14 +89,16 @@ impl Storage for S3Storage {
             }
         }
 
-        if charged {
-            self.stats.get_requests += 1;
-        }
-
+        let end_time = Instant::now();
+        self.stats
+            .lock()
+            .unwrap()
+            .add_get(start_time, end_time, size);
         Ok(keys)
     }
 
-    async fn get(&mut self, key: &str) -> Result<Vec<u8>> {
+    async fn get(&self, key: &str) -> Result<Vec<u8>> {
+        let start_time = Instant::now();
         let response = self
             .client
             .get_object()
@@ -115,25 +112,26 @@ impl Storage for S3Storage {
             })?;
 
         let bytes = response.body.collect().await?.to_vec();
-        self.stats.bytes_downloaded += bytes.len() as u64;
 
-        if response.request_charged.is_some() {
-            self.stats.get_requests += 1;
-        }
-
+        let end_time = Instant::now();
+        let size = u32::try_from(bytes.len()).unwrap();
+        self.stats
+            .lock()
+            .unwrap()
+            .add_get(start_time, end_time, size);
         Ok(bytes)
     }
 
-    async fn put(&mut self, key: &str, bytes: Vec<u8>) -> Result<()> {
-        let size = bytes.len() as u64;
+    async fn put(&self, key: &str, bytes: Vec<u8>) -> Result<()> {
+        let size = u32::try_from(bytes.len()).unwrap();
         let (bytes, encoded_digest) = spawn_blocking(move || {
             let encoded_digest = md5_base64(&bytes);
             (bytes, encoded_digest)
         })
         .await?;
 
-        let response = self
-            .client
+        let start_time = Instant::now();
+        self.client
             .put_object()
             .bucket(&self.bucket)
             .key(key)
@@ -142,32 +140,29 @@ impl Storage for S3Storage {
             .send()
             .await?;
 
-        self.stats.bytes_uploaded += size;
-
-        if response.request_charged.is_some() {
-            self.stats.put_requests += 1;
-        }
-
+        let end_time = Instant::now();
+        self.stats
+            .lock()
+            .unwrap()
+            .add_put(start_time, end_time, size);
         Ok(())
     }
 
-    async fn delete(&mut self, key: &str) -> Result<()> {
-        let response = self
-            .client
+    async fn delete(&self, key: &str) -> Result<()> {
+        let start_time = Instant::now();
+        self.client
             .delete_object()
             .bucket(&self.bucket)
             .key(key)
             .send()
             .await?;
 
-        if response.request_charged.is_some() {
-            self.stats.put_requests += 1;
-        }
-
+        let end_time = Instant::now();
+        self.stats.lock().unwrap().add_delete(start_time, end_time);
         Ok(())
     }
 
-    async fn delete_many(&mut self, keys: Vec<String>) -> Result<()> {
+    async fn delete_many(&self, keys: Vec<String>) -> Result<()> {
         let mut delete_builder = Delete::builder().quiet(true);
         for key in keys {
             let object = ObjectIdentifier::builder().key(key).build()?;
@@ -175,23 +170,22 @@ impl Storage for S3Storage {
         }
 
         let delete = delete_builder.build()?;
-        let response = self
-            .client
+
+        let start_time = Instant::now();
+        self.client
             .delete_objects()
             .bucket(&self.bucket)
             .delete(delete)
             .send()
             .await?;
 
-        if response.request_charged.is_some() {
-            self.stats.put_requests += 1;
-        }
-
+        let end_time = Instant::now();
+        self.stats.lock().unwrap().add_delete(start_time, end_time);
         Ok(())
     }
 
-    fn stats(&self) -> &StorageStats {
-        &self.stats
+    fn stats(&self) -> MutexGuard<StorageStats> {
+        self.stats.lock().unwrap()
     }
 }
 

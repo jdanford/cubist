@@ -20,7 +20,7 @@ const COMPRESSION_LEVEL: u8 = 3;
 
 pub async fn download_archive(storage: Arc<RwLock<BoxedStorage>>, hash: &Hash) -> Result<Archive> {
     let key = keys::archive(hash);
-    let compressed_bytes = storage.write().await.get(&key).await?;
+    let compressed_bytes = storage.read().await.get(&key).await?;
     let archive = spawn_blocking(move || {
         let bytes = decompress(&compressed_bytes)?;
         deserialize(&bytes)
@@ -71,13 +71,13 @@ pub async fn upload_archive(
         Result::Ok(compressed_bytes)
     })
     .await??;
-    storage.write().await.put(&key, archive_bytes).await?;
+    storage.read().await.put(&key, archive_bytes).await?;
     Ok(())
 }
 
 async fn delete_archive(storage: Arc<RwLock<BoxedStorage>>, hash: &Hash) -> Result<()> {
     let key = keys::archive(hash);
-    storage.write().await.delete(&key).await?;
+    storage.read().await.delete(&key).await?;
     Ok(())
 }
 

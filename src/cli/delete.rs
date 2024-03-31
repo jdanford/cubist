@@ -4,7 +4,7 @@ use log::debug;
 use tokio::try_join;
 
 use crate::{
-    arc::rwarc,
+    arc::{rwarc, unrwarc},
     error::Result,
     ops::{
         delete_archives, delete_blocks, download_archive_records, download_archives,
@@ -62,7 +62,8 @@ pub async fn main(cli: DeleteArgs) -> Result<()> {
     }
 
     if cli.global.stats {
-        let full_stats = stats.finalize(storage.read().await.stats());
+        let storage = unrwarc(storage);
+        let full_stats = stats.finalize(storage);
         print_stat(
             "metadata downloaded",
             format_size(full_stats.metadata_bytes_downloaded()),

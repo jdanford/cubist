@@ -25,7 +25,7 @@ pub async fn delete_blocks<'a, I: IntoIterator<Item = &'a Hash>>(
     hashes: I,
 ) -> Result<()> {
     let keys = hashes.into_iter().map(keys::block).collect();
-    storage.write().await.delete_many(keys).await?;
+    storage.read().await.delete_many(keys).await?;
     Ok(())
 }
 
@@ -34,7 +34,7 @@ pub async fn find_archive_hash(
     short_hash: &ShortHash,
 ) -> Result<Hash> {
     let partial_key = keys::archive(short_hash);
-    let full_key = storage.write().await.expand_key(&partial_key).await?;
+    let full_key = storage.read().await.expand_key(&partial_key).await?;
     hash_from_key(keys::ARCHIVE_NAMESPACE, &full_key)
 }
 
@@ -47,7 +47,7 @@ pub async fn find_archive_hashes(
         .iter()
         .map(String::as_str)
         .collect::<Vec<_>>();
-    let full_keys = storage.write().await.expand_keys(&partial_keys).await?;
+    let full_keys = storage.read().await.expand_keys(&partial_keys).await?;
     full_keys
         .into_iter()
         .map(|key| hash_from_key(keys::ARCHIVE_NAMESPACE, key.as_str()))

@@ -8,22 +8,22 @@ use crate::{file::WalkOrder, hash::ShortHash, storage::StorageUrl};
 
 use super::parse::{parse_range_inclusive, parse_short_hash};
 
-const DEFAULT_COMPRESSION_LEVEL: u8 = 3;
 const COMPRESSION_LEVEL_RANGE: RangeInclusive<u8> = 1..=19;
+const DEFAULT_COMPRESSION_LEVEL: u8 = 3;
+
+const BLOCK_SIZE_RANGE: RangeInclusive<u32> = 1..=u32::MAX;
+const DEFAULT_TARGET_BLOCK_SIZE: u32 = 1 << 20;
+
+const TASK_COUNT_RANGE: RangeInclusive<usize> = 1..=1024;
+const DEFAULT_TASK_COUNT: usize = 64;
 
 fn parse_compression_level(s: &str) -> Result<u8, String> {
     parse_range_inclusive(s, COMPRESSION_LEVEL_RANGE)
 }
 
-const DEFAULT_TARGET_BLOCK_SIZE: u32 = 1 << 20;
-const BLOCK_SIZE_RANGE: RangeInclusive<u32> = 1..=u32::MAX;
-
 fn parse_block_size(s: &str) -> Result<u32, String> {
     parse_range_inclusive(s, BLOCK_SIZE_RANGE)
 }
-
-const DEFAULT_TASK_COUNT: usize = 64;
-const TASK_COUNT_RANGE: RangeInclusive<usize> = 1..=1024;
 
 fn parse_task_count(s: &str) -> Result<usize, String> {
     parse_range_inclusive(s, TASK_COUNT_RANGE)

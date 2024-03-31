@@ -81,7 +81,8 @@ pub async fn main(cli: RestoreArgs) -> Result<()> {
     let stats = unrwarc(stats);
 
     if cli.global.stats {
-        let full_stats = stats.finalize(storage.read().await.stats());
+        let storage = unrwarc(storage);
+        let full_stats = stats.finalize(storage);
         print_stat(
             "content downloaded",
             format_size(full_stats.content_bytes_downloaded),

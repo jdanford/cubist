@@ -115,7 +115,8 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
     info!("{style}created archive{style:#} {short_hash}");
 
     if cli.global.stats {
-        let full_stats = stats.finalize(storage.read().await.stats());
+        let storage = unrwarc(storage);
+        let full_stats = stats.finalize(storage);
         print_stat(
             "metadata downloaded",
             format_size(full_stats.metadata_bytes_downloaded()),

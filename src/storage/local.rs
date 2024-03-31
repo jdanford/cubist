@@ -1,7 +1,8 @@
 use std::{
     mem::size_of_val,
     path::{Path, PathBuf},
-    time::Duration,
+    sync::{Arc, Mutex, MutexGuard},
+    time::{Duration, Instant},
 };
 
 use async_trait::async_trait;
@@ -10,18 +11,15 @@ use rand_distr::{Distribution, LogNormal};
 use tokio::{fs, time::sleep};
 use tokio_stream::StreamExt;
 
-use crate::{
-    error::{Error, Result},
-    stats::StorageStats,
-};
+use crate::error::{Error, Result};
 
-use super::Storage;
+use super::{Storage, StorageStats};
 
 #[derive(Debug)]
 pub struct LocalStorage {
     path: PathBuf,
     latency: Option<Duration>,
-    stats: StorageStats,
+    stats: Arc<Mutex<StorageStats>>,
 }
 
 impl LocalStorage {
@@ -29,7 +27,7 @@ impl LocalStorage {
         LocalStorage {
             path,
             latency,
-            stats: StorageStats::new(),
+            stats: Arc::new(Mutex::new(StorageStats::new())),
         }
     }
 
@@ -56,17 +54,20 @@ impl LocalStorage {
 
 #[async_trait]
 impl Storage for LocalStorage {
-    async fn exists(&mut self, key: &str) -> Result<bool> {
+    async fn exists(&self, key: &str) -> Result<bool> {
+        let start_time = Instant::now();
         self.simulate_latency().await;
 
         let path = self.object_path(key);
         let exists = fs::try_exists(path).await?;
 
-        self.stats.get_requests += 1;
+        let end_time = Instant::now();
+        self.stats.lock().unwrap().add_get(start_time, end_time, 0);
         Ok(exists)
     }
 
-    async fn keys(&mut self, prefix: Option<&str>) -> Result<Vec<String>> {
+    async fn keys(&self, prefix: Option<&str>) -> Result<Vec<String>> {
+        let start_time = Instant::now();
         self.simulate_latency().await;
 
         let prefix_path = self.path.join(prefix.unwrap_or(""));
@@ -77,13 +78,15 @@ impl Storage for LocalStorage {
 
         let mut walker = WalkDir::new(dirname);
         let mut keys = vec![];
+        let mut size = 0;
 
         while let Some(entry) = walker.try_next().await? {
             if entry.file_type().await?.is_dir() {
                 continue;
             }
 
-            self.stats.bytes_downloaded += size_of_val(&entry) as u64;
+            let raw_size = size_of_val(&entry);
+            size += u32::try_from(raw_size).unwrap();
 
             let absolute_path = entry.path();
             let path = absolute_path.strip_prefix(&self.path)?;
@@ -92,19 +95,25 @@ impl Storage for LocalStorage {
                 .unwrap()
                 .to_str()
                 .ok_or_else(|| invalid_key(path))?;
+
             if filename.starts_with(filename_prefix) {
                 let key = path.to_str().ok_or_else(|| invalid_key(path))?;
                 keys.push(key.to_owned());
             }
         }
 
-        self.stats.get_requests += 1;
-
         keys.sort();
+
+        let end_time = Instant::now();
+        self.stats
+            .lock()
+            .unwrap()
+            .add_get(start_time, end_time, size);
         Ok(keys)
     }
 
-    async fn get(&mut self, key: &str) -> Result<Vec<u8>> {
+    async fn get(&self, key: &str) -> Result<Vec<u8>> {
+        let start_time = Instant::now();
         self.simulate_latency().await;
 
         let path = self.object_path(key);
@@ -116,41 +125,59 @@ impl Storage for LocalStorage {
             }
         })?;
 
-        self.stats.bytes_downloaded += bytes.len() as u64;
-        self.stats.get_requests += 1;
+        let end_time = Instant::now();
+        let size = u32::try_from(bytes.len()).unwrap();
+        self.stats
+            .lock()
+            .unwrap()
+            .add_get(start_time, end_time, size);
         Ok(bytes)
     }
 
-    async fn put(&mut self, key: &str, bytes: Vec<u8>) -> Result<()> {
+    async fn put(&self, key: &str, bytes: Vec<u8>) -> Result<()> {
+        let start_time = Instant::now();
         self.simulate_latency().await;
 
         let path = self.object_path(key);
-        let size = bytes.len() as u64;
-
+        let size = u32::try_from(bytes.len()).unwrap();
         self.create_parent_dirs(&path).await?;
         fs::write(path, bytes).await?;
 
-        self.stats.bytes_uploaded += size;
-        self.stats.put_requests += 1;
+        let end_time = Instant::now();
+        self.stats
+            .lock()
+            .unwrap()
+            .add_put(start_time, end_time, size);
         Ok(())
     }
 
-    async fn delete(&mut self, key: &str) -> Result<()> {
+    async fn delete(&self, key: &str) -> Result<()> {
+        let start_time = Instant::now();
+        self.simulate_latency().await;
+
         let path = self.object_path(key);
         fs::remove_file(path).await?;
+
+        let end_time = Instant::now();
+        self.stats.lock().unwrap().add_delete(start_time, end_time);
         Ok(())
     }
 
-    async fn delete_many(&mut self, keys: Vec<String>) -> Result<()> {
+    async fn delete_many(&self, keys: Vec<String>) -> Result<()> {
+        let start_time = Instant::now();
+        self.simulate_latency().await;
+
         for key in keys {
             self.delete(&key).await?;
         }
 
+        let end_time = Instant::now();
+        self.stats.lock().unwrap().add_delete(start_time, end_time);
         Ok(())
     }
 
-    fn stats(&self) -> &StorageStats {
-        &self.stats
+    fn stats(&self) -> MutexGuard<StorageStats> {
+        self.stats.lock().unwrap()
     }
 }
 
