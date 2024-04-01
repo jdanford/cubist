@@ -54,6 +54,10 @@ impl BlockRecords {
         self.records.len()
     }
 
+    pub fn keys(&self) -> impl Iterator<Item = &Hash> {
+        self.records.keys()
+    }
+
     #[allow(dead_code)]
     pub fn contains(&self, hash: &Hash) -> bool {
         self.records.contains_key(hash)
@@ -70,6 +74,13 @@ impl BlockRecords {
 
     pub fn insert(&mut self, hash: Hash, record: BlockRecord) {
         self.records.insert(hash, record);
+    }
+
+    pub fn remove(&mut self, hash: &Hash) -> Result<()> {
+        self.records
+            .remove(hash)
+            .ok_or_else(|| Error::BlockRecordNotFound(*hash))?;
+        Ok(())
     }
 
     pub fn remove_refs(&mut self, refs: &BlockRefs) -> Result<Vec<(Hash, BlockRecord)>> {

@@ -1,56 +1,60 @@
 use std::{fmt, ops::RangeInclusive, str::FromStr};
 
-use rand::RngCore;
+use once_cell::sync::Lazy;
+use regex::Regex;
 
-use crate::error::Error;
+use crate::{
+    archive::ArchiveRecord,
+    error::{Error, Result},
+};
 
 pub const SIZE: usize = blake3::OUT_LEN;
+
+static HASH_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[0-9a-fA-F]+$").unwrap());
 
 pub type Hash = blake3::Hash;
 
 #[derive(Debug, Clone)]
-pub struct ShortHash(Vec<u8>);
+pub struct ShortHash(String);
 
 impl ShortHash {
-    pub fn from_bytes(bytes: Vec<u8>) -> Self {
-        ShortHash(bytes)
-    }
-
-    pub fn as_bytes(&self) -> &[u8] {
-        &self.0[..]
-    }
-
-    #[allow(dead_code)]
-    pub fn matches(&self, hash: &Hash) -> bool {
-        let short_bytes = self.as_bytes();
-        let long_bytes = hash.as_bytes();
-        short_bytes == &long_bytes[..short_bytes.len()]
+    pub fn new(s: String) -> Result<Self> {
+        if PREFIX_LENGTH_RANGE.contains(&s.len()) && HASH_REGEX.is_match(&s) {
+            Ok(ShortHash(s))
+        } else {
+            Err(Error::InvalidHash(s))
+        }
     }
 }
 
 impl FromStr for ShortHash {
     type Err = Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if !PREFIX_LENGTH_RANGE.contains(&s.len()) {
-            return Err(Error::InvalidHash(s.to_owned()));
-        }
-
-        let bytes = hex::decode(s).map_err(|_| Error::InvalidHash(s.to_owned()))?;
-        Ok(ShortHash(bytes))
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        ShortHash::new(s.to_owned())
     }
 }
 
 impl fmt::Display for ShortHash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", hex::encode(self.as_bytes()))
+        write!(f, "{}", self.0)
     }
 }
 
-pub fn random() -> Hash {
-    let mut bytes = [0; SIZE];
-    rand::thread_rng().fill_bytes(&mut bytes);
-    Hash::from_bytes(bytes)
+pub fn archive(archive: &ArchiveRecord) -> Hash {
+    let mut hasher = blake3::Hasher::new();
+
+    let timestamp = archive.created.format("%+").to_string();
+    let mut sorted_tags = archive.tags.iter().collect::<Vec<_>>();
+    sorted_tags.sort();
+
+    hasher.update(timestamp.as_bytes());
+
+    for tag in sorted_tags {
+        hasher.update(tag.as_bytes());
+    }
+
+    hasher.finalize()
 }
 
 pub fn leaf(data: &[u8]) -> Hash {

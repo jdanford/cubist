@@ -35,31 +35,37 @@ pub async fn main(cli: DeleteArgs) -> Result<()> {
 
         let archive_garbage_blocks = block_records.remove_refs(&archive.block_refs)?;
         removed_blocks.extend(archive_garbage_blocks);
+        stats.archives_deleted += 1;
     }
 
-    let mut removed_hashes = vec![];
+    let mut block_hashes = vec![];
 
     for (hash, record) in removed_blocks {
-        removed_hashes.push(hash);
+        block_hashes.push(hash);
         stats.bytes_deleted += record.size;
         stats.blocks_deleted += 1;
     }
 
     if !cli.dry_run {
-        delete_blocks(storage.clone(), removed_hashes.iter()).await?;
+        delete_blocks(storage.clone(), block_hashes.iter()).await?;
     }
 
-    for hash in removed_hashes {
+    for hash in block_hashes {
         let style = AnsiColor::Yellow.on_default();
-        debug!("{style}deleted archive{style:#} {hash}");
+        debug!("{style}deleted block{style:#} {hash}");
     }
 
     if !cli.dry_run {
         try_join!(
-            delete_archives(storage.clone(), &archive_hashes, cli.tasks),
+            delete_archives(storage.clone(), &archive_hashes),
             upload_archive_records(storage.clone(), rwarc(archive_records)),
             upload_block_records(storage.clone(), rwarc(block_records)),
         )?;
+    }
+
+    for hash in archive_hashes {
+        let style = AnsiColor::Yellow.on_default();
+        debug!("{style}deleted archive{style:#} {hash}");
     }
 
     if cli.global.stats {
@@ -74,6 +80,7 @@ pub async fn main(cli: DeleteArgs) -> Result<()> {
             format_size(full_stats.metadata_bytes_uploaded()),
         );
         print_stat("bytes deleted", format_size(full_stats.bytes_deleted));
+        print_stat("archives deleted", full_stats.archives_deleted);
         print_stat("blocks deleted", full_stats.blocks_deleted);
         print_stat("elapsed time", format_duration(full_stats.elapsed_time()));
     }

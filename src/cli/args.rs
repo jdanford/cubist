@@ -139,6 +139,16 @@ pub struct ArchivesArgs {
 }
 
 #[derive(Args, Debug)]
+pub struct CleanupArgs {
+    /// Show operations that would be performed without actually doing them
+    #[arg(short = 'n', long, default_value_t = false)]
+    pub dry_run: bool,
+
+    #[command(flatten)]
+    pub global: GlobalArgs,
+}
+
+#[derive(Args, Debug)]
 pub struct GlobalArgs {
     /// Storage backend (e.g. 's3://<bucket>' or 'file://<path>')
     #[arg(short, long, value_name = "URL")]

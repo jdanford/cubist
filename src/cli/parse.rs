@@ -23,8 +23,7 @@ pub fn parse_short_hash(s: &str) -> Result<ShortHash, String> {
     let len_range = hash::PREFIX_LENGTH_RANGE;
     let len = s.len();
     if len_range.contains(&len) {
-        let bytes = hex::decode(s).map_err(|_| "invalid characters in hash")?;
-        Ok(ShortHash::from_bytes(bytes))
+        ShortHash::new(s.to_owned()).map_err(|_| "invalid characters in hash".to_string())
     } else {
         Err(format!(
             "hash has {} characters, expected {}-{}",

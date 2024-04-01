@@ -20,7 +20,7 @@ use crate::{
     stats::CommandStats,
 };
 
-use super::{print_requests, print_stat, storage::create_storage, BackupArgs};
+use super::{print_stat, storage::create_storage, BackupArgs};
 
 pub async fn main(cli: BackupArgs) -> Result<()> {
     let stats = rwarc(CommandStats::new());
@@ -78,11 +78,11 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
         let removed_hashes = removed_blocks.iter().map(|(hash, _)| hash);
         delete_blocks(storage.clone(), removed_hashes).await?;
     } else {
-        let archive_hash = hash::random();
         let archive_record = ArchiveRecord {
             created: stats.start_time,
             tags: HashSet::new(),
         };
+        let archive_hash = hash::archive(&archive_record);
         archive_records.insert(archive_hash, archive_record);
 
         if !cli.dry_run {
@@ -99,10 +99,9 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
         info!("{style}created archive{style:#} {short_hash}");
     }
 
-    let storage = unrwarc(storage);
-    let full_stats = stats.finalize(storage);
-
     if cli.global.stats {
+        let storage = unrwarc(storage);
+        let full_stats = stats.finalize(storage);
         print_stat(
             "metadata downloaded",
             format_size(full_stats.metadata_bytes_downloaded()),

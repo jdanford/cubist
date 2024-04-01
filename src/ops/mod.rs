@@ -1,7 +1,7 @@
 mod archive;
-mod download;
+mod backup;
 mod records;
-mod upload;
+mod restore;
 
 use std::sync::Arc;
 
@@ -9,12 +9,12 @@ use tokio::sync::RwLock;
 
 pub use {
     archive::{delete_archives, download_archive, download_archives, upload_archive},
-    download::{download_pending_files, restore_recursive, DownloadArgs, DownloadState},
+    backup::{backup_recursive, upload_pending_files, UploadArgs, UploadState},
     records::{
         download_archive_records, download_block_records, upload_archive_records,
         upload_block_records,
     },
-    upload::{backup_recursive, upload_pending_files, UploadArgs, UploadState},
+    restore::{download_pending_files, restore_recursive, DownloadArgs, DownloadState},
 };
 
 use crate::{

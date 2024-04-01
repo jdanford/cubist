@@ -44,6 +44,10 @@ impl ArchiveRecords {
         }
     }
 
+    pub fn keys(&self) -> impl Iterator<Item = &Hash> {
+        self.records.keys()
+    }
+
     #[allow(dead_code)]
     pub fn get(&self, hash: &Hash) -> Option<&ArchiveRecord> {
         self.records.get(hash)

@@ -75,6 +75,7 @@ pub async fn upload_archive(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub async fn delete_archive(storage: Arc<RwLock<BoxedStorage>>, hash: &Hash) -> Result<()> {
     let key = keys::archive(hash);
     storage.read().await.delete(&key).await?;
@@ -84,26 +85,8 @@ pub async fn delete_archive(storage: Arc<RwLock<BoxedStorage>>, hash: &Hash) -> 
 pub async fn delete_archives<'a, I: IntoIterator<Item = &'a Hash>>(
     storage: Arc<RwLock<BoxedStorage>>,
     hashes: I,
-    tasks: usize,
 ) -> Result<()> {
-    let semaphore = Arc::new(Semaphore::new(tasks));
-    let mut tasks = JoinSet::new();
-
-    for hash in hashes {
-        let storage = storage.clone();
-        let hash = hash.to_owned();
-        let permit = semaphore.clone().acquire_owned().await?;
-
-        tasks.spawn(async move {
-            delete_archive(storage.clone(), &hash).await?;
-            drop(permit);
-            Result::Ok(())
-        });
-    }
-
-    while let Some(result) = tasks.join_next().await {
-        result??;
-    }
-
+    let keys = hashes.into_iter().map(keys::archive).collect();
+    storage.read().await.delete_many(keys).await?;
     Ok(())
 }

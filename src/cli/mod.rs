@@ -1,5 +1,6 @@
 mod archives;
 mod backup;
+mod cleanup;
 mod delete;
 mod restore;
 
@@ -19,7 +20,9 @@ use log::{error, LevelFilter};
 
 use crate::{logger, stats::FinalizedCommandStats};
 
-use self::args::{ArchivesArgs, BackupArgs, DeleteArgs, GlobalArgs, LoggerArgs, RestoreArgs};
+use self::args::{
+    ArchivesArgs, BackupArgs, CleanupArgs, DeleteArgs, GlobalArgs, LoggerArgs, RestoreArgs,
+};
 
 /// Fast deduplicated backups on top of S3
 #[derive(Parser, Debug)]
@@ -49,6 +52,9 @@ enum Command {
 
     /// List archives
     Archives(ArchivesArgs),
+
+    /// Clean up data
+    Cleanup(CleanupArgs),
 }
 
 impl Command {
@@ -58,6 +64,7 @@ impl Command {
             Command::Restore(args) => &args.global,
             Command::Delete(args) => &args.global,
             Command::Archives(args) => &args.global,
+            Command::Cleanup(args) => &args.global,
         }
     }
 }
@@ -75,6 +82,7 @@ pub async fn main() {
         Command::Restore(args) => restore::main(args).await,
         Command::Delete(args) => delete::main(args).await,
         Command::Archives(args) => archives::main(args).await,
+        Command::Cleanup(args) => cleanup::main(args).await,
     };
 
     if let Err(err) = result {

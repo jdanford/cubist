@@ -17,6 +17,8 @@ use crate::error::{Error, Result};
 
 use super::{Storage, StorageStats};
 
+const MAX_KEYS_PER_REQUEST: usize = 1000;
+
 #[derive(Debug)]
 pub struct S3Storage {
     client: Client,
@@ -163,24 +165,27 @@ impl Storage for S3Storage {
     }
 
     async fn delete_many(&self, keys: Vec<String>) -> Result<()> {
-        let mut delete_builder = Delete::builder().quiet(true);
-        for key in keys {
-            let object = ObjectIdentifier::builder().key(key).build()?;
-            delete_builder = delete_builder.objects(object);
+        for keys in keys.chunks(MAX_KEYS_PER_REQUEST) {
+            let mut delete_builder = Delete::builder().quiet(true);
+            for key in keys {
+                let object = ObjectIdentifier::builder().key(key).build()?;
+                delete_builder = delete_builder.objects(object);
+            }
+
+            let delete = delete_builder.build()?;
+
+            let start_time = Instant::now();
+            self.client
+                .delete_objects()
+                .bucket(&self.bucket)
+                .delete(delete)
+                .send()
+                .await?;
+
+            let end_time = Instant::now();
+            self.stats.lock().unwrap().add_delete(start_time, end_time);
         }
 
-        let delete = delete_builder.build()?;
-
-        let start_time = Instant::now();
-        self.client
-            .delete_objects()
-            .bucket(&self.bucket)
-            .delete(delete)
-            .send()
-            .await?;
-
-        let end_time = Instant::now();
-        self.stats.lock().unwrap().add_delete(start_time, end_time);
         Ok(())
     }
 
