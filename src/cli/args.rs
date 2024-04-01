@@ -15,7 +15,7 @@ const BLOCK_SIZE_RANGE: RangeInclusive<u32> = 1..=u32::MAX;
 const DEFAULT_TARGET_BLOCK_SIZE: u32 = 1 << 20;
 
 const TASK_COUNT_RANGE: RangeInclusive<usize> = 1..=1024;
-const DEFAULT_TASK_COUNT: usize = 64;
+const DEFAULT_TASK_COUNT: usize = 8;
 
 fn parse_compression_level(s: &str) -> Result<u8, String> {
     parse_range_inclusive(s, COMPRESSION_LEVEL_RANGE)
@@ -64,6 +64,10 @@ pub struct BackupArgs {
         value_parser = parse_task_count,
     )]
     pub tasks: usize,
+
+    /// Undo all changes when finished
+    #[arg(short = 't', long, default_value_t = false)]
+    pub transient: bool,
 
     /// Show operations that would be performed without actually doing them
     #[arg(short = 'n', long, default_value_t = false)]
@@ -130,48 +134,6 @@ pub struct DeleteArgs {
 
 #[derive(Args, Debug)]
 pub struct ArchivesArgs {
-    #[command(flatten)]
-    pub global: GlobalArgs,
-}
-
-#[derive(Args, Debug)]
-pub struct BenchArgs {
-    /// Target size for generated files
-    pub target_file_size: u32,
-
-    /// Number of generated files
-    pub files: u32,
-
-    /// Compression level (1-19)
-    #[arg(
-        short = 'l',
-        long,
-        value_name = "NUM",
-        default_value_t = DEFAULT_COMPRESSION_LEVEL,
-        value_parser = parse_compression_level,
-    )]
-    pub compression_level: u8,
-
-    /// Target size for blocks
-    #[arg(
-        short = 'b',
-        long,
-        value_name = "NUM",
-        default_value_t = DEFAULT_TARGET_BLOCK_SIZE,
-        value_parser = parse_block_size,
-    )]
-    pub target_block_size: u32,
-
-    /// Number of background tasks to use
-    #[arg(
-        short = 'j',
-        long,
-        value_name = "NUM",
-        default_value_t = DEFAULT_TASK_COUNT,
-        value_parser = parse_task_count,
-    )]
-    pub tasks: usize,
-
     #[command(flatten)]
     pub global: GlobalArgs,
 }

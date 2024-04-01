@@ -17,7 +17,7 @@ use concolor_clap::{color_choice, ColorChoice};
 use env_logger::WriteStyle;
 use log::{error, LevelFilter};
 
-use crate::logger;
+use crate::{logger, stats::FinalizedCommandStats};
 
 use self::args::{ArchivesArgs, BackupArgs, DeleteArgs, GlobalArgs, LoggerArgs, RestoreArgs};
 
@@ -115,4 +115,17 @@ fn cli_styles() -> Styles {
 fn print_stat<T: Display>(name: &str, value: T) {
     let style = AnsiColor::Cyan.on_default();
     println!("{style}{name}:{style:#} {value}");
+}
+
+#[allow(dead_code)]
+fn print_requests(stats: &FinalizedCommandStats) {
+    println!("bytes,time,type");
+
+    for request in &stats.storage.stats().get_requests {
+        println!("{},{},get", request.bytes, request.elapsed_time.as_millis());
+    }
+
+    for request in &stats.storage.stats().put_requests {
+        println!("{},{},put", request.bytes, request.elapsed_time.as_millis());
+    }
 }

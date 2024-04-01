@@ -8,9 +8,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 pub use {
-    archive::{
-        delete_archive, delete_archives, download_archive, download_archives, upload_archive,
-    },
+    archive::{delete_archives, download_archive, download_archives, upload_archive},
     download::{download_pending_files, restore_recursive, DownloadArgs, DownloadState},
     records::{
         download_archive_records, download_block_records, upload_archive_records,

@@ -13,14 +13,14 @@ use crate::{
     hash,
     locks::BlockLocks,
     ops::{
-        backup_recursive, download_archive_records, download_block_records, upload_archive,
-        upload_archive_records, upload_block_records, upload_pending_files, UploadArgs,
-        UploadState,
+        backup_recursive, delete_blocks, download_archive_records, download_block_records,
+        upload_archive, upload_archive_records, upload_block_records, upload_pending_files,
+        UploadArgs, UploadState,
     },
     stats::CommandStats,
 };
 
-use super::{print_stat, storage::create_storage, BackupArgs};
+use super::{print_requests, print_stat, storage::create_storage, BackupArgs};
 
 pub async fn main(cli: BackupArgs) -> Result<()> {
     let stats = rwarc(CommandStats::new());
@@ -71,29 +71,38 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
     } = unarc(state);
     let stats = unrwarc(stats);
 
-    let archive_hash = hash::random();
-    let archive_record = ArchiveRecord {
-        created: stats.start_time,
-        tags: HashSet::new(),
-    };
-    archive_records.insert(archive_hash, archive_record);
+    if cli.transient {
+        let archive = unrwarc(archive);
+        let mut block_records = unrwarc(block_records);
+        let removed_blocks = block_records.remove_refs(&archive.block_refs)?;
+        let removed_hashes = removed_blocks.iter().map(|(hash, _)| hash);
+        delete_blocks(storage.clone(), removed_hashes).await?;
+    } else {
+        let archive_hash = hash::random();
+        let archive_record = ArchiveRecord {
+            created: stats.start_time,
+            tags: HashSet::new(),
+        };
+        archive_records.insert(archive_hash, archive_record);
 
-    if !cli.dry_run {
-        try_join!(
-            upload_archive(storage.clone(), &archive_hash, archive.clone()),
-            upload_block_records(storage.clone(), block_records.clone()),
-            upload_archive_records(storage.clone(), rwarc(archive_records)),
-        )?;
+        if !cli.dry_run {
+            try_join!(
+                upload_archive(storage.clone(), &archive_hash, archive.clone()),
+                upload_block_records(storage.clone(), block_records.clone()),
+                upload_archive_records(storage.clone(), rwarc(archive_records)),
+            )?;
+        }
+
+        let block_count = block_records.read().await.unique_count();
+        let short_hash = hash::format_short(&archive_hash, block_count);
+        let style = AnsiColor::Green.on_default();
+        info!("{style}created archive{style:#} {short_hash}");
     }
 
-    let block_count = block_records.read().await.unique_count();
-    let short_hash = hash::format_short(&archive_hash, block_count);
-    let style = AnsiColor::Green.on_default();
-    info!("{style}created archive{style:#} {short_hash}");
+    let storage = unrwarc(storage);
+    let full_stats = stats.finalize(storage);
 
     if cli.global.stats {
-        let storage = unrwarc(storage);
-        let full_stats = stats.finalize(storage);
         print_stat(
             "metadata downloaded",
             format_size(full_stats.metadata_bytes_downloaded()),
