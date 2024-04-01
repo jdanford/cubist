@@ -20,13 +20,13 @@ use tokio_stream::StreamExt;
 
 use crate::{
     block,
-    cli::format::{format_path, format_size},
     error::{Error, Result},
     file::{read_metadata, Node},
+    format::{format_path, format_size},
     hash::Hash,
 };
 
-use super::{blocks::UploadTree, Args, State};
+use super::{blocks::UploadTree, UploadArgs, UploadState};
 
 #[derive(Debug)]
 pub struct PendingUpload {
@@ -35,8 +35,8 @@ pub struct PendingUpload {
 }
 
 pub async fn backup_recursive(
-    args: Arc<Args>,
-    state: Arc<State>,
+    args: Arc<UploadArgs>,
+    state: Arc<UploadState>,
     sender: Sender<PendingUpload>,
     path: &Path,
 ) -> Result<()> {
@@ -63,8 +63,8 @@ pub async fn backup_recursive(
 }
 
 async fn backup_from_entry(
-    _args: Arc<Args>,
-    state: Arc<State>,
+    _args: Arc<UploadArgs>,
+    state: Arc<UploadState>,
     entry: DirEntry,
     base_path: &Path,
 ) -> Result<Option<PendingUpload>> {
@@ -105,8 +105,8 @@ async fn backup_from_entry(
 }
 
 pub async fn upload_pending_files(
-    args: Arc<Args>,
-    state: Arc<State>,
+    args: Arc<UploadArgs>,
+    state: Arc<UploadState>,
     receiver: Receiver<PendingUpload>,
 ) -> Result<()> {
     let semaphore = Arc::new(Semaphore::new(args.tasks));
@@ -139,8 +139,8 @@ pub async fn upload_pending_files(
 }
 
 async fn upload_pending_file(
-    args: Arc<Args>,
-    state: Arc<State>,
+    args: Arc<UploadArgs>,
+    state: Arc<UploadState>,
     pending_file: PendingUpload,
 ) -> Result<()> {
     let PendingUpload {
@@ -164,8 +164,8 @@ async fn upload_pending_file(
 }
 
 pub async fn upload_file(
-    args: Arc<Args>,
-    state: Arc<State>,
+    args: Arc<UploadArgs>,
+    state: Arc<UploadState>,
     file: &mut File,
 ) -> Result<(Option<Hash>, u64)> {
     let reader = BufReader::new(file);

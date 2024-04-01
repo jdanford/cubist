@@ -135,6 +135,48 @@ pub struct ArchivesArgs {
 }
 
 #[derive(Args, Debug)]
+pub struct BenchArgs {
+    /// Target size for generated files
+    pub target_file_size: u32,
+
+    /// Number of generated files
+    pub files: u32,
+
+    /// Compression level (1-19)
+    #[arg(
+        short = 'l',
+        long,
+        value_name = "NUM",
+        default_value_t = DEFAULT_COMPRESSION_LEVEL,
+        value_parser = parse_compression_level,
+    )]
+    pub compression_level: u8,
+
+    /// Target size for blocks
+    #[arg(
+        short = 'b',
+        long,
+        value_name = "NUM",
+        default_value_t = DEFAULT_TARGET_BLOCK_SIZE,
+        value_parser = parse_block_size,
+    )]
+    pub target_block_size: u32,
+
+    /// Number of background tasks to use
+    #[arg(
+        short = 'j',
+        long,
+        value_name = "NUM",
+        default_value_t = DEFAULT_TASK_COUNT,
+        value_parser = parse_task_count,
+    )]
+    pub tasks: usize,
+
+    #[command(flatten)]
+    pub global: GlobalArgs,
+}
+
+#[derive(Args, Debug)]
 pub struct GlobalArgs {
     /// Storage backend (e.g. 's3://<bucket>' or 'file://<path>')
     #[arg(short, long, value_name = "URL")]

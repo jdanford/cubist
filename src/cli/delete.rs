@@ -6,6 +6,7 @@ use tokio::try_join;
 use crate::{
     arc::{rwarc, unrwarc},
     error::Result,
+    format::format_size,
     ops::{
         delete_archives, delete_blocks, download_archive_records, download_archives,
         download_block_records, find_archive_hashes, upload_archive_records, upload_block_records,
@@ -13,7 +14,7 @@ use crate::{
     stats::CommandStats,
 };
 
-use super::{format::format_size, print_stat, storage::create_storage, DeleteArgs};
+use super::{print_stat, storage::create_storage, DeleteArgs};
 
 pub async fn main(cli: DeleteArgs) -> Result<()> {
     let mut stats = CommandStats::new();

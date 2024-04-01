@@ -75,7 +75,7 @@ pub async fn upload_archive(
     Ok(())
 }
 
-async fn delete_archive(storage: Arc<RwLock<BoxedStorage>>, hash: &Hash) -> Result<()> {
+pub async fn delete_archive(storage: Arc<RwLock<BoxedStorage>>, hash: &Hash) -> Result<()> {
     let key = keys::archive(hash);
     storage.read().await.delete(&key).await?;
     Ok(())

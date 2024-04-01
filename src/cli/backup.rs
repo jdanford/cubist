@@ -1,49 +1,26 @@
-mod blocks;
-mod files;
-
-use std::{collections::HashSet, fmt::Debug, path::PathBuf, sync::Arc};
+use std::{collections::HashSet, sync::Arc};
 
 use clap::builder::styling::AnsiColor;
 use humantime::format_duration;
 use log::info;
-use tokio::{spawn, sync::RwLock, try_join};
+use tokio::{spawn, try_join};
 
 use crate::{
     arc::{rwarc, unarc, unrwarc},
     archive::{Archive, ArchiveRecord},
-    block::BlockRecords,
     error::Result,
+    format::format_size,
     hash,
     locks::BlockLocks,
     ops::{
-        download_archive_records, download_block_records, upload_archive, upload_archive_records,
-        upload_block_records,
+        backup_recursive, download_archive_records, download_block_records, upload_archive,
+        upload_archive_records, upload_block_records, upload_pending_files, UploadArgs,
+        UploadState,
     },
     stats::CommandStats,
-    storage::BoxedStorage,
 };
 
-use super::{format::format_size, print_stat, storage::create_storage, BackupArgs};
-
-use self::files::{backup_recursive, upload_pending_files};
-
-#[derive(Debug)]
-struct Args {
-    paths: Vec<PathBuf>,
-    compression_level: u8,
-    target_block_size: u32,
-    tasks: usize,
-    dry_run: bool,
-}
-
-#[derive(Debug)]
-struct State {
-    stats: Arc<RwLock<CommandStats>>,
-    storage: Arc<RwLock<BoxedStorage>>,
-    archive: Arc<RwLock<Archive>>,
-    block_records: Arc<RwLock<BlockRecords>>,
-    block_locks: Arc<RwLock<BlockLocks>>,
-}
+use super::{print_stat, storage::create_storage, BackupArgs};
 
 pub async fn main(cli: BackupArgs) -> Result<()> {
     let stats = rwarc(CommandStats::new());
@@ -57,14 +34,14 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
     )?;
     let block_records = rwarc(block_records);
 
-    let args = Arc::new(Args {
+    let args = Arc::new(UploadArgs {
         paths: cli.paths,
         compression_level: cli.compression_level,
         target_block_size: cli.target_block_size,
         tasks: cli.tasks,
         dry_run: cli.dry_run,
     });
-    let state = Arc::new(State {
+    let state = Arc::new(UploadState {
         stats,
         storage,
         archive,
@@ -85,7 +62,7 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
     sender.close();
     uploader_task.await??;
 
-    let State {
+    let UploadState {
         stats,
         storage,
         archive,

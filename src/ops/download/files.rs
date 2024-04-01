@@ -9,15 +9,15 @@ use log::debug;
 use tokio::{fs, sync::Semaphore, task::JoinSet};
 
 use crate::{
-    cli::format::{format_path, format_size},
     error::{Error, Result},
     file::{restore_metadata, restore_metadata_from_node, try_exists, FileType, Metadata, Node},
+    format::{format_path, format_size},
     hash::Hash,
 };
 
 use super::{
     blocks::{download_block_recursive, ActiveDownload},
-    Args, State,
+    DownloadArgs, DownloadState,
 };
 
 #[derive(Debug)]
@@ -28,8 +28,8 @@ pub struct PendingDownload {
 }
 
 pub async fn restore_recursive(
-    args: Arc<Args>,
-    state: Arc<State>,
+    args: Arc<DownloadArgs>,
+    state: Arc<DownloadState>,
     sender: Sender<PendingDownload>,
 ) -> Result<()> {
     let root_paths = if args.paths.is_empty() {
@@ -61,8 +61,8 @@ pub async fn restore_recursive(
 }
 
 async fn restore_from_node(
-    args: Arc<Args>,
-    _state: Arc<State>,
+    args: Arc<DownloadArgs>,
+    _state: Arc<DownloadState>,
     path: &Path,
     node: &Node,
 ) -> Result<Option<PendingDownload>> {
@@ -105,8 +105,8 @@ async fn restore_from_node(
 }
 
 pub async fn download_pending_files(
-    args: Arc<Args>,
-    state: Arc<State>,
+    args: Arc<DownloadArgs>,
+    state: Arc<DownloadState>,
     receiver: Receiver<PendingDownload>,
 ) -> Result<()> {
     let semaphore = Arc::new(Semaphore::new(args.tasks));
@@ -132,8 +132,8 @@ pub async fn download_pending_files(
 }
 
 async fn download_pending_file(
-    args: Arc<Args>,
-    state: Arc<State>,
+    args: Arc<DownloadArgs>,
+    state: Arc<DownloadState>,
     pending_file: PendingDownload,
 ) -> Result<()> {
     let mut size = 0;

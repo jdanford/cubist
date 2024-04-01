@@ -1,46 +1,21 @@
-mod blocks;
-mod files;
-
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use humantime::format_duration;
-use tokio::{spawn, sync::RwLock};
+use tokio::spawn;
 
 use crate::{
     arc::{rwarc, unarc, unrwarc},
-    archive::Archive,
     error::Result,
-    file::WalkOrder,
-    hash::Hash,
+    format::format_size,
     locks::BlockLocks,
-    ops::{download_archive, find_archive_hash},
+    ops::{
+        download_archive, download_pending_files, find_archive_hash, restore_recursive,
+        DownloadArgs, DownloadState,
+    },
     stats::CommandStats,
-    storage::BoxedStorage,
 };
 
-use super::{format::format_size, print_stat, storage::create_storage, RestoreArgs};
-
-use self::{
-    blocks::LocalBlock,
-    files::{download_pending_files, restore_recursive},
-};
-
-#[derive(Debug)]
-struct Args {
-    archive: Archive,
-    paths: Vec<PathBuf>,
-    order: WalkOrder,
-    tasks: usize,
-    dry_run: bool,
-}
-
-#[derive(Debug)]
-struct State {
-    stats: Arc<RwLock<CommandStats>>,
-    storage: Arc<RwLock<BoxedStorage>>,
-    local_blocks: Arc<RwLock<HashMap<Hash, LocalBlock>>>,
-    block_locks: Arc<RwLock<BlockLocks>>,
-}
+use super::{print_stat, storage::create_storage, RestoreArgs};
 
 pub async fn main(cli: RestoreArgs) -> Result<()> {
     let stats = rwarc(CommandStats::new());
@@ -51,14 +26,14 @@ pub async fn main(cli: RestoreArgs) -> Result<()> {
     let archive_hash = find_archive_hash(storage.clone(), &cli.archive).await?;
     let archive = download_archive(storage.clone(), &archive_hash).await?;
 
-    let args = Arc::new(Args {
+    let args = Arc::new(DownloadArgs {
         archive,
         paths: cli.paths,
         order: cli.order,
         tasks: cli.tasks,
         dry_run: cli.dry_run,
     });
-    let state = Arc::new(State {
+    let state = Arc::new(DownloadState {
         stats,
         storage,
         local_blocks,
@@ -77,7 +52,7 @@ pub async fn main(cli: RestoreArgs) -> Result<()> {
     sender.close();
     downloader_task.await??;
 
-    let State { stats, storage, .. } = unarc(state);
+    let DownloadState { stats, storage, .. } = unarc(state);
     let stats = unrwarc(stats);
 
     if cli.global.stats {

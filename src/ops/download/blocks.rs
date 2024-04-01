@@ -17,7 +17,7 @@ use crate::{
     keys,
 };
 
-use super::{files::PendingDownload, Args, State};
+use super::{files::PendingDownload, DownloadArgs, DownloadState};
 
 #[derive(Debug, Clone, Copy)]
 pub struct LocalBlock {
@@ -72,8 +72,8 @@ impl DerefMut for ActiveDownload {
 
 #[async_recursion]
 pub async fn download_block_recursive(
-    args: Arc<Args>,
-    state: Arc<State>,
+    args: Arc<DownloadArgs>,
+    state: Arc<DownloadState>,
     file: &mut ActiveDownload,
     hash: Hash,
     level: Option<u8>,
@@ -120,7 +120,7 @@ pub async fn download_block_recursive(
 }
 
 async fn write_local_block(
-    state: Arc<State>,
+    state: Arc<DownloadState>,
     file: &mut ActiveDownload,
     data: &[u8],
 ) -> Result<LocalBlock> {
@@ -135,7 +135,7 @@ async fn write_local_block(
     Ok(local_block)
 }
 
-async fn read_local_block(args: Arc<Args>, local_block: LocalBlock) -> Result<Vec<u8>> {
+async fn read_local_block(args: Arc<DownloadArgs>, local_block: LocalBlock) -> Result<Vec<u8>> {
     let path = args
         .archive
         .path(local_block.inode)

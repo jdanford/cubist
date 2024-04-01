@@ -7,16 +7,16 @@ use crate::{
     keys,
 };
 
-use super::{Args, State};
+use super::{UploadArgs, UploadState};
 
 pub struct UploadTree {
-    args: Arc<Args>,
-    state: Arc<State>,
+    args: Arc<UploadArgs>,
+    state: Arc<UploadState>,
     layers: Vec<Vec<Hash>>,
 }
 
 impl UploadTree {
-    pub fn new(args: Arc<Args>, state: Arc<State>) -> Self {
+    pub fn new(args: Arc<UploadArgs>, state: Arc<UploadState>) -> Self {
         UploadTree {
             args,
             state,

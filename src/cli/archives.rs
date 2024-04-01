@@ -5,16 +5,12 @@ use log::info;
 use crate::{
     arc::{rwarc, unrwarc},
     error::Result,
+    format::{format_size, format_time},
     ops::download_archive_records,
     stats::CommandStats,
 };
 
-use super::{
-    format::{format_size, format_time},
-    print_stat,
-    storage::create_storage,
-    ArchivesArgs,
-};
+use super::{print_stat, storage::create_storage, ArchivesArgs};
 
 pub async fn main(cli: ArchivesArgs) -> Result<()> {
     let stats = CommandStats::new();

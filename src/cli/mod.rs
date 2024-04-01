@@ -4,8 +4,6 @@ mod delete;
 mod restore;
 
 mod args;
-mod format;
-mod logger;
 mod parse;
 mod storage;
 
@@ -15,10 +13,13 @@ use clap::{
     builder::{styling::AnsiColor, Styles},
     Parser, Subcommand,
 };
-use concolor_clap::color_choice;
-use log::error;
+use concolor_clap::{color_choice, ColorChoice};
+use env_logger::WriteStyle;
+use log::{error, LevelFilter};
 
-use self::args::{ArchivesArgs, BackupArgs, DeleteArgs, GlobalArgs, RestoreArgs};
+use crate::logger;
+
+use self::args::{ArchivesArgs, BackupArgs, DeleteArgs, GlobalArgs, LoggerArgs, RestoreArgs};
 
 /// Fast deduplicated backups on top of S3
 #[derive(Parser, Debug)]
@@ -64,7 +65,10 @@ impl Command {
 pub async fn main() {
     let cli = Cli::parse();
     let global = cli.command.global();
-    logger::init(&global.logger);
+
+    let level = log_level_from_args(&global.logger);
+    let style = write_style_from_color_choice(global.logger.color);
+    logger::init(level, style);
 
     let result = match cli.command {
         Command::Backup(args) => backup::main(args).await,
@@ -76,6 +80,27 @@ pub async fn main() {
     if let Err(err) = result {
         error!("{err}");
         exit(1);
+    }
+}
+
+fn log_level_from_args(args: &LoggerArgs) -> LevelFilter {
+    let base_verbosity: i8 = args.verbose.try_into().unwrap();
+    let quietness: i8 = args.quiet.try_into().unwrap();
+    let verbosity = base_verbosity - quietness;
+    match verbosity {
+        -2 => LevelFilter::Error,
+        -1 => LevelFilter::Warn,
+        0 => LevelFilter::Info,
+        1 => LevelFilter::Debug,
+        _ => LevelFilter::Trace,
+    }
+}
+
+fn write_style_from_color_choice(color: ColorChoice) -> WriteStyle {
+    match color {
+        ColorChoice::Auto => WriteStyle::Auto,
+        ColorChoice::Always => WriteStyle::Always,
+        ColorChoice::Never => WriteStyle::Never,
     }
 }
 
