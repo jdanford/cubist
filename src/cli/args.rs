@@ -139,6 +139,15 @@ pub struct ArchivesArgs {
 
 #[derive(Args, Debug)]
 pub struct CleanupArgs {
+    /// Number of background tasks to use
+    #[arg(
+        long,
+        value_name = "NUM",
+        default_value_t = DEFAULT_TASK_COUNT,
+        value_parser = parse_task_count,
+    )]
+    pub tasks: usize,
+
     /// Show operations that would be performed without actually doing them
     #[arg(short = 'n', long, default_value_t = false)]
     pub dry_run: bool,

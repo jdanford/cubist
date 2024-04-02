@@ -6,7 +6,7 @@ use log::{Level, LevelFilter, Record};
 pub fn init(level: LevelFilter, style: WriteStyle) {
     env_logger::Builder::new()
         .format(format)
-        .filter_level(level)
+        .filter(Some("cubist"), level)
         .write_style(style)
         .init();
 }

@@ -202,11 +202,12 @@ checksum = "fbb36e985947064623dbd357f727af08ffd077f93d696782f3c56365fa2e2799"
 
 [[package]]
 name = "async-walkdir"
-version = "1.1.0"
-source = "git+https://github.com/jdanford/async-walkdir.git?branch=richer-errors#c0d82f94682d32bf3e82b26fc8f814385c68a8f6"
+version = "2.0.0"
+source = "git+https://github.com/jdanford/async-walkdir.git?branch=richer-errors#0477d44cfedd117fb390fab000c45a0e94ebc3cc"
 dependencies = [
  "async-fs",
  "futures-lite",
+ "thiserror",
 ]
 
 [[package]]

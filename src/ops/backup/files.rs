@@ -1,6 +1,5 @@
 use std::{
     collections::BTreeMap,
-    io,
     path::{Path, PathBuf},
     pin::pin,
     sync::Arc,
@@ -51,11 +50,9 @@ pub async fn backup_recursive(
                 }
             }
             Ok(None) => break,
-            Err(err) if err.kind() == io::ErrorKind::PermissionDenied => {
-                let formatted_path = format_path(err.path());
-                warn!("skipped {formatted_path} (permission denied)");
+            Err(err) => {
+                handle_walkdir_error(err)?;
             }
-            Err(err) => return Err(err.into()),
         }
     }
 
@@ -98,7 +95,7 @@ async fn backup_from_entry(
         let style = AnsiColor::Magenta.on_default();
         debug!("{style}added directory{style:#} {formatted_path}");
     } else {
-        warn!("skipped {formatted_path} (special file)");
+        warn!("skipped special file {formatted_path}");
     };
 
     Ok(None)
@@ -119,11 +116,8 @@ pub async fn upload_pending_files(
 
         tasks.spawn(async move {
             let result = upload_pending_file(args, state, pending_file).await;
-            if let Err(Error::WalkDir(inner)) = result {
-                if inner.kind() == io::ErrorKind::PermissionDenied {
-                    let formatted_path = format_path(inner.path());
-                    warn!("skipped {formatted_path} (permission denied)");
-                }
+            if let Err(Error::WalkDir(err)) = result {
+                handle_walkdir_error(err)?;
             }
 
             drop(permit);
@@ -184,4 +178,19 @@ pub async fn upload_file(
 
     let hash = tree.finalize().await?;
     Ok((hash, size))
+}
+
+fn handle_walkdir_error(err: async_walkdir::Error) -> Result<()> {
+    if let Some(io_err) = err.io() {
+        if let Some(path) = err.path() {
+            let formatted_path = format_path(path);
+            warn!("skipped file {formatted_path} ({io_err})");
+        } else {
+            warn!("skipped file ({io_err})");
+        }
+
+        Ok(())
+    } else {
+        Err(err.into())
+    }
 }

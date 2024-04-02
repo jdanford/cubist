@@ -1,4 +1,5 @@
 use std::{
+    pin::pin,
     sync::{Arc, Mutex},
     time::Instant,
 };
@@ -21,7 +22,7 @@ use crate::{
     stats::StorageStats,
 };
 
-const MAX_KEYS_PER_REQUEST: usize = 1000;
+pub const MAX_KEYS_PER_REQUEST: usize = 1000;
 
 #[derive(Debug)]
 pub struct Storage {
@@ -68,11 +69,12 @@ impl Storage {
         Ok(exists)
     }
 
-    pub fn keys<'a>(&'a self, prefix: Option<&'a str>) -> impl Stream<Item = Result<String>> + 'a {
+    pub fn keys_paginated<'a>(
+        &'a self,
+        prefix: Option<&'a str>,
+    ) -> impl Stream<Item = Result<Vec<String>>> + 'a {
         try_stream! {
             let prefix_owned = prefix.map(ToOwned::to_owned);
-
-            let start_time = Instant::now();
             let mut stream = self
                 .client
                 .list_objects_v2()
@@ -81,30 +83,77 @@ impl Storage {
                 .into_paginator()
                 .send();
 
-            let mut size = 0;
+            loop {
+                let start_time = Instant::now();
+                let maybe_page = stream.try_next().await?;
+                let end_time = Instant::now();
 
-            while let Some(page) = stream.try_next().await? {
-                let contents = page.contents.unwrap_or(vec![]);
-                for object in contents {
-                    if let Some(size_signed) = object.size {
-                        size += u32::try_from(size_signed).unwrap();
+                if let Some(page) = maybe_page {
+                    let mut keys = vec![];
+                    let mut size = 0;
+
+                    let contents = page.contents.unwrap_or(vec![]);
+                    for object in contents {
+                        let key = object.key.ok_or_else(|| Error::InvalidKey(String::new()))?;
+                        keys.push(key);
+
+                        if let Some(size_signed) = object.size {
+                            size += u32::try_from(size_signed).unwrap();
+                        }
                     }
 
-                    let key = object.key.ok_or_else(|| Error::InvalidKey(String::new()))?;
+                    self.stats
+                        .lock()
+                        .unwrap()
+                        .add_get(start_time, end_time, size);
+
+                    yield keys;
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
+    pub fn keys<'a>(&'a self, prefix: Option<&'a str>) -> impl Stream<Item = Result<String>> + 'a {
+        try_stream! {
+            let mut pages = pin!(self.keys_paginated(prefix));
+            while let Some(keys) = pages.try_next().await? {
+                for key in keys {
                     yield key;
                 }
             }
-
-            let end_time = Instant::now();
-            self.stats
-                .lock()
-                .unwrap()
-                .add_get(start_time, end_time, size);
         }
     }
 
     pub async fn keys_vec(&self, prefix: Option<&str>) -> Result<Vec<String>> {
-        self.keys(prefix).collect::<Result<Vec<_>>>().await
+        self.keys(prefix).collect().await
+    }
+
+    pub async fn expand_key(&self, prefix: &str) -> Result<String> {
+        let keys = self.keys_vec(Some(prefix)).await?;
+        match &keys[..] {
+            [key] => Ok(key.clone()),
+            [] => Err(Error::NoItemForPrefix(prefix.to_owned())),
+            _ => Err(Error::MultipleItemsForPrefix(prefix.to_owned())),
+        }
+    }
+
+    pub async fn expand_keys<S: AsRef<str>, I: IntoIterator<Item = S>>(
+        &self,
+        prefixes: I,
+    ) -> Result<Vec<String>> {
+        let prefixes = prefixes.into_iter().collect::<Vec<_>>();
+        let common_prefix = longest_common_prefix(&prefixes);
+        let keys = self.keys_vec(common_prefix).await?;
+        let mut matching_keys = vec![];
+
+        for prefix in &prefixes {
+            let matching_key = find_one_by_prefix(&keys, prefix.as_ref())?;
+            matching_keys.push(matching_key.to_owned());
+        }
+
+        Ok(matching_keys)
     }
 
     pub async fn get(&self, key: &str) -> Result<Vec<u8>> {
@@ -130,6 +179,14 @@ impl Storage {
             .unwrap()
             .add_get(start_time, end_time, size);
         Ok(bytes)
+    }
+
+    pub async fn try_get(&self, key: &str) -> Result<Option<Vec<u8>>> {
+        match self.get(key).await {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(Error::ItemNotFound(_)) => Ok(None),
+            Err(err) => Err(err),
+        }
     }
 
     pub async fn put(&self, key: &str, bytes: Vec<u8>) -> Result<()> {
@@ -195,40 +252,6 @@ impl Storage {
         }
 
         Ok(())
-    }
-
-    pub async fn try_get(&self, key: &str) -> Result<Option<Vec<u8>>> {
-        match self.get(key).await {
-            Ok(bytes) => Ok(Some(bytes)),
-            Err(Error::ItemNotFound(_)) => Ok(None),
-            Err(err) => Err(err),
-        }
-    }
-
-    pub async fn expand_key(&self, prefix: &str) -> Result<String> {
-        let keys = self.keys_vec(Some(prefix)).await?;
-        match &keys[..] {
-            [key] => Ok(key.clone()),
-            [] => Err(Error::NoItemForPrefix(prefix.to_owned())),
-            _ => Err(Error::MultipleItemsForPrefix(prefix.to_owned())),
-        }
-    }
-
-    pub async fn expand_keys<S: AsRef<str>, I: IntoIterator<Item = S>>(
-        &self,
-        prefixes: I,
-    ) -> Result<Vec<String>> {
-        let prefixes = prefixes.into_iter().collect::<Vec<_>>();
-        let common_prefix = longest_common_prefix(&prefixes);
-        let keys = self.keys_vec(common_prefix).await?;
-        let mut matching_keys = vec![];
-
-        for prefix in &prefixes {
-            let matching_key = find_one_by_prefix(&keys, prefix.as_ref())?;
-            matching_keys.push(matching_key.to_owned());
-        }
-
-        Ok(matching_keys)
     }
 
     pub fn stats(self) -> StorageStats {

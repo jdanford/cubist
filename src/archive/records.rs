@@ -44,8 +44,13 @@ impl ArchiveRecords {
         }
     }
 
+    #[allow(dead_code)]
     pub fn keys(&self) -> impl Iterator<Item = &Hash> {
         self.records.keys()
+    }
+
+    pub fn contains(&self, hash: &Hash) -> bool {
+        self.records.contains_key(hash)
     }
 
     #[allow(dead_code)]

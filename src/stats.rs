@@ -4,8 +4,9 @@ use std::{
 };
 
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommandStats {
     pub start_time: DateTime<Utc>,
     pub content_bytes_downloaded: u64,
@@ -50,24 +51,24 @@ impl CommandStats {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetRequestStats {
     pub elapsed_time: Duration,
     pub bytes: u32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PutRequestStats {
     pub elapsed_time: Duration,
     pub bytes: u32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteRequestStats {
     pub elapsed_time: Duration,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageStats {
     pub bytes_downloaded: u64,
     pub bytes_uploaded: u64,
@@ -116,7 +117,7 @@ impl StorageStats {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FinalizedCommandStats {
     command: CommandStats,
     pub storage: StorageStats,

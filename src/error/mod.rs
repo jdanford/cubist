@@ -84,6 +84,9 @@ pub enum Error {
     #[error("block is empty")]
     EmptyBlock,
 
+    #[error("`{0}` must be set")]
+    MissingEnvVar(String),
+
     #[error(transparent)]
     Io(#[from] std::io::Error),
 

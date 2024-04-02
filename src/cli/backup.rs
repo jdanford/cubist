@@ -29,8 +29,8 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
     let block_locks = rwarc(BlockLocks::new());
 
     let (mut archive_records, block_records) = try_join!(
-        download_archive_records(storage.clone()),
-        download_block_records(storage.clone()),
+        Box::pin(download_archive_records(storage.clone())),
+        Box::pin(download_block_records(storage.clone())),
     )?;
     let block_records = rwarc(block_records);
 

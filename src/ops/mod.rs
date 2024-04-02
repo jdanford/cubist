@@ -1,5 +1,6 @@
 mod archive;
 mod backup;
+mod cleanup;
 mod records;
 mod restore;
 
@@ -10,6 +11,7 @@ use tokio::sync::RwLock;
 pub use {
     archive::{delete_archives, download_archive, download_archives, upload_archive},
     backup::{backup_recursive, upload_pending_files, UploadArgs, UploadState},
+    cleanup::{cleanup_archives, cleanup_blocks, CleanupArgs, CleanupState},
     records::{
         download_archive_records, download_block_records, upload_archive_records,
         upload_block_records,

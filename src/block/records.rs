@@ -54,11 +54,11 @@ impl BlockRecords {
         self.records.len()
     }
 
+    #[allow(dead_code)]
     pub fn keys(&self) -> impl Iterator<Item = &Hash> {
         self.records.keys()
     }
 
-    #[allow(dead_code)]
     pub fn contains(&self, hash: &Hash) -> bool {
         self.records.contains_key(hash)
     }
@@ -76,6 +76,7 @@ impl BlockRecords {
         self.records.insert(hash, record);
     }
 
+    #[allow(dead_code)]
     pub fn remove(&mut self, hash: &Hash) -> Result<()> {
         self.records
             .remove(hash)

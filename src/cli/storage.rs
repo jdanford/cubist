@@ -1,8 +1,9 @@
 use std::env::{self};
 
-use anyhow::anyhow;
-
-use crate::{error::Result, storage::Storage};
+use crate::{
+    error::{Error, Result},
+    storage::Storage,
+};
 
 use super::GlobalArgs;
 
@@ -12,7 +13,7 @@ pub async fn create_storage(args: &GlobalArgs) -> Result<Storage> {
     let bucket = if let Some(bucket) = &args.bucket {
         bucket.to_owned()
     } else {
-        env::var(ENV_VAR_STORAGE).map_err(|_| anyhow!("`{ENV_VAR_STORAGE}` must be set"))?
+        env::var(ENV_VAR_STORAGE).map_err(|_| Error::MissingEnvVar(ENV_VAR_STORAGE.to_owned()))?
     };
 
     Ok(Storage::new(bucket).await)
