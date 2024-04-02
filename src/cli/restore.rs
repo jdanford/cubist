@@ -15,7 +15,7 @@ use crate::{
     stats::CommandStats,
 };
 
-use super::{print_stat, storage::create_storage, RestoreArgs};
+use super::{args::StatsType, print_stat, print_stats_json, storage::create_storage, RestoreArgs};
 
 pub async fn main(cli: RestoreArgs) -> Result<()> {
     let stats = rwarc(CommandStats::new());
@@ -54,23 +54,29 @@ pub async fn main(cli: RestoreArgs) -> Result<()> {
 
     let DownloadState { stats, storage, .. } = unarc(state);
     let stats = unrwarc(stats);
+    let storage = unarc(storage);
+    let full_stats = stats.finalize(storage.stats());
 
-    if cli.global.stats {
-        let storage = unarc(storage);
-        let full_stats = stats.finalize(storage.stats());
-        print_stat(
-            "content downloaded",
-            format_size(full_stats.content_bytes_downloaded),
-        );
-        print_stat(
-            "metadata downloaded",
-            format_size(full_stats.metadata_bytes_downloaded()),
-        );
-        print_stat("bytes written", format_size(full_stats.bytes_written));
-        print_stat("files created", full_stats.files_created);
-        print_stat("blocks downloaded", full_stats.blocks_downloaded);
-        print_stat("blocks referenced", full_stats.blocks_referenced);
-        print_stat("elapsed time", format_duration(full_stats.elapsed_time()));
+    match cli.global.stats {
+        Some(StatsType::Basic) => {
+            print_stat(
+                "content downloaded",
+                format_size(full_stats.content_bytes_downloaded),
+            );
+            print_stat(
+                "metadata downloaded",
+                format_size(full_stats.metadata_bytes_downloaded()),
+            );
+            print_stat("bytes written", format_size(full_stats.bytes_written));
+            print_stat("files created", full_stats.files_created);
+            print_stat("blocks downloaded", full_stats.blocks_downloaded);
+            print_stat("blocks referenced", full_stats.blocks_referenced);
+            print_stat("elapsed time", format_duration(full_stats.elapsed_time()));
+        }
+        Some(StatsType::Json) => {
+            print_stats_json(&full_stats)?;
+        }
+        None => {}
     }
 
     Ok(())

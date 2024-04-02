@@ -75,13 +75,6 @@ pub async fn upload_archive(
     Ok(())
 }
 
-#[allow(dead_code)]
-pub async fn delete_archive(storage: Arc<Storage>, hash: &Hash) -> Result<()> {
-    let key = keys::archive(hash);
-    storage.delete(&key).await?;
-    Ok(())
-}
-
 pub async fn delete_archives<'a, I: IntoIterator<Item = &'a Hash>>(
     storage: Arc<Storage>,
     hashes: I,

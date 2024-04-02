@@ -1,12 +1,9 @@
-use std::{
-    ops::Deref,
-    time::{Duration, Instant},
-};
+use std::{ops::Deref, time::Duration};
 
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{ser::SerializeMap, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct CommandStats {
     pub start_time: DateTime<Utc>,
     pub content_bytes_downloaded: u64,
@@ -51,30 +48,29 @@ impl CommandStats {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GetRequestStats {
-    pub elapsed_time: Duration,
-    pub bytes: u32,
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RequestKind {
+    Get,
+    Put,
+    Delete,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PutRequestStats {
-    pub elapsed_time: Duration,
-    pub bytes: u32,
+#[derive(Debug, Clone, Serialize)]
+pub struct RequestInfo {
+    #[serde(rename = "type")]
+    pub kind: RequestKind,
+    pub start_time: DateTime<Utc>,
+    pub end_time: DateTime<Utc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bytes: Option<u32>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeleteRequestStats {
-    pub elapsed_time: Duration,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct StorageStats {
     pub bytes_downloaded: u64,
     pub bytes_uploaded: u64,
-    pub get_requests: Vec<GetRequestStats>,
-    pub put_requests: Vec<PutRequestStats>,
-    pub delete_requests: Vec<DeleteRequestStats>,
+    pub requests: Vec<RequestInfo>,
 }
 
 impl StorageStats {
@@ -82,42 +78,46 @@ impl StorageStats {
         StorageStats {
             bytes_downloaded: 0,
             bytes_uploaded: 0,
-            get_requests: Vec::new(),
-            put_requests: Vec::new(),
-            delete_requests: Vec::new(),
+            requests: Vec::new(),
         }
     }
 
-    pub fn add_get(&mut self, start_time: Instant, end_time: Instant, bytes: u32) {
-        let elapsed_time = end_time - start_time;
-        let stats = GetRequestStats {
-            elapsed_time,
-            bytes,
+    pub fn add_get(&mut self, start_time: DateTime<Utc>, end_time: DateTime<Utc>, bytes: u32) {
+        let stats = RequestInfo {
+            kind: RequestKind::Get,
+            start_time,
+            end_time,
+            bytes: Some(bytes),
         };
 
         self.bytes_downloaded += u64::from(bytes);
-        self.get_requests.push(stats);
+        self.requests.push(stats);
     }
 
-    pub fn add_put(&mut self, start_time: Instant, end_time: Instant, bytes: u32) {
-        let elapsed_time = end_time - start_time;
-        let stats = PutRequestStats {
-            elapsed_time,
-            bytes,
+    pub fn add_put(&mut self, start_time: DateTime<Utc>, end_time: DateTime<Utc>, bytes: u32) {
+        let stats = RequestInfo {
+            kind: RequestKind::Put,
+            start_time,
+            end_time,
+            bytes: Some(bytes),
         };
 
         self.bytes_uploaded += u64::from(bytes);
-        self.put_requests.push(stats);
+        self.requests.push(stats);
     }
 
-    pub fn add_delete(&mut self, start_time: Instant, end_time: Instant) {
-        let elapsed_time = end_time - start_time;
-        let stats = DeleteRequestStats { elapsed_time };
-        self.delete_requests.push(stats);
+    pub fn add_delete(&mut self, start_time: DateTime<Utc>, end_time: DateTime<Utc>) {
+        let stats = RequestInfo {
+            kind: RequestKind::Delete,
+            start_time,
+            end_time,
+            bytes: None,
+        };
+        self.requests.push(stats);
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct FinalizedCommandStats {
     command: CommandStats,
     pub storage: StorageStats,
@@ -145,5 +145,37 @@ impl Deref for FinalizedCommandStats {
 
     fn deref(&self) -> &Self::Target {
         &self.command
+    }
+}
+
+impl Serialize for FinalizedCommandStats {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut map = serializer.serialize_map(None)?;
+
+        map.serialize_entry("start_time", &self.start_time)?;
+        map.serialize_entry("end_time", &self.end_time)?;
+        map.serialize_entry("content_bytes_downloaded", &self.content_bytes_downloaded)?;
+        map.serialize_entry("content_bytes_uploaded", &self.content_bytes_uploaded)?;
+        map.serialize_entry(
+            "metadata_bytes_downloaded",
+            &self.metadata_bytes_downloaded(),
+        )?;
+        map.serialize_entry("metadata_bytes_uploaded", &self.metadata_bytes_uploaded())?;
+        map.serialize_entry("bytes_read", &self.bytes_read)?;
+        map.serialize_entry("bytes_written", &self.bytes_written)?;
+        map.serialize_entry("bytes_deleted", &self.bytes_deleted)?;
+        map.serialize_entry("files_read", &self.files_read)?;
+        map.serialize_entry("files_created", &self.files_created)?;
+        map.serialize_entry("archives_deleted", &self.archives_deleted)?;
+        map.serialize_entry("blocks_downloaded", &self.blocks_downloaded)?;
+        map.serialize_entry("blocks_uploaded", &self.blocks_uploaded)?;
+        map.serialize_entry("blocks_deleted", &self.blocks_deleted)?;
+        map.serialize_entry("blocks_referenced", &self.blocks_referenced)?;
+        map.serialize_entry("requests", &self.storage.requests)?;
+
+        map.end()
     }
 }

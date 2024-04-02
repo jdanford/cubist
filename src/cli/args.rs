@@ -1,6 +1,6 @@
-use std::{ops::RangeInclusive, path::PathBuf};
+use std::{fmt, ops::RangeInclusive, path::PathBuf};
 
-use clap::{ArgAction, Args};
+use clap::{ArgAction, Args, ValueEnum};
 use concolor_clap::ColorChoice;
 
 use crate::{file::WalkOrder, hash::ShortHash};
@@ -46,7 +46,7 @@ pub struct BackupArgs {
 
     /// Target size for blocks
     #[arg(
-        short = 'b',
+        short = 's',
         long,
         value_name = "NUM",
         default_value_t = DEFAULT_TARGET_BLOCK_SIZE,
@@ -159,12 +159,12 @@ pub struct CleanupArgs {
 #[derive(Args, Debug)]
 pub struct GlobalArgs {
     /// S3 bucket
-    #[arg(short, long)]
+    #[arg(short = 'b', long)]
     pub bucket: Option<String>,
 
-    /// Print stats after completion
-    #[arg(long, default_value_t = false)]
-    pub stats: bool,
+    /// Format to use for stats
+    #[arg(long)]
+    pub stats: Option<StatsType>,
 
     #[command(flatten)]
     pub logger: LoggerArgs,
@@ -183,4 +183,19 @@ pub struct LoggerArgs {
     /// Print less output
     #[arg(short, long, action = ArgAction::Count, group = "verbosity")]
     pub quiet: u8,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum StatsType {
+    Basic,
+    Json,
+}
+
+impl fmt::Display for StatsType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StatsType::Basic => write!(f, "basic"),
+            StatsType::Json => write!(f, "json"),
+        }
+    }
 }

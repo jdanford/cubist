@@ -43,7 +43,7 @@ pub async fn find_garbage_archives(
             let archive_records = state.archive_records.blocking_read();
 
             for key in keys {
-                let hash = hash_from_key(keys::BLOCK_NAMESPACE, &key)?;
+                let hash = hash_from_key(keys::ARCHIVE_NAMESPACE, &key)?;
                 if !archive_records.contains(&hash) {
                     sender.send_blocking(hash)?;
                 }

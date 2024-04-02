@@ -22,6 +22,12 @@ impl From<bincode::Error> for Error {
     }
 }
 
+impl From<serde_json::Error> for Error {
+    fn from(error: serde_json::Error) -> Self {
+        Error::other(error)
+    }
+}
+
 impl From<JoinError> for Error {
     fn from(error: JoinError) -> Self {
         Error::other(error)

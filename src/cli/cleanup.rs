@@ -14,7 +14,7 @@ use crate::{
     stats::CommandStats,
 };
 
-use super::{print_stat, storage::create_storage};
+use super::{args::StatsType, print_stat, print_stats_json, storage::create_storage};
 
 pub async fn main(cli: super::args::CleanupArgs) -> Result<()> {
     let stats = rwarc(CommandStats::new());
@@ -62,20 +62,27 @@ pub async fn main(cli: super::args::CleanupArgs) -> Result<()> {
         )?;
     }
 
-    if cli.global.stats {
-        let storage = unarc(storage);
-        let full_stats = stats.finalize(storage.stats());
-        print_stat(
-            "metadata downloaded",
-            format_size(full_stats.metadata_bytes_downloaded()),
-        );
-        print_stat(
-            "metadata uploaded",
-            format_size(full_stats.metadata_bytes_uploaded()),
-        );
-        print_stat("archives deleted", full_stats.archives_deleted);
-        print_stat("blocks deleted", full_stats.blocks_deleted);
-        print_stat("elapsed time", format_duration(full_stats.elapsed_time()));
+    let storage = unarc(storage);
+    let full_stats = stats.finalize(storage.stats());
+
+    match cli.global.stats {
+        Some(StatsType::Basic) => {
+            print_stat(
+                "metadata downloaded",
+                format_size(full_stats.metadata_bytes_downloaded()),
+            );
+            print_stat(
+                "metadata uploaded",
+                format_size(full_stats.metadata_bytes_uploaded()),
+            );
+            print_stat("archives deleted", full_stats.archives_deleted);
+            print_stat("blocks deleted", full_stats.blocks_deleted);
+            print_stat("elapsed time", format_duration(full_stats.elapsed_time()));
+        }
+        Some(StatsType::Json) => {
+            print_stats_json(&full_stats)?;
+        }
+        None => {}
     }
 
     Ok(())

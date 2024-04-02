@@ -8,7 +8,11 @@ mod args;
 mod parse;
 mod storage;
 
-use std::{fmt::Display, process::exit};
+use std::{
+    fmt::Display,
+    io::{stdout, Write},
+    process::exit,
+};
 
 use clap::{
     builder::{styling::AnsiColor, Styles},
@@ -18,7 +22,7 @@ use concolor_clap::{color_choice, ColorChoice};
 use env_logger::WriteStyle;
 use log::{error, LevelFilter};
 
-use crate::logger;
+use crate::{error::Result, logger, stats::FinalizedCommandStats};
 
 use self::args::{
     ArchivesArgs, BackupArgs, CleanupArgs, DeleteArgs, GlobalArgs, LoggerArgs, RestoreArgs,
@@ -123,4 +127,10 @@ fn cli_styles() -> Styles {
 fn print_stat<T: Display>(name: &str, value: T) {
     let style = AnsiColor::Cyan.on_default();
     println!("{style}{name}:{style:#} {value}");
+}
+
+fn print_stats_json(stats: &FinalizedCommandStats) -> Result<()> {
+    serde_json::to_writer_pretty(stdout(), stats)?;
+    writeln!(stdout())?;
+    Ok(())
 }

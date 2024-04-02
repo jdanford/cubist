@@ -20,8 +20,9 @@ use crate::{
     stats::CommandStats,
 };
 
-use super::{print_stat, storage::create_storage, BackupArgs};
+use super::{args::StatsType, print_stat, print_stats_json, storage::create_storage, BackupArgs};
 
+#[allow(clippy::too_many_lines)]
 pub async fn main(cli: BackupArgs) -> Result<()> {
     let stats = rwarc(CommandStats::new());
     let storage = Arc::new(create_storage(&cli.global).await?);
@@ -106,26 +107,33 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
         info!("{style}created archive{style:#} {short_hash}");
     }
 
-    if cli.global.stats {
-        let storage = unarc(storage);
-        let full_stats = stats.finalize(storage.stats());
-        print_stat(
-            "metadata downloaded",
-            format_size(full_stats.metadata_bytes_downloaded()),
-        );
-        print_stat(
-            "content uploaded",
-            format_size(full_stats.content_bytes_uploaded),
-        );
-        print_stat(
-            "metadata uploaded",
-            format_size(full_stats.metadata_bytes_uploaded()),
-        );
-        print_stat("bytes read", format_size(full_stats.bytes_read));
-        print_stat("files read", full_stats.files_read);
-        print_stat("blocks uploaded", full_stats.blocks_uploaded);
-        print_stat("blocks referenced", full_stats.blocks_referenced);
-        print_stat("elapsed time", format_duration(full_stats.elapsed_time()));
+    let storage = unarc(storage);
+    let full_stats = stats.finalize(storage.stats());
+
+    match cli.global.stats {
+        Some(StatsType::Basic) => {
+            print_stat(
+                "metadata downloaded",
+                format_size(full_stats.metadata_bytes_downloaded()),
+            );
+            print_stat(
+                "content uploaded",
+                format_size(full_stats.content_bytes_uploaded),
+            );
+            print_stat(
+                "metadata uploaded",
+                format_size(full_stats.metadata_bytes_uploaded()),
+            );
+            print_stat("bytes read", format_size(full_stats.bytes_read));
+            print_stat("files read", full_stats.files_read);
+            print_stat("blocks uploaded", full_stats.blocks_uploaded);
+            print_stat("blocks referenced", full_stats.blocks_referenced);
+            print_stat("elapsed time", format_duration(full_stats.elapsed_time()));
+        }
+        Some(StatsType::Json) => {
+            print_stats_json(&full_stats)?;
+        }
+        None => {}
     }
 
     Ok(())

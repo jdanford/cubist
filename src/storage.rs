@@ -1,7 +1,6 @@
 use std::{
     pin::pin,
     sync::{Arc, Mutex},
-    time::Instant,
 };
 
 use async_stream::try_stream;
@@ -12,6 +11,7 @@ use aws_sdk_s3::{
     Client,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
+use chrono::Utc;
 use itertools::Itertools;
 use tokio::task::spawn_blocking;
 use tokio_stream::{Stream, StreamExt};
@@ -48,7 +48,7 @@ impl Storage {
 impl Storage {
     #[allow(dead_code)]
     pub async fn exists(&self, key: &str) -> Result<bool> {
-        let start_time = Instant::now();
+        let start_time = Utc::now();
         let response_result = self
             .client
             .head_object()
@@ -64,7 +64,7 @@ impl Storage {
             Err(err) => Err(Error::other(err)),
         }?;
 
-        let end_time = Instant::now();
+        let end_time = Utc::now();
         self.stats.lock().unwrap().add_get(start_time, end_time, 0);
         Ok(exists)
     }
@@ -84,9 +84,9 @@ impl Storage {
                 .send();
 
             loop {
-                let start_time = Instant::now();
+                let start_time = Utc::now();
                 let maybe_page = stream.try_next().await?;
-                let end_time = Instant::now();
+                let end_time = Utc::now();
 
                 if let Some(page) = maybe_page {
                     let mut keys = vec![];
@@ -157,7 +157,7 @@ impl Storage {
     }
 
     pub async fn get(&self, key: &str) -> Result<Vec<u8>> {
-        let start_time = Instant::now();
+        let start_time = Utc::now();
         let response = self
             .client
             .get_object()
@@ -172,7 +172,7 @@ impl Storage {
 
         let bytes = response.body.collect().await?.to_vec();
 
-        let end_time = Instant::now();
+        let end_time = Utc::now();
         let size = u32::try_from(bytes.len()).unwrap();
         self.stats
             .lock()
@@ -197,7 +197,7 @@ impl Storage {
         })
         .await?;
 
-        let start_time = Instant::now();
+        let start_time = Utc::now();
         self.client
             .put_object()
             .bucket(&self.bucket)
@@ -207,7 +207,7 @@ impl Storage {
             .send()
             .await?;
 
-        let end_time = Instant::now();
+        let end_time = Utc::now();
         self.stats
             .lock()
             .unwrap()
@@ -215,8 +215,9 @@ impl Storage {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn delete(&self, key: &str) -> Result<()> {
-        let start_time = Instant::now();
+        let start_time = Utc::now();
         self.client
             .delete_object()
             .bucket(&self.bucket)
@@ -224,7 +225,7 @@ impl Storage {
             .send()
             .await?;
 
-        let end_time = Instant::now();
+        let end_time = Utc::now();
         self.stats.lock().unwrap().add_delete(start_time, end_time);
         Ok(())
     }
@@ -239,7 +240,7 @@ impl Storage {
 
             let delete = delete_builder.build()?;
 
-            let start_time = Instant::now();
+            let start_time = Utc::now();
             self.client
                 .delete_objects()
                 .bucket(&self.bucket)
@@ -247,7 +248,7 @@ impl Storage {
                 .send()
                 .await?;
 
-            let end_time = Instant::now();
+            let end_time = Utc::now();
             self.stats.lock().unwrap().add_delete(start_time, end_time);
         }
 
