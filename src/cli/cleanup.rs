@@ -39,10 +39,8 @@ pub async fn main(cli: super::args::CleanupArgs) -> Result<()> {
         block_records,
     });
 
-    try_join!(
-        Box::pin(cleanup_archives(args.clone(), state.clone())),
-        Box::pin(cleanup_blocks(args.clone(), state.clone())),
-    )?;
+    cleanup_archives(args.clone(), state.clone()).await?;
+    cleanup_blocks(args.clone(), state.clone()).await?;
 
     let CleanupState {
         stats,

@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use humantime::format_duration;
-use tokio::spawn;
+use tokio::try_join;
 
 use crate::{
     arc::{rwarc, unarc, unrwarc},
@@ -41,16 +41,14 @@ pub async fn main(cli: RestoreArgs) -> Result<()> {
     });
     let (sender, receiver) = async_channel::bounded(args.tasks);
 
-    let downloader_args = args.clone();
-    let downloader_state = state.clone();
-    let downloader_task = spawn(async move {
-        download_pending_files(downloader_args, downloader_state, receiver).await
-    });
-
-    restore_recursive(args, state.clone(), sender.clone()).await?;
-
-    sender.close();
-    downloader_task.await??;
+    try_join!(
+        async {
+            restore_recursive(args.clone(), state.clone(), sender.clone()).await?;
+            sender.close();
+            Ok(())
+        },
+        download_pending_files(args.clone(), state.clone(), receiver)
+    )?;
 
     let DownloadState { stats, storage, .. } = unarc(state);
     let stats = unrwarc(stats);

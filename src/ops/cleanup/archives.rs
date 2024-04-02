@@ -16,7 +16,7 @@ use crate::{
 use super::{CleanupArgs, CleanupState};
 
 pub async fn cleanup_archives(args: Arc<CleanupArgs>, state: Arc<CleanupState>) -> Result<()> {
-    let (sender, receiver) = async_channel::bounded(args.tasks);
+    let (sender, receiver) = async_channel::bounded(MAX_KEYS_PER_REQUEST);
     try_join!(
         find_garbage_archives(args.clone(), state.clone(), sender),
         delete_garbage_archives(args.clone(), state.clone(), receiver),
@@ -33,7 +33,6 @@ pub async fn find_garbage_archives(
     let mut tasks = JoinSet::new();
 
     let mut archive_key_chunks = pin!(state.storage.keys_paginated(Some(keys::ARCHIVE_NAMESPACE)));
-
     while let Some(keys) = archive_key_chunks.try_next().await? {
         let state = state.clone();
         let sender = sender.clone();

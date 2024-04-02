@@ -3,7 +3,7 @@ use std::{collections::HashSet, sync::Arc};
 use clap::builder::styling::AnsiColor;
 use humantime::format_duration;
 use log::info;
-use tokio::{spawn, try_join};
+use tokio::try_join;
 
 use crate::{
     arc::{rwarc, unarc, unrwarc},
@@ -51,17 +51,17 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
     });
     let (sender, receiver) = async_channel::bounded(args.tasks);
 
-    let uploader_args = args.clone();
-    let uploader_state = state.clone();
-    let uploader_task =
-        spawn(async move { upload_pending_files(uploader_args, uploader_state, receiver).await });
+    try_join!(
+        async {
+            for path in &args.paths {
+                backup_recursive(args.clone(), state.clone(), sender.clone(), path).await?;
+            }
 
-    for path in &args.paths {
-        backup_recursive(args.clone(), state.clone(), sender.clone(), path).await?;
-    }
-
-    sender.close();
-    uploader_task.await??;
+            sender.close();
+            Ok(())
+        },
+        upload_pending_files(args.clone(), state.clone(), receiver),
+    )?;
 
     let UploadState {
         stats,
