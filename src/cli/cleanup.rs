@@ -25,8 +25,8 @@ pub async fn main(cli: super::args::CleanupArgs) -> Result<()> {
     let storage = rwarc(create_storage(&cli.global).await?);
 
     let (mut archive_records, mut block_records) = try_join!(
-        download_archive_records(storage.clone()),
-        download_block_records(storage.clone()),
+        Box::pin(download_archive_records(storage.clone())),
+        Box::pin(download_block_records(storage.clone())),
     )?;
 
     let mut archive_hashes = HashSet::new();
@@ -65,8 +65,8 @@ pub async fn main(cli: super::args::CleanupArgs) -> Result<()> {
 
     if !cli.dry_run {
         try_join!(
-            delete_archives(storage.clone(), &archive_hashes),
-            delete_blocks(storage.clone(), &block_hashes),
+            Box::pin(delete_archives(storage.clone(), &archive_hashes)),
+            Box::pin(delete_blocks(storage.clone(), &block_hashes)),
         )?;
     }
 
@@ -88,8 +88,11 @@ pub async fn main(cli: super::args::CleanupArgs) -> Result<()> {
 
     if !cli.dry_run {
         try_join!(
-            upload_block_records(storage.clone(), rwarc(block_records)),
-            upload_archive_records(storage.clone(), rwarc(archive_records)),
+            Box::pin(upload_block_records(storage.clone(), rwarc(block_records))),
+            Box::pin(upload_archive_records(
+                storage.clone(),
+                rwarc(archive_records)
+            )),
         )?;
     }
 

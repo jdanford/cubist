@@ -1,8 +1,7 @@
-use std::{ops::RangeInclusive, path::PathBuf, time::Duration};
+use std::{ops::RangeInclusive, path::PathBuf};
 
 use clap::{ArgAction, Args};
 use concolor_clap::ColorChoice;
-use humantime::parse_duration;
 
 use crate::{file::WalkOrder, hash::ShortHash};
 
@@ -153,10 +152,6 @@ pub struct GlobalArgs {
     /// S3 bucket
     #[arg(short, long)]
     pub bucket: Option<String>,
-
-    /// Add latency when using local storage
-    #[arg(short = 'L', long, value_parser = parse_duration)]
-    pub latency: Option<Duration>,
 
     /// Print stats after completion
     #[arg(long, default_value_t = false)]

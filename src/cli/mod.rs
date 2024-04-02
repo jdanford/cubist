@@ -78,11 +78,11 @@ pub async fn main() {
     logger::init(level, style);
 
     let result = match cli.command {
-        Command::Backup(args) => Box::pin(backup::main(args)).await,
+        Command::Backup(args) => backup::main(args).await,
         Command::Restore(args) => restore::main(args).await,
-        Command::Delete(args) => Box::pin(delete::main(args)).await,
+        Command::Delete(args) => delete::main(args).await,
         Command::Archives(args) => archives::main(args).await,
-        Command::Cleanup(args) => Box::pin(cleanup::main(args)).await,
+        Command::Cleanup(args) => cleanup::main(args).await,
     };
 
     if let Err(err) = result {

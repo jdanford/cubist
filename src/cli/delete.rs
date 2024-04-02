@@ -25,9 +25,13 @@ pub async fn main(cli: DeleteArgs) -> Result<()> {
     let archive_hashes = find_archive_hashes(storage.clone(), archive_prefixes).await?;
 
     let (archives, mut archive_records, mut block_records) = try_join!(
-        download_archives(storage.clone(), &archive_hashes, cli.tasks),
-        download_archive_records(storage.clone()),
-        download_block_records(storage.clone()),
+        Box::pin(download_archives(
+            storage.clone(),
+            &archive_hashes,
+            cli.tasks
+        )),
+        Box::pin(download_archive_records(storage.clone())),
+        Box::pin(download_block_records(storage.clone())),
     )?;
 
     for (hash, archive) in &archives {
@@ -57,9 +61,12 @@ pub async fn main(cli: DeleteArgs) -> Result<()> {
 
     if !cli.dry_run {
         try_join!(
-            delete_archives(storage.clone(), &archive_hashes),
-            upload_archive_records(storage.clone(), rwarc(archive_records)),
-            upload_block_records(storage.clone(), rwarc(block_records)),
+            Box::pin(delete_archives(storage.clone(), &archive_hashes)),
+            Box::pin(upload_archive_records(
+                storage.clone(),
+                rwarc(archive_records)
+            )),
+            Box::pin(upload_block_records(storage.clone(), rwarc(block_records))),
         )?;
     }
 
