@@ -6,8 +6,7 @@ use std::{path::PathBuf, sync::Arc};
 use tokio::sync::RwLock;
 
 use crate::{
-    archive::Archive, block::BlockRecords, locks::BlockLocks, stats::CommandStats,
-    storage::BoxedStorage,
+    archive::Archive, block::BlockRecords, locks::BlockLocks, stats::CommandStats, storage::Storage,
 };
 
 pub use files::{backup_recursive, upload_pending_files};
@@ -24,7 +23,7 @@ pub struct UploadArgs {
 #[derive(Debug)]
 pub struct UploadState {
     pub stats: Arc<RwLock<CommandStats>>,
-    pub storage: Arc<RwLock<BoxedStorage>>,
+    pub storage: Arc<RwLock<Storage>>,
     pub archive: Arc<RwLock<Archive>>,
     pub block_records: Arc<RwLock<BlockRecords>>,
     pub block_locks: Arc<RwLock<BlockLocks>>,

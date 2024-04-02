@@ -70,7 +70,7 @@ pub async fn main(cli: DeleteArgs) -> Result<()> {
 
     if cli.global.stats {
         let storage = unrwarc(storage);
-        let full_stats = stats.finalize(storage);
+        let full_stats = stats.finalize(storage.stats());
         print_stat(
             "metadata downloaded",
             format_size(full_stats.metadata_bytes_downloaded()),

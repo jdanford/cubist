@@ -8,12 +8,10 @@ use crate::{
     error::Result,
     keys,
     serde::{deserialize, serialize},
-    storage::BoxedStorage,
+    storage::Storage,
 };
 
-pub async fn download_archive_records(
-    storage: Arc<RwLock<BoxedStorage>>,
-) -> Result<ArchiveRecords> {
+pub async fn download_archive_records(storage: Arc<RwLock<Storage>>) -> Result<ArchiveRecords> {
     let maybe_bytes = storage
         .write()
         .await
@@ -30,7 +28,7 @@ pub async fn download_archive_records(
 }
 
 pub async fn upload_archive_records(
-    storage: Arc<RwLock<BoxedStorage>>,
+    storage: Arc<RwLock<Storage>>,
     archive_records: Arc<RwLock<ArchiveRecords>>,
 ) -> Result<()> {
     let bytes = spawn_blocking(move || serialize(&*archive_records.blocking_read())).await??;
@@ -42,7 +40,7 @@ pub async fn upload_archive_records(
     Ok(())
 }
 
-pub async fn download_block_records(storage: Arc<RwLock<BoxedStorage>>) -> Result<BlockRecords> {
+pub async fn download_block_records(storage: Arc<RwLock<Storage>>) -> Result<BlockRecords> {
     let maybe_bytes = storage
         .write()
         .await
@@ -59,7 +57,7 @@ pub async fn download_block_records(storage: Arc<RwLock<BoxedStorage>>) -> Resul
 }
 
 pub async fn upload_block_records(
-    storage: Arc<RwLock<BoxedStorage>>,
+    storage: Arc<RwLock<Storage>>,
     block_records: Arc<RwLock<BlockRecords>>,
 ) -> Result<()> {
     let bytes = spawn_blocking(move || serialize(&*block_records.blocking_read())).await??;

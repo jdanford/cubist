@@ -7,8 +7,7 @@ use blake3::Hash;
 use tokio::sync::RwLock;
 
 use crate::{
-    archive::Archive, file::WalkOrder, locks::BlockLocks, stats::CommandStats,
-    storage::BoxedStorage,
+    archive::Archive, file::WalkOrder, locks::BlockLocks, stats::CommandStats, storage::Storage,
 };
 
 use self::blocks::LocalBlock;
@@ -27,7 +26,7 @@ pub struct DownloadArgs {
 #[derive(Debug)]
 pub struct DownloadState {
     pub stats: Arc<RwLock<CommandStats>>,
-    pub storage: Arc<RwLock<BoxedStorage>>,
+    pub storage: Arc<RwLock<Storage>>,
     pub local_blocks: Arc<RwLock<HashMap<Hash, LocalBlock>>>,
     pub block_locks: Arc<RwLock<BlockLocks>>,
 }

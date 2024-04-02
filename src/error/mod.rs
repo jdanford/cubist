@@ -16,9 +16,6 @@ pub enum Error {
     #[error("no item found for key `{0}`")]
     ItemNotFound(String),
 
-    #[error("storage URL `{0}` is invalid")]
-    InvalidStorageUrl(String),
-
     #[error("key `{0}` is invalid")]
     InvalidKey(String),
 
@@ -120,7 +117,6 @@ impl PartialEq for Error {
 
         match (self, other) {
             (ItemNotFound(key_l), ItemNotFound(key_r)) => key_l == key_r,
-            (InvalidStorageUrl(url_l), InvalidStorageUrl(url_r)) => url_l == url_r,
             (InvalidKey(key_l), InvalidKey(key_r)) => key_l == key_r,
             (InvalidHash(hash_l), InvalidHash(hash_r)) => hash_l == hash_r,
             (NoItemForPrefix(prefix_l), NoItemForPrefix(prefix_r)) => prefix_l == prefix_r,

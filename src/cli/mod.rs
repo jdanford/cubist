@@ -78,11 +78,11 @@ pub async fn main() {
     logger::init(level, style);
 
     let result = match cli.command {
-        Command::Backup(args) => backup::main(args).await,
+        Command::Backup(args) => Box::pin(backup::main(args)).await,
         Command::Restore(args) => restore::main(args).await,
-        Command::Delete(args) => delete::main(args).await,
+        Command::Delete(args) => Box::pin(delete::main(args)).await,
         Command::Archives(args) => archives::main(args).await,
-        Command::Cleanup(args) => cleanup::main(args).await,
+        Command::Cleanup(args) => Box::pin(cleanup::main(args)).await,
     };
 
     if let Err(err) = result {
@@ -129,11 +129,11 @@ fn print_stat<T: Display>(name: &str, value: T) {
 fn print_requests(stats: &FinalizedCommandStats) {
     println!("bytes,time,type");
 
-    for request in &stats.storage.stats().get_requests {
+    for request in &stats.storage.get_requests {
         println!("{},{},get", request.bytes, request.elapsed_time.as_millis());
     }
 
-    for request in &stats.storage.stats().put_requests {
+    for request in &stats.storage.put_requests {
         println!("{},{},put", request.bytes, request.elapsed_time.as_millis());
     }
 }

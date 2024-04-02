@@ -21,20 +21,20 @@ use crate::{
     error::Result,
     hash::{Hash, ShortHash},
     keys::{self, hash_from_key},
-    storage::BoxedStorage,
+    storage::Storage,
 };
 
 pub async fn delete_blocks<'a, I: IntoIterator<Item = &'a Hash>>(
-    storage: Arc<RwLock<BoxedStorage>>,
+    storage: Arc<RwLock<Storage>>,
     hashes: I,
 ) -> Result<()> {
-    let keys = hashes.into_iter().map(keys::block).collect();
+    let keys = hashes.into_iter().map(keys::block);
     storage.read().await.delete_many(keys).await?;
     Ok(())
 }
 
 pub async fn find_archive_hash(
-    storage: Arc<RwLock<BoxedStorage>>,
+    storage: Arc<RwLock<Storage>>,
     short_hash: &ShortHash,
 ) -> Result<Hash> {
     let partial_key = keys::archive(short_hash);
@@ -43,15 +43,20 @@ pub async fn find_archive_hash(
 }
 
 pub async fn find_archive_hashes(
-    storage: Arc<RwLock<BoxedStorage>>,
+    storage: Arc<RwLock<Storage>>,
     short_hashes: &[&ShortHash],
 ) -> Result<Vec<Hash>> {
-    let partial_keys_owned = short_hashes.iter().map(keys::archive).collect::<Vec<_>>();
-    let partial_keys = partial_keys_owned
-        .iter()
-        .map(String::as_str)
-        .collect::<Vec<_>>();
-    let full_keys = storage.read().await.expand_keys(&partial_keys).await?;
+    match short_hashes {
+        [short_hash] => {
+            let hash = find_archive_hash(storage, short_hash).await?;
+            return Ok(vec![hash]);
+        }
+        [] => return Ok(vec![]),
+        _ => {}
+    };
+
+    let partial_keys = short_hashes.iter().map(keys::archive);
+    let full_keys = storage.read().await.expand_keys(partial_keys).await?;
     full_keys
         .into_iter()
         .map(|key| hash_from_key(keys::ARCHIVE_NAMESPACE, key.as_str()))

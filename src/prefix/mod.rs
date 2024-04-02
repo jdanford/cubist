@@ -4,8 +4,6 @@ mod tests;
 
 use std::cmp::Ordering;
 
-use rand_distr::num_traits::Zero;
-
 use crate::error::{Error, Result};
 
 use self::range::find_prefix_range;
@@ -27,7 +25,7 @@ pub fn longest_common_prefix<S: AsRef<str>>(strings: &[S]) -> Option<&str> {
         min_len = min_len.min(len);
     }
 
-    if min_len.is_zero() {
+    if min_len == 0 {
         None
     } else {
         Some(&first[..min_len])

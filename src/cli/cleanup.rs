@@ -1,9 +1,10 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, pin::pin};
 
 use clap::builder::styling::AnsiColor;
 use humantime::format_duration;
 use log::debug;
 use tokio::try_join;
+use tokio_stream::StreamExt;
 
 use crate::{
     arc::{rwarc, unrwarc},
@@ -28,27 +29,24 @@ pub async fn main(cli: super::args::CleanupArgs) -> Result<()> {
         download_block_records(storage.clone()),
     )?;
 
-    let archive_keys = storage
-        .read()
-        .await
-        .keys(Some(keys::ARCHIVE_NAMESPACE))
-        .await?;
+    let mut archive_hashes = HashSet::new();
+    let mut block_hashes = HashSet::new();
 
-    let block_keys = storage
-        .read()
-        .await
-        .keys(Some(keys::BLOCK_NAMESPACE))
-        .await?;
+    {
+        let storage_lock = storage.read().await;
+        let mut archive_keys = pin!(storage_lock.keys(Some(keys::ARCHIVE_NAMESPACE)));
+        let mut block_keys = pin!(storage_lock.keys(Some(keys::BLOCK_NAMESPACE)));
 
-    let archive_hashes = archive_keys
-        .iter()
-        .map(|key| hash_from_key(keys::ARCHIVE_NAMESPACE, key).unwrap())
-        .collect::<HashSet<_>>();
+        while let Some(key) = archive_keys.try_next().await? {
+            let hash = hash_from_key(keys::ARCHIVE_NAMESPACE, &key)?;
+            archive_hashes.insert(hash);
+        }
 
-    let block_hashes = block_keys
-        .iter()
-        .map(|key| hash_from_key(keys::BLOCK_NAMESPACE, key).unwrap())
-        .collect::<HashSet<_>>();
+        while let Some(key) = block_keys.try_next().await? {
+            let hash = hash_from_key(keys::BLOCK_NAMESPACE, &key)?;
+            block_hashes.insert(hash);
+        }
+    }
 
     let mut removed_archives = vec![];
     let mut removed_blocks = vec![];
@@ -97,7 +95,7 @@ pub async fn main(cli: super::args::CleanupArgs) -> Result<()> {
 
     if cli.global.stats {
         let storage = unrwarc(storage);
-        let full_stats = stats.finalize(storage);
+        let full_stats = stats.finalize(storage.stats());
         print_stat(
             "metadata downloaded",
             format_size(full_stats.metadata_bytes_downloaded()),

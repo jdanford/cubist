@@ -4,7 +4,7 @@ use clap::{ArgAction, Args};
 use concolor_clap::ColorChoice;
 use humantime::parse_duration;
 
-use crate::{file::WalkOrder, hash::ShortHash, storage::StorageUrl};
+use crate::{file::WalkOrder, hash::ShortHash};
 
 use super::parse::{parse_range_inclusive, parse_short_hash};
 
@@ -150,9 +150,9 @@ pub struct CleanupArgs {
 
 #[derive(Args, Debug)]
 pub struct GlobalArgs {
-    /// Storage backend (e.g. 's3://<bucket>' or 'file://<path>')
-    #[arg(short, long, value_name = "URL")]
-    pub storage: Option<StorageUrl>,
+    /// S3 bucket
+    #[arg(short, long)]
+    pub bucket: Option<String>,
 
     /// Add latency when using local storage
     #[arg(short = 'L', long, value_parser = parse_duration)]
