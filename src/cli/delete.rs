@@ -1,10 +1,12 @@
+use std::sync::Arc;
+
 use clap::builder::styling::AnsiColor;
 use humantime::format_duration;
 use log::debug;
 use tokio::try_join;
 
 use crate::{
-    arc::{rwarc, unrwarc},
+    arc::{rwarc, unarc},
     error::Result,
     format::format_size,
     ops::{
@@ -18,7 +20,7 @@ use super::{print_stat, storage::create_storage, DeleteArgs};
 
 pub async fn main(cli: DeleteArgs) -> Result<()> {
     let mut stats = CommandStats::new();
-    let storage = rwarc(create_storage(&cli.global).await?);
+    let storage = Arc::new(create_storage(&cli.global).await?);
     let mut removed_blocks = vec![];
 
     let archive_prefixes = &cli.archives.iter().collect::<Vec<_>>();
@@ -76,7 +78,7 @@ pub async fn main(cli: DeleteArgs) -> Result<()> {
     }
 
     if cli.global.stats {
-        let storage = unrwarc(storage);
+        let storage = unarc(storage);
         let full_stats = stats.finalize(storage.stats());
         print_stat(
             "metadata downloaded",

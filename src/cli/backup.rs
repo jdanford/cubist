@@ -24,7 +24,7 @@ use super::{print_stat, storage::create_storage, BackupArgs};
 
 pub async fn main(cli: BackupArgs) -> Result<()> {
     let stats = rwarc(CommandStats::new());
-    let storage = rwarc(create_storage(&cli.global).await?);
+    let storage = Arc::new(create_storage(&cli.global).await?);
     let archive = rwarc(Archive::new());
     let block_locks = rwarc(BlockLocks::new());
 
@@ -107,7 +107,7 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
     }
 
     if cli.global.stats {
-        let storage = unrwarc(storage);
+        let storage = unarc(storage);
         let full_stats = stats.finalize(storage.stats());
         print_stat(
             "metadata downloaded",

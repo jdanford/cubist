@@ -26,7 +26,7 @@ pub struct DownloadArgs {
 #[derive(Debug)]
 pub struct DownloadState {
     pub stats: Arc<RwLock<CommandStats>>,
-    pub storage: Arc<RwLock<Storage>>,
+    pub storage: Arc<Storage>,
     pub local_blocks: Arc<RwLock<HashMap<Hash, LocalBlock>>>,
     pub block_locks: Arc<RwLock<BlockLocks>>,
 }

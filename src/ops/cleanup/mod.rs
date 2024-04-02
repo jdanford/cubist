@@ -18,7 +18,7 @@ pub struct CleanupArgs {
 #[derive(Debug)]
 pub struct CleanupState {
     pub stats: Arc<RwLock<CommandStats>>,
-    pub storage: Arc<RwLock<Storage>>,
+    pub storage: Arc<Storage>,
     pub archive_records: Arc<RwLock<ArchiveRecords>>,
     pub block_records: Arc<RwLock<BlockRecords>>,
 }

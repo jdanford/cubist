@@ -32,9 +32,7 @@ pub async fn find_garbage_blocks(
     let semaphore = Arc::new(Semaphore::new(args.tasks));
     let mut tasks = JoinSet::new();
 
-    let storage = state.storage.read().await;
-    let mut block_key_chunks = pin!(storage.keys_paginated(Some(keys::BLOCK_NAMESPACE)));
-
+    let mut block_key_chunks = pin!(state.storage.keys_paginated(Some(keys::BLOCK_NAMESPACE)));
     while let Some(keys) = block_key_chunks.try_next().await? {
         let state = state.clone();
         let sender = sender.clone();
@@ -79,12 +77,7 @@ pub async fn delete_garbage_blocks(
             let deleted_keys = keys.drain(..chunk_size).collect::<Vec<_>>();
 
             if !args.dry_run {
-                state
-                    .storage
-                    .read()
-                    .await
-                    .delete_many(&deleted_keys)
-                    .await?;
+                state.storage.delete_many(&deleted_keys).await?;
             }
 
             state.stats.write().await.blocks_deleted += count as u64;
@@ -99,7 +92,7 @@ pub async fn delete_garbage_blocks(
     let count = keys.len();
     if count > 0 {
         if !args.dry_run {
-            state.storage.read().await.delete_many(&keys).await?;
+            state.storage.delete_many(&keys).await?;
         }
 
         state.stats.write().await.blocks_deleted += count as u64;

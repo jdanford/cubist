@@ -18,7 +18,7 @@ use super::{print_stat, storage::create_storage};
 
 pub async fn main(cli: super::args::CleanupArgs) -> Result<()> {
     let stats = rwarc(CommandStats::new());
-    let storage = rwarc(create_storage(&cli.global).await?);
+    let storage = Arc::new(create_storage(&cli.global).await?);
 
     let (archive_records, block_records) = try_join!(
         Box::pin(download_archive_records(storage.clone())),
@@ -63,7 +63,7 @@ pub async fn main(cli: super::args::CleanupArgs) -> Result<()> {
     }
 
     if cli.global.stats {
-        let storage = unrwarc(storage);
+        let storage = unarc(storage);
         let full_stats = stats.finalize(storage.stats());
         print_stat(
             "metadata downloaded",

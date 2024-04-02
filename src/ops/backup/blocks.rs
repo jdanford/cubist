@@ -89,7 +89,7 @@ impl UploadTree {
             let size = bytes.len() as u64;
 
             if !self.args.dry_run {
-                self.state.storage.read().await.put(&key, bytes).await?;
+                self.state.storage.put(&key, bytes).await?;
                 self.state.stats.write().await.blocks_uploaded += 1;
                 self.state.stats.write().await.content_bytes_uploaded += size;
             }

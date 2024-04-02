@@ -19,7 +19,7 @@ use super::{print_stat, storage::create_storage, RestoreArgs};
 
 pub async fn main(cli: RestoreArgs) -> Result<()> {
     let stats = rwarc(CommandStats::new());
-    let storage = rwarc(create_storage(&cli.global).await?);
+    let storage = Arc::new(create_storage(&cli.global).await?);
     let local_blocks = rwarc(HashMap::new());
     let block_locks = rwarc(BlockLocks::new());
 
@@ -56,7 +56,7 @@ pub async fn main(cli: RestoreArgs) -> Result<()> {
     let stats = unrwarc(stats);
 
     if cli.global.stats {
-        let storage = unrwarc(storage);
+        let storage = unarc(storage);
         let full_stats = stats.finalize(storage.stats());
         print_stat(
             "content downloaded",

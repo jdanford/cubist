@@ -18,9 +18,9 @@ use crate::{
 
 const COMPRESSION_LEVEL: u8 = 3;
 
-pub async fn download_archive(storage: Arc<RwLock<Storage>>, hash: &Hash) -> Result<Archive> {
+pub async fn download_archive(storage: Arc<Storage>, hash: &Hash) -> Result<Archive> {
     let key = keys::archive(hash);
-    let compressed_bytes = storage.read().await.get(&key).await?;
+    let compressed_bytes = storage.get(&key).await?;
     let archive = spawn_blocking(move || {
         let bytes = decompress(&compressed_bytes)?;
         deserialize(&bytes)
@@ -30,7 +30,7 @@ pub async fn download_archive(storage: Arc<RwLock<Storage>>, hash: &Hash) -> Res
 }
 
 pub async fn download_archives<'a, I: IntoIterator<Item = &'a Hash>>(
-    storage: Arc<RwLock<Storage>>,
+    storage: Arc<Storage>,
     hashes: I,
     tasks: usize,
 ) -> Result<Vec<(Hash, Archive)>> {
@@ -60,7 +60,7 @@ pub async fn download_archives<'a, I: IntoIterator<Item = &'a Hash>>(
 }
 
 pub async fn upload_archive(
-    storage: Arc<RwLock<Storage>>,
+    storage: Arc<Storage>,
     hash: &Hash,
     archive: Arc<RwLock<Archive>>,
 ) -> Result<()> {
@@ -71,22 +71,22 @@ pub async fn upload_archive(
         Result::Ok(compressed_bytes)
     })
     .await??;
-    storage.read().await.put(&key, archive_bytes).await?;
+    storage.put(&key, archive_bytes).await?;
     Ok(())
 }
 
 #[allow(dead_code)]
-pub async fn delete_archive(storage: Arc<RwLock<Storage>>, hash: &Hash) -> Result<()> {
+pub async fn delete_archive(storage: Arc<Storage>, hash: &Hash) -> Result<()> {
     let key = keys::archive(hash);
-    storage.read().await.delete(&key).await?;
+    storage.delete(&key).await?;
     Ok(())
 }
 
 pub async fn delete_archives<'a, I: IntoIterator<Item = &'a Hash>>(
-    storage: Arc<RwLock<Storage>>,
+    storage: Arc<Storage>,
     hashes: I,
 ) -> Result<()> {
     let keys = hashes.into_iter().map(keys::archive);
-    storage.read().await.delete_many(keys).await?;
+    storage.delete_many(keys).await?;
     Ok(())
 }

@@ -32,8 +32,7 @@ pub async fn find_garbage_archives(
     let semaphore = Arc::new(Semaphore::new(args.tasks));
     let mut tasks = JoinSet::new();
 
-    let storage = state.storage.read().await;
-    let mut archive_key_chunks = pin!(storage.keys_paginated(Some(keys::ARCHIVE_NAMESPACE)));
+    let mut archive_key_chunks = pin!(state.storage.keys_paginated(Some(keys::ARCHIVE_NAMESPACE)));
 
     while let Some(keys) = archive_key_chunks.try_next().await? {
         let state = state.clone();
@@ -77,12 +76,7 @@ pub async fn delete_garbage_archives(
         let count = keys.len();
         if count >= chunk_size {
             let deleted_keys = keys.drain(..chunk_size).collect::<Vec<_>>();
-            state
-                .storage
-                .read()
-                .await
-                .delete_many(&deleted_keys)
-                .await?;
+            state.storage.delete_many(&deleted_keys).await?;
             state.stats.write().await.archives_deleted += count as u64;
 
             for key in deleted_keys {
@@ -94,7 +88,7 @@ pub async fn delete_garbage_archives(
 
     let count = keys.len();
     if count > 0 {
-        state.storage.read().await.delete_many(&keys).await?;
+        state.storage.delete_many(&keys).await?;
         state.stats.write().await.archives_deleted += count as u64;
 
         for key in keys {

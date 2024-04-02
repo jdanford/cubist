@@ -1,9 +1,11 @@
+use std::sync::Arc;
+
 use clap::builder::styling::AnsiColor;
 use humantime::format_duration;
 use log::info;
 
 use crate::{
-    arc::{rwarc, unrwarc},
+    arc::unarc,
     error::Result,
     format::{format_size, format_time},
     ops::download_archive_records,
@@ -14,7 +16,7 @@ use super::{print_stat, storage::create_storage, ArchivesArgs};
 
 pub async fn main(cli: ArchivesArgs) -> Result<()> {
     let stats = CommandStats::new();
-    let storage = rwarc(create_storage(&cli.global).await?);
+    let storage = Arc::new(create_storage(&cli.global).await?);
     let archive_records = download_archive_records(storage.clone()).await?;
 
     for (hash, archive_record) in archive_records.iter_by_created() {
@@ -24,7 +26,7 @@ pub async fn main(cli: ArchivesArgs) -> Result<()> {
     }
 
     if cli.global.stats {
-        let storage = unrwarc(storage);
+        let storage = unarc(storage);
         let full_stats = stats.finalize(storage.stats());
         print_stat(
             "metadata downloaded",
