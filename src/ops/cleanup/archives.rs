@@ -13,27 +13,23 @@ use crate::{
     storage::MAX_KEYS_PER_REQUEST,
 };
 
-use super::{CleanupArgs, CleanupState};
+use super::CleanupState;
 
-pub async fn cleanup_archives(args: Arc<CleanupArgs>, state: Arc<CleanupState>) -> Result<()> {
+pub async fn cleanup_archives(state: Arc<CleanupState>) -> Result<()> {
     let (sender, receiver) = async_channel::bounded(MAX_KEYS_PER_REQUEST);
     try_join!(
-        find_garbage_archives(args.clone(), state.clone(), sender),
-        delete_garbage_archives(args.clone(), state.clone(), receiver),
+        find_garbage_archives(state.clone(), sender),
+        delete_garbage_archives(state.clone(), receiver),
     )?;
     Ok(())
 }
 
-pub async fn find_garbage_archives(
-    args: Arc<CleanupArgs>,
-    state: Arc<CleanupState>,
-    sender: Sender<Hash>,
-) -> Result<()> {
-    let semaphore = Arc::new(Semaphore::new(args.tasks));
+async fn find_garbage_archives(state: Arc<CleanupState>, sender: Sender<Hash>) -> Result<()> {
+    let semaphore = Arc::new(Semaphore::new(state.task_count));
     let mut tasks = JoinSet::new();
 
-    let mut archive_key_chunks = pin!(state.storage.keys_paginated(Some(keys::ARCHIVE_NAMESPACE)));
-    while let Some(keys) = archive_key_chunks.try_next().await? {
+    let mut key_chunks = pin!(state.storage.keys_paginated(Some(keys::ARCHIVE_NAMESPACE)));
+    while let Some(keys) = key_chunks.try_next().await? {
         let state = state.clone();
         let sender = sender.clone();
         let permit = semaphore.clone().acquire_owned().await?;
@@ -60,11 +56,7 @@ pub async fn find_garbage_archives(
     Ok(())
 }
 
-pub async fn delete_garbage_archives(
-    _args: Arc<CleanupArgs>,
-    state: Arc<CleanupState>,
-    receiver: Receiver<Hash>,
-) -> Result<()> {
+async fn delete_garbage_archives(state: Arc<CleanupState>, receiver: Receiver<Hash>) -> Result<()> {
     let chunk_size = MAX_KEYS_PER_REQUEST;
     let mut keys = vec![];
 
@@ -75,7 +67,11 @@ pub async fn delete_garbage_archives(
         let count = keys.len();
         if count >= chunk_size {
             let deleted_keys = keys.drain(..chunk_size).collect::<Vec<_>>();
-            state.storage.delete_many(&deleted_keys).await?;
+
+            if !state.dry_run {
+                state.storage.delete_many(&deleted_keys).await?;
+            }
+
             state.stats.write().await.archives_deleted += count as u64;
 
             for key in deleted_keys {
@@ -87,7 +83,10 @@ pub async fn delete_garbage_archives(
 
     let count = keys.len();
     if count > 0 {
-        state.storage.delete_many(&keys).await?;
+        if !state.dry_run {
+            state.storage.delete_many(&keys).await?;
+        }
+
         state.stats.write().await.archives_deleted += count as u64;
 
         for key in keys {

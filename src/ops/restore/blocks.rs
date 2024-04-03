@@ -17,7 +17,7 @@ use crate::{
     keys,
 };
 
-use super::{files::PendingDownload, DownloadArgs, DownloadState};
+use super::{files::PendingDownload, RestoreState};
 
 #[derive(Debug, Clone, Copy)]
 pub struct LocalBlock {
@@ -72,8 +72,7 @@ impl DerefMut for ActiveDownload {
 
 #[async_recursion]
 pub async fn download_block_recursive(
-    args: Arc<DownloadArgs>,
-    state: Arc<DownloadState>,
+    state: Arc<RestoreState>,
     file: &mut ActiveDownload,
     hash: Hash,
     level: Option<u8>,
@@ -87,7 +86,7 @@ pub async fn download_block_recursive(
     let maybe_block = state.local_blocks.read().await.get(&hash).copied();
     if let Some(local_block) = maybe_block {
         assert_block_level_eq(hash, 0, level)?;
-        let data = read_local_block(args, local_block).await?;
+        let data = read_local_block(state.clone(), local_block).await?;
         write_local_block(state.clone(), file, &data).await?;
         let size = file.offset;
         return Ok(size);
@@ -108,8 +107,7 @@ pub async fn download_block_recursive(
             level, children, ..
         } => {
             for hash in children {
-                download_block_recursive(args.clone(), state.clone(), file, hash, Some(level - 1))
-                    .await?;
+                download_block_recursive(state.clone(), file, hash, Some(level - 1)).await?;
             }
         }
     }
@@ -120,7 +118,7 @@ pub async fn download_block_recursive(
 }
 
 async fn write_local_block(
-    state: Arc<DownloadState>,
+    state: Arc<RestoreState>,
     file: &mut ActiveDownload,
     data: &[u8],
 ) -> Result<LocalBlock> {
@@ -135,8 +133,8 @@ async fn write_local_block(
     Ok(local_block)
 }
 
-async fn read_local_block(args: Arc<DownloadArgs>, local_block: LocalBlock) -> Result<Vec<u8>> {
-    let path = args
+async fn read_local_block(state: Arc<RestoreState>, local_block: LocalBlock) -> Result<Vec<u8>> {
+    let path = state
         .archive
         .path(local_block.inode)
         .ok_or_else(|| Error::InodeDoesNotExist(local_block.inode))?;

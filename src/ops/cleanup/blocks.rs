@@ -13,27 +13,23 @@ use crate::{
     storage::MAX_KEYS_PER_REQUEST,
 };
 
-use super::{CleanupArgs, CleanupState};
+use super::CleanupState;
 
-pub async fn cleanup_blocks(args: Arc<CleanupArgs>, state: Arc<CleanupState>) -> Result<()> {
-    let (sender, receiver) = async_channel::bounded(args.tasks);
+pub async fn cleanup_blocks(state: Arc<CleanupState>) -> Result<()> {
+    let (sender, receiver) = async_channel::bounded(MAX_KEYS_PER_REQUEST);
     try_join!(
-        find_garbage_blocks(args.clone(), state.clone(), sender),
-        delete_garbage_blocks(args.clone(), state.clone(), receiver),
+        find_garbage_blocks(state.clone(), sender),
+        delete_garbage_blocks(state.clone(), receiver),
     )?;
     Ok(())
 }
 
-pub async fn find_garbage_blocks(
-    args: Arc<CleanupArgs>,
-    state: Arc<CleanupState>,
-    sender: Sender<Hash>,
-) -> Result<()> {
-    let semaphore = Arc::new(Semaphore::new(args.tasks));
+async fn find_garbage_blocks(state: Arc<CleanupState>, sender: Sender<Hash>) -> Result<()> {
+    let semaphore = Arc::new(Semaphore::new(state.task_count));
     let mut tasks = JoinSet::new();
 
-    let mut block_key_chunks = pin!(state.storage.keys_paginated(Some(keys::BLOCK_NAMESPACE)));
-    while let Some(keys) = block_key_chunks.try_next().await? {
+    let mut key_chunks = pin!(state.storage.keys_paginated(Some(keys::BLOCK_NAMESPACE)));
+    while let Some(keys) = key_chunks.try_next().await? {
         let state = state.clone();
         let sender = sender.clone();
         let permit = semaphore.clone().acquire_owned().await?;
@@ -60,11 +56,7 @@ pub async fn find_garbage_blocks(
     Ok(())
 }
 
-pub async fn delete_garbage_blocks(
-    args: Arc<CleanupArgs>,
-    state: Arc<CleanupState>,
-    receiver: Receiver<Hash>,
-) -> Result<()> {
+async fn delete_garbage_blocks(state: Arc<CleanupState>, receiver: Receiver<Hash>) -> Result<()> {
     let chunk_size = MAX_KEYS_PER_REQUEST;
     let mut keys = vec![];
 
@@ -76,7 +68,7 @@ pub async fn delete_garbage_blocks(
         if count >= chunk_size {
             let deleted_keys = keys.drain(..chunk_size).collect::<Vec<_>>();
 
-            if !args.dry_run {
+            if !state.dry_run {
                 state.storage.delete_many(&deleted_keys).await?;
             }
 
@@ -91,7 +83,7 @@ pub async fn delete_garbage_blocks(
 
     let count = keys.len();
     if count > 0 {
-        if !args.dry_run {
+        if !state.dry_run {
             state.storage.delete_many(&keys).await?;
         }
 

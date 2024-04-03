@@ -7,15 +7,17 @@ use crate::{
     arc::{rwarc, unarc, unrwarc},
     error::Result,
     format::format_size,
+    keys,
     locks::BlockLocks,
-    ops::{
-        download_archive, download_pending_files, find_archive_hash, restore_recursive,
-        DownloadArgs, DownloadState,
-    },
+    ops::{download_archive, download_pending_files, expand_hash, restore_recursive, RestoreState},
     stats::CommandStats,
 };
 
-use super::{args::StatsType, print_stat, print_stats_json, storage::create_storage, RestoreArgs};
+use super::{
+    args::{RestoreArgs, StatsType},
+    print_stat, print_stats_json,
+    storage::create_storage,
+};
 
 pub async fn main(cli: RestoreArgs) -> Result<()> {
     let stats = rwarc(CommandStats::new());
@@ -23,34 +25,28 @@ pub async fn main(cli: RestoreArgs) -> Result<()> {
     let local_blocks = rwarc(HashMap::new());
     let block_locks = rwarc(BlockLocks::new());
 
-    let archive_hash = find_archive_hash(storage.clone(), &cli.archive).await?;
+    let archive_hash = expand_hash(storage.clone(), keys::ARCHIVE_NAMESPACE, &cli.archive).await?;
     let archive = download_archive(storage.clone(), &archive_hash).await?;
 
-    let args = Arc::new(DownloadArgs {
+    let state = Arc::new(RestoreState {
         archive,
         paths: cli.paths,
         order: cli.order,
-        tasks: cli.tasks,
+        task_count: cli.tasks,
         dry_run: cli.dry_run,
-    });
-    let state = Arc::new(DownloadState {
         stats,
         storage,
         local_blocks,
         block_locks,
     });
-    let (sender, receiver) = async_channel::bounded(args.tasks);
+    let (sender, receiver) = async_channel::bounded(state.task_count);
 
     try_join!(
-        async {
-            restore_recursive(args.clone(), state.clone(), sender.clone()).await?;
-            sender.close();
-            Ok(())
-        },
-        download_pending_files(args.clone(), state.clone(), receiver)
+        restore_recursive(state.clone(), sender),
+        download_pending_files(state.clone(), receiver)
     )?;
 
-    let DownloadState { stats, storage, .. } = unarc(state);
+    let RestoreState { stats, storage, .. } = unarc(state);
     let stats = unrwarc(stats);
     let storage = unarc(storage);
     let full_stats = stats.finalize(storage.stats());

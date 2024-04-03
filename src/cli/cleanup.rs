@@ -9,44 +9,47 @@ use crate::{
     format::format_size,
     ops::{
         cleanup_archives, cleanup_blocks, download_archive_records, download_block_records,
-        upload_archive_records, upload_block_records, CleanupArgs, CleanupState,
+        upload_archive_records, upload_block_records, CleanupState,
     },
     stats::CommandStats,
 };
 
-use super::{args::StatsType, print_stat, print_stats_json, storage::create_storage};
+use super::{
+    args::{CleanupArgs, StatsType},
+    print_stat, print_stats_json,
+    storage::create_storage,
+};
 
-pub async fn main(cli: super::args::CleanupArgs) -> Result<()> {
+pub async fn main(cli: CleanupArgs) -> Result<()> {
     let stats = rwarc(CommandStats::new());
     let storage = Arc::new(create_storage(&cli.global).await?);
 
     let (archive_records, block_records) = try_join!(
-        Box::pin(download_archive_records(storage.clone())),
-        Box::pin(download_block_records(storage.clone())),
+        download_archive_records(storage.clone()),
+        download_block_records(storage.clone()),
     )?;
 
     let archive_records = rwarc(archive_records);
     let block_records = rwarc(block_records);
 
-    let args = Arc::new(CleanupArgs {
-        tasks: cli.tasks,
-        dry_run: cli.dry_run,
-    });
     let state = Arc::new(CleanupState {
+        task_count: cli.tasks,
+        dry_run: cli.dry_run,
         stats,
         storage,
         archive_records,
         block_records,
     });
 
-    cleanup_archives(args.clone(), state.clone()).await?;
-    cleanup_blocks(args.clone(), state.clone()).await?;
+    cleanup_archives(state.clone()).await?;
+    cleanup_blocks(state.clone()).await?;
 
     let CleanupState {
         stats,
         storage,
         archive_records,
         block_records,
+        ..
     } = unarc(state);
     let stats = unrwarc(stats);
 

@@ -7,18 +7,16 @@ use crate::{
     keys,
 };
 
-use super::{UploadArgs, UploadState};
+use super::BackupState;
 
 pub struct UploadTree {
-    args: Arc<UploadArgs>,
-    state: Arc<UploadState>,
+    state: Arc<BackupState>,
     layers: Vec<Vec<Hash>>,
 }
 
 impl UploadTree {
-    pub fn new(args: Arc<UploadArgs>, state: Arc<UploadState>) -> Self {
+    pub fn new(state: Arc<BackupState>) -> Self {
         UploadTree {
-            args,
             state,
             layers: vec![],
         }
@@ -46,7 +44,7 @@ impl UploadTree {
     }
 
     async fn add_inner(&mut self, mut hash: Hash, finalize: bool) -> Result<()> {
-        let max_layer_size = self.args.target_block_size as usize / hash::SIZE;
+        let max_layer_size = self.state.target_block_size as usize / hash::SIZE;
 
         for i in 0.. {
             if i >= self.layers.len() {
@@ -85,10 +83,10 @@ impl UploadTree {
             record.ref_count += 1;
         } else {
             let key = keys::block(&hash);
-            let bytes = block.encode(self.args.compression_level).await?;
+            let bytes = block.encode(self.state.compression_level).await?;
             let size = bytes.len() as u64;
 
-            if !self.args.dry_run {
+            if !self.state.dry_run {
                 self.state.storage.put(&key, bytes).await?;
                 self.state.stats.write().await.blocks_uploaded += 1;
                 self.state.stats.write().await.content_bytes_uploaded += size;

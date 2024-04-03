@@ -15,14 +15,17 @@ use crate::{
     ops::{
         backup_recursive, delete_blocks, download_archive_records, download_block_records,
         upload_archive, upload_archive_records, upload_block_records, upload_pending_files,
-        UploadArgs, UploadState,
+        BackupState,
     },
     stats::CommandStats,
 };
 
-use super::{args::StatsType, print_stat, print_stats_json, storage::create_storage, BackupArgs};
+use super::{
+    args::{BackupArgs, StatsType},
+    print_stat, print_stats_json,
+    storage::create_storage,
+};
 
-#[allow(clippy::too_many_lines)]
 pub async fn main(cli: BackupArgs) -> Result<()> {
     let stats = rwarc(CommandStats::new());
     let storage = Arc::new(create_storage(&cli.global).await?);
@@ -30,40 +33,31 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
     let block_locks = rwarc(BlockLocks::new());
 
     let (mut archive_records, block_records) = try_join!(
-        Box::pin(download_archive_records(storage.clone())),
-        Box::pin(download_block_records(storage.clone())),
+        download_archive_records(storage.clone()),
+        download_block_records(storage.clone()),
     )?;
     let block_records = rwarc(block_records);
 
-    let args = Arc::new(UploadArgs {
+    let state = Arc::new(BackupState {
         paths: cli.paths,
         compression_level: cli.compression_level,
         target_block_size: cli.target_block_size,
-        tasks: cli.tasks,
+        task_count: cli.tasks,
         dry_run: cli.dry_run,
-    });
-    let state = Arc::new(UploadState {
         stats,
         storage,
         archive,
         block_records,
         block_locks,
     });
-    let (sender, receiver) = async_channel::bounded(args.tasks);
+    let (sender, receiver) = async_channel::bounded(state.task_count);
 
     try_join!(
-        async {
-            for path in &args.paths {
-                backup_recursive(args.clone(), state.clone(), sender.clone(), path).await?;
-            }
-
-            sender.close();
-            Ok(())
-        },
-        upload_pending_files(args.clone(), state.clone(), receiver),
+        backup_recursive(state.clone(), sender),
+        upload_pending_files(state.clone(), receiver),
     )?;
 
-    let UploadState {
+    let BackupState {
         stats,
         storage,
         archive,

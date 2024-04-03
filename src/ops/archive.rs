@@ -32,10 +32,10 @@ pub async fn download_archive(storage: Arc<Storage>, hash: &Hash) -> Result<Arch
 pub async fn download_archives<'a, I: IntoIterator<Item = &'a Hash>>(
     storage: Arc<Storage>,
     hashes: I,
-    tasks: usize,
+    task_count: usize,
 ) -> Result<Vec<(Hash, Archive)>> {
     let archives = rwarc(vec![]);
-    let semaphore = Arc::new(Semaphore::new(tasks));
+    let semaphore = Arc::new(Semaphore::new(task_count));
     let mut tasks = JoinSet::new();
 
     for hash in hashes {

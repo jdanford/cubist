@@ -6,22 +6,22 @@ mod restore;
 
 use std::sync::Arc;
 
-pub use {
-    archive::{delete_archives, download_archive, download_archives, upload_archive},
-    backup::{backup_recursive, upload_pending_files, UploadArgs, UploadState},
-    cleanup::{cleanup_archives, cleanup_blocks, CleanupArgs, CleanupState},
-    records::{
-        download_archive_records, download_block_records, upload_archive_records,
-        upload_block_records,
-    },
-    restore::{download_pending_files, restore_recursive, DownloadArgs, DownloadState},
-};
-
 use crate::{
     error::Result,
     hash::{Hash, ShortHash},
     keys::{self, hash_from_key},
     storage::Storage,
+};
+
+pub use self::{
+    archive::{delete_archives, download_archive, download_archives, upload_archive},
+    backup::{backup_recursive, upload_pending_files, BackupState},
+    cleanup::{cleanup_archives, cleanup_blocks, CleanupState},
+    records::{
+        download_archive_records, download_block_records, upload_archive_records,
+        upload_block_records,
+    },
+    restore::{download_pending_files, restore_recursive, RestoreState},
 };
 
 pub async fn delete_blocks<'a, I: IntoIterator<Item = &'a Hash>>(
@@ -33,19 +33,24 @@ pub async fn delete_blocks<'a, I: IntoIterator<Item = &'a Hash>>(
     Ok(())
 }
 
-pub async fn find_archive_hash(storage: Arc<Storage>, short_hash: &ShortHash) -> Result<Hash> {
+pub async fn expand_hash(
+    storage: Arc<Storage>,
+    namespace: &str,
+    short_hash: &ShortHash,
+) -> Result<Hash> {
     let partial_key = keys::archive(short_hash);
     let full_key = storage.expand_key(&partial_key).await?;
-    hash_from_key(keys::ARCHIVE_NAMESPACE, &full_key)
+    hash_from_key(namespace, &full_key)
 }
 
-pub async fn find_archive_hashes(
+pub async fn expand_hashes(
     storage: Arc<Storage>,
+    namespace: &str,
     short_hashes: &[&ShortHash],
 ) -> Result<Vec<Hash>> {
     match short_hashes {
         [short_hash] => {
-            let hash = find_archive_hash(storage, short_hash).await?;
+            let hash = expand_hash(storage, namespace, short_hash).await?;
             return Ok(vec![hash]);
         }
         [] => return Ok(vec![]),
@@ -56,6 +61,6 @@ pub async fn find_archive_hashes(
     let full_keys = storage.expand_keys(partial_keys).await?;
     full_keys
         .into_iter()
-        .map(|key| hash_from_key(keys::ARCHIVE_NAMESPACE, key.as_str()))
+        .map(|key| hash_from_key(namespace, key.as_str()))
         .collect()
 }

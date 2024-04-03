@@ -25,7 +25,7 @@ use crate::{
     hash::Hash,
 };
 
-use super::{blocks::UploadTree, UploadArgs, UploadState};
+use super::{blocks::UploadTree, BackupState};
 
 #[derive(Debug)]
 pub struct PendingUpload {
@@ -34,24 +34,23 @@ pub struct PendingUpload {
 }
 
 pub async fn backup_recursive(
-    args: Arc<UploadArgs>,
-    state: Arc<UploadState>,
+    state: Arc<BackupState>,
     sender: Sender<PendingUpload>,
-    path: &Path,
 ) -> Result<()> {
-    let mut walker = WalkDir::new(path);
-    loop {
-        match walker.try_next().await {
-            Ok(Some(entry)) => {
-                let maybe_file =
-                    backup_from_entry(args.clone(), state.clone(), entry, path).await?;
-                if let Some(pending_file) = maybe_file {
-                    sender.send(pending_file).await?;
+    for path in &state.paths {
+        let mut walker = WalkDir::new(path);
+        loop {
+            match walker.try_next().await {
+                Ok(Some(entry)) => {
+                    let maybe_file = backup_from_entry(state.clone(), entry, path).await?;
+                    if let Some(pending_file) = maybe_file {
+                        sender.send(pending_file).await?;
+                    }
                 }
-            }
-            Ok(None) => break,
-            Err(err) => {
-                handle_walkdir_error(err)?;
+                Ok(None) => break,
+                Err(err) => {
+                    handle_walkdir_error(err)?;
+                }
             }
         }
     }
@@ -60,8 +59,7 @@ pub async fn backup_recursive(
 }
 
 async fn backup_from_entry(
-    _args: Arc<UploadArgs>,
-    state: Arc<UploadState>,
+    state: Arc<BackupState>,
     entry: DirEntry,
     base_path: &Path,
 ) -> Result<Option<PendingUpload>> {
@@ -102,20 +100,18 @@ async fn backup_from_entry(
 }
 
 pub async fn upload_pending_files(
-    args: Arc<UploadArgs>,
-    state: Arc<UploadState>,
+    state: Arc<BackupState>,
     receiver: Receiver<PendingUpload>,
 ) -> Result<()> {
-    let semaphore = Arc::new(Semaphore::new(args.tasks));
+    let semaphore = Arc::new(Semaphore::new(state.task_count));
     let mut tasks = JoinSet::new();
 
     while let Ok(pending_file) = receiver.recv().await {
-        let args = args.clone();
         let state = state.clone();
         let permit = semaphore.clone().acquire_owned().await?;
 
         tasks.spawn(async move {
-            let result = upload_pending_file(args, state, pending_file).await;
+            let result = upload_pending_file(state, pending_file).await;
             if let Err(Error::WalkDir(err)) = result {
                 handle_walkdir_error(err)?;
             }
@@ -132,11 +128,7 @@ pub async fn upload_pending_files(
     Ok(())
 }
 
-async fn upload_pending_file(
-    args: Arc<UploadArgs>,
-    state: Arc<UploadState>,
-    pending_file: PendingUpload,
-) -> Result<()> {
+async fn upload_pending_file(state: Arc<BackupState>, pending_file: PendingUpload) -> Result<()> {
     let PendingUpload {
         local_path,
         archive_path,
@@ -144,7 +136,7 @@ async fn upload_pending_file(
 
     let metadata = read_metadata(&local_path).await?;
     let mut file = File::open(&local_path).await?;
-    let (hash, size) = upload_file(args.clone(), state.clone(), &mut file).await?;
+    let (hash, size) = upload_file(state.clone(), &mut file).await?;
     let node = Node::File { metadata, hash };
     let archive = &mut state.archive.write().await;
     archive.insert(archive_path, node)?;
@@ -157,15 +149,11 @@ async fn upload_pending_file(
     Ok(())
 }
 
-pub async fn upload_file(
-    args: Arc<UploadArgs>,
-    state: Arc<UploadState>,
-    file: &mut File,
-) -> Result<(Option<Hash>, u64)> {
+pub async fn upload_file(state: Arc<BackupState>, file: &mut File) -> Result<(Option<Hash>, u64)> {
     let reader = BufReader::new(file);
-    let mut chunker = block::chunker(reader, args.target_block_size);
+    let mut chunker = block::chunker(reader, state.target_block_size);
     let mut chunks = pin!(chunker.as_stream());
-    let mut tree = UploadTree::new(args.clone(), state.clone());
+    let mut tree = UploadTree::new(state.clone());
     let mut size = 0;
 
     while let Some(chunk) = chunks.try_next().await? {

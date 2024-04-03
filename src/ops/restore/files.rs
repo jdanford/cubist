@@ -17,7 +17,7 @@ use crate::{
 
 use super::{
     blocks::{download_block_recursive, ActiveDownload},
-    DownloadArgs, DownloadState,
+    RestoreState,
 };
 
 #[derive(Debug)]
@@ -28,21 +28,21 @@ pub struct PendingDownload {
 }
 
 pub async fn restore_recursive(
-    args: Arc<DownloadArgs>,
-    state: Arc<DownloadState>,
+    state: Arc<RestoreState>,
     sender: Sender<PendingDownload>,
 ) -> Result<()> {
-    let root_paths = if args.paths.is_empty() {
+    let root_paths = if state.paths.is_empty() {
         vec![None]
     } else {
-        args.paths
+        state
+            .paths
             .iter()
             .map(|path| Option::Some(path.as_path()))
             .collect()
     };
 
     for root_path in root_paths {
-        let walker = args.archive.walk(root_path, args.order)?;
+        let walker = state.archive.walk(root_path, state.order)?;
         for (child_path, node) in walker {
             let path = if let Some(path) = root_path {
                 path.join(&child_path)
@@ -50,7 +50,7 @@ pub async fn restore_recursive(
                 child_path
             };
 
-            let maybe_file = restore_from_node(args.clone(), state.clone(), &path, node).await?;
+            let maybe_file = restore_from_node(state.clone(), &path, node).await?;
             if let Some(pending_file) = maybe_file {
                 sender.send(pending_file).await?;
             }
@@ -61,8 +61,7 @@ pub async fn restore_recursive(
 }
 
 async fn restore_from_node(
-    args: Arc<DownloadArgs>,
-    _state: Arc<DownloadState>,
+    state: Arc<RestoreState>,
     path: &Path,
     node: &Node,
 ) -> Result<Option<PendingDownload>> {
@@ -80,7 +79,7 @@ async fn restore_from_node(
             return Ok(Some(pending_file));
         }
         Node::Symlink { path: src, .. } => {
-            if !args.dry_run {
+            if !state.dry_run {
                 fs::symlink(src, path).await?;
                 restore_metadata_from_node(path, node).await?;
             }
@@ -90,7 +89,7 @@ async fn restore_from_node(
             debug!("{style}created symlink{style:#} {formatted_path}");
         }
         Node::Directory { .. } => {
-            if !args.dry_run {
+            if !state.dry_run {
                 fs::create_dir(path).await?;
                 restore_metadata_from_node(path, node).await?;
             }
@@ -105,20 +104,18 @@ async fn restore_from_node(
 }
 
 pub async fn download_pending_files(
-    args: Arc<DownloadArgs>,
-    state: Arc<DownloadState>,
+    state: Arc<RestoreState>,
     receiver: Receiver<PendingDownload>,
 ) -> Result<()> {
-    let semaphore = Arc::new(Semaphore::new(args.tasks));
+    let semaphore = Arc::new(Semaphore::new(state.task_count));
     let mut tasks = JoinSet::new();
 
     while let Ok(pending_file) = receiver.recv().await {
-        let args = args.clone();
         let state = state.clone();
         let permit = semaphore.clone().acquire_owned().await?;
 
         tasks.spawn(async move {
-            download_pending_file(args, state, pending_file).await?;
+            download_pending_file(state, pending_file).await?;
             drop(permit);
             Result::Ok(())
         });
@@ -132,18 +129,16 @@ pub async fn download_pending_files(
 }
 
 async fn download_pending_file(
-    args: Arc<DownloadArgs>,
-    state: Arc<DownloadState>,
+    state: Arc<RestoreState>,
     pending_file: PendingDownload,
 ) -> Result<()> {
     let mut size = 0;
 
-    if !args.dry_run {
+    if !state.dry_run {
         let mut file = ActiveDownload::new(&pending_file).await?;
 
         if let Some(hash) = pending_file.hash {
-            size = download_block_recursive(args.clone(), state.clone(), &mut file, hash, None)
-                .await?;
+            size = download_block_recursive(state.clone(), &mut file, hash, None).await?;
             file.sync_all().await?;
         }
 

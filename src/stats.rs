@@ -113,6 +113,7 @@ impl StorageStats {
             end_time,
             bytes: None,
         };
+
         self.requests.push(stats);
     }
 }

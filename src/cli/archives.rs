@@ -12,7 +12,11 @@ use crate::{
     stats::CommandStats,
 };
 
-use super::{args::StatsType, print_stat, print_stats_json, storage::create_storage, ArchivesArgs};
+use super::{
+    args::{ArchivesArgs, StatsType},
+    print_stat, print_stats_json,
+    storage::create_storage,
+};
 
 pub async fn main(cli: ArchivesArgs) -> Result<()> {
     let stats = CommandStats::new();

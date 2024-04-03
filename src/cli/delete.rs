@@ -9,14 +9,19 @@ use crate::{
     arc::{rwarc, unarc},
     error::Result,
     format::format_size,
+    keys,
     ops::{
         delete_archives, delete_blocks, download_archive_records, download_archives,
-        download_block_records, find_archive_hashes, upload_archive_records, upload_block_records,
+        download_block_records, expand_hashes, upload_archive_records, upload_block_records,
     },
     stats::CommandStats,
 };
 
-use super::{args::StatsType, print_stat, print_stats_json, storage::create_storage, DeleteArgs};
+use super::{
+    args::{DeleteArgs, StatsType},
+    print_stat, print_stats_json,
+    storage::create_storage,
+};
 
 pub async fn main(cli: DeleteArgs) -> Result<()> {
     let mut stats = CommandStats::new();
@@ -24,16 +29,13 @@ pub async fn main(cli: DeleteArgs) -> Result<()> {
     let mut removed_blocks = vec![];
 
     let archive_prefixes = &cli.archives.iter().collect::<Vec<_>>();
-    let archive_hashes = find_archive_hashes(storage.clone(), archive_prefixes).await?;
+    let archive_hashes =
+        expand_hashes(storage.clone(), keys::ARCHIVE_NAMESPACE, archive_prefixes).await?;
 
     let (archives, mut archive_records, mut block_records) = try_join!(
-        Box::pin(download_archives(
-            storage.clone(),
-            &archive_hashes,
-            cli.tasks
-        )),
-        Box::pin(download_archive_records(storage.clone())),
-        Box::pin(download_block_records(storage.clone())),
+        download_archives(storage.clone(), &archive_hashes, cli.tasks),
+        download_archive_records(storage.clone()),
+        download_block_records(storage.clone()),
     )?;
 
     for (hash, archive) in &archives {
