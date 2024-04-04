@@ -13,7 +13,7 @@ use crate::{
     hash,
     locks::BlockLocks,
     ops::{
-        backup_recursive, delete_blocks, download_archive_records, download_block_records,
+        backup_all, delete_blocks, download_archive_records, download_block_records,
         upload_archive, upload_archive_records, upload_block_records, upload_pending_files,
         BackupState,
     },
@@ -39,7 +39,6 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
     let block_records = rwarc(block_records);
 
     let state = Arc::new(BackupState {
-        paths: cli.paths,
         compression_level: cli.compression_level,
         target_block_size: cli.target_block_size,
         task_count: cli.tasks,
@@ -53,7 +52,7 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
     let (sender, receiver) = async_channel::bounded(state.task_count);
 
     try_join!(
-        backup_recursive(state.clone(), sender),
+        backup_all(state.clone(), sender, &cli.paths),
         upload_pending_files(state.clone(), receiver),
     )?;
 
@@ -73,6 +72,7 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
         let removed_hashes = removed_blocks.iter().map(|(hash, _)| hash);
         delete_blocks(storage.clone(), removed_hashes).await?;
     } else {
+        // TODO: include archive size
         let archive_record = ArchiveRecord {
             created: stats.start_time,
             tags: HashSet::new(),
@@ -85,7 +85,7 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
                 Box::pin(upload_archive(
                     storage.clone(),
                     &archive_hash,
-                    archive.clone()
+                    archive.clone(),
                 )),
                 Box::pin(upload_block_records(storage.clone(), block_records.clone())),
                 Box::pin(upload_archive_records(

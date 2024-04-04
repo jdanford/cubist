@@ -8,12 +8,11 @@ use tokio_stream::StreamExt;
 
 use crate::{
     error::Result,
-    hash::Hash,
     keys::{self, hash_from_key},
     storage::MAX_KEYS_PER_REQUEST,
 };
 
-use super::CleanupState;
+use super::{CleanupState, RemovedBlock};
 
 pub async fn cleanup_blocks(state: Arc<CleanupState>) -> Result<()> {
     let (sender, receiver) = async_channel::bounded(MAX_KEYS_PER_REQUEST);
@@ -24,7 +23,7 @@ pub async fn cleanup_blocks(state: Arc<CleanupState>) -> Result<()> {
     Ok(())
 }
 
-async fn find_garbage_blocks(state: Arc<CleanupState>, sender: Sender<Hash>) -> Result<()> {
+async fn find_garbage_blocks(state: Arc<CleanupState>, sender: Sender<RemovedBlock>) -> Result<()> {
     let semaphore = Arc::new(Semaphore::new(state.task_count));
     let mut tasks = JoinSet::new();
 
@@ -40,7 +39,8 @@ async fn find_garbage_blocks(state: Arc<CleanupState>, sender: Sender<Hash>) -> 
             for key in keys {
                 let hash = hash_from_key(keys::BLOCK_NAMESPACE, &key)?;
                 if !block_records.contains(&hash) {
-                    sender.send_blocking(hash)?;
+                    let removed_block = RemovedBlock { hash, record: None };
+                    sender.send_blocking(removed_block)?;
                 }
             }
 
@@ -56,13 +56,21 @@ async fn find_garbage_blocks(state: Arc<CleanupState>, sender: Sender<Hash>) -> 
     Ok(())
 }
 
-async fn delete_garbage_blocks(state: Arc<CleanupState>, receiver: Receiver<Hash>) -> Result<()> {
+pub async fn delete_garbage_blocks(
+    state: Arc<CleanupState>,
+    receiver: Receiver<RemovedBlock>,
+) -> Result<()> {
     let chunk_size = MAX_KEYS_PER_REQUEST;
     let mut keys = vec![];
+    let mut bytes = 0;
 
-    while let Ok(hash) = receiver.recv().await {
-        let key = keys::block(&hash);
+    while let Ok(removed_block) = receiver.recv().await {
+        let key = keys::block(&removed_block.hash);
         keys.push(key);
+
+        if let Some(record) = removed_block.record {
+            bytes += record.size;
+        }
 
         let count = keys.len();
         if count >= chunk_size {
@@ -73,6 +81,8 @@ async fn delete_garbage_blocks(state: Arc<CleanupState>, receiver: Receiver<Hash
             }
 
             state.stats.write().await.blocks_deleted += count as u64;
+            state.stats.write().await.bytes_deleted += bytes;
+            bytes = 0;
 
             for key in deleted_keys {
                 let style = AnsiColor::Yellow.on_default();
@@ -88,6 +98,7 @@ async fn delete_garbage_blocks(state: Arc<CleanupState>, receiver: Receiver<Hash
         }
 
         state.stats.write().await.blocks_deleted += count as u64;
+        state.stats.write().await.bytes_deleted += bytes;
 
         for key in keys {
             let style = AnsiColor::Yellow.on_default();

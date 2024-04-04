@@ -21,8 +21,7 @@ pub fn block<T: Display>(hash: &T) -> String {
 
 pub fn hash_from_key(namespace: &str, key: &str) -> Result<Hash> {
     let hash_str = key.strip_prefix(namespace).unwrap();
-    let hash = hash_str
+    hash_str
         .parse()
-        .map_err(|_| Error::InvalidHash(hash_str.to_owned()))?;
-    Ok(hash)
+        .map_err(|_| Error::InvalidHash(hash_str.to_owned()))
 }

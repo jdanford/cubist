@@ -1,7 +1,7 @@
 mod blocks;
 mod files;
 
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 use tokio::sync::RwLock;
 
@@ -9,11 +9,10 @@ use crate::{
     archive::Archive, block::BlockRecords, locks::BlockLocks, stats::CommandStats, storage::Storage,
 };
 
-pub use self::files::{backup_recursive, upload_pending_files};
+pub use self::files::{backup_all, upload_pending_files};
 
 #[derive(Debug)]
 pub struct BackupState {
-    pub paths: Vec<PathBuf>,
     pub compression_level: u8,
     pub target_block_size: u32,
     pub task_count: usize,

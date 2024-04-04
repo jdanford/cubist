@@ -1,18 +1,16 @@
 use std::sync::Arc;
 
-use clap::builder::styling::AnsiColor;
 use humantime::format_duration;
-use log::debug;
 use tokio::try_join;
 
 use crate::{
-    arc::{rwarc, unarc},
+    arc::{rwarc, unarc, unrwarc},
     error::Result,
     format::format_size,
     keys,
     ops::{
-        delete_archives, delete_blocks, download_archive_records, download_archives,
-        download_block_records, expand_hashes, upload_archive_records, upload_block_records,
+        delete_archives_and_garbage_blocks, download_archive_records, download_block_records,
+        expand_hashes, upload_archive_records, upload_block_records, CleanupState,
     },
     stats::CommandStats,
 };
@@ -24,59 +22,44 @@ use super::{
 };
 
 pub async fn main(cli: DeleteArgs) -> Result<()> {
-    let mut stats = CommandStats::new();
+    let stats = rwarc(CommandStats::new());
     let storage = Arc::new(create_storage(&cli.global).await?);
-    let mut removed_blocks = vec![];
 
-    let archive_prefixes = &cli.archives.iter().collect::<Vec<_>>();
     let archive_hashes =
-        expand_hashes(storage.clone(), keys::ARCHIVE_NAMESPACE, archive_prefixes).await?;
+        expand_hashes(storage.clone(), keys::ARCHIVE_NAMESPACE, &cli.archives).await?;
 
-    let (archives, mut archive_records, mut block_records) = try_join!(
-        download_archives(storage.clone(), &archive_hashes, cli.tasks),
+    let (archive_records, block_records) = try_join!(
         download_archive_records(storage.clone()),
         download_block_records(storage.clone()),
     )?;
+    let archive_records = rwarc(archive_records);
+    let block_records = rwarc(block_records);
 
-    for (hash, archive) in &archives {
-        archive_records.remove(hash)?;
+    let state = Arc::new(CleanupState {
+        task_count: cli.tasks,
+        dry_run: cli.dry_run,
+        stats,
+        storage,
+        archive_records,
+        block_records,
+    });
 
-        let archive_garbage_blocks = block_records.remove_refs(&archive.block_refs)?;
-        removed_blocks.extend(archive_garbage_blocks);
-        stats.archives_deleted += 1;
-    }
+    delete_archives_and_garbage_blocks(state.clone(), &archive_hashes).await?;
 
-    let mut block_hashes = vec![];
-
-    for (hash, record) in removed_blocks {
-        block_hashes.push(hash);
-        stats.bytes_deleted += record.size;
-        stats.blocks_deleted += 1;
-    }
-
-    if !cli.dry_run {
-        delete_blocks(storage.clone(), block_hashes.iter()).await?;
-    }
-
-    for hash in block_hashes {
-        let style = AnsiColor::Yellow.on_default();
-        debug!("{style}deleted block{style:#} {hash}");
-    }
+    let CleanupState {
+        stats,
+        storage,
+        archive_records,
+        block_records,
+        ..
+    } = unarc(state);
+    let stats = unrwarc(stats);
 
     if !cli.dry_run {
         try_join!(
-            Box::pin(delete_archives(storage.clone(), &archive_hashes)),
-            Box::pin(upload_archive_records(
-                storage.clone(),
-                rwarc(archive_records)
-            )),
-            Box::pin(upload_block_records(storage.clone(), rwarc(block_records))),
+            Box::pin(upload_archive_records(storage.clone(), archive_records)),
+            Box::pin(upload_block_records(storage.clone(), block_records)),
         )?;
-    }
-
-    for hash in archive_hashes {
-        let style = AnsiColor::Yellow.on_default();
-        debug!("{style}deleted archive{style:#} {hash}");
     }
 
     let storage = unarc(storage);

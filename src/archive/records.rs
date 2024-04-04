@@ -64,14 +64,14 @@ impl ArchiveRecords {
         self.records.insert(hash, record);
     }
 
-    pub fn remove(&mut self, hash: &Hash) -> Result<()> {
+    pub fn remove(&mut self, hash: &Hash) -> Result<ArchiveRecord> {
         let record = self
             .records
             .remove(hash)
             .ok_or_else(|| Error::ArchiveRecordNotFound(*hash))?;
         self.by_created.remove(&record.created);
         self.remove_tags(hash, &record.tags)?;
-        Ok(())
+        Ok(record)
     }
 
     fn remove_tags(&mut self, hash: &Hash, tags: &HashSet<String>) -> Result<()> {

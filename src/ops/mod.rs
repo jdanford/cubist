@@ -4,7 +4,7 @@ mod cleanup;
 mod records;
 mod restore;
 
-use std::sync::Arc;
+use std::{borrow::Borrow, fmt::Display, sync::Arc};
 
 use crate::{
     error::Result,
@@ -14,14 +14,14 @@ use crate::{
 };
 
 pub use self::{
-    archive::{delete_archives, download_archive, download_archives, upload_archive},
-    backup::{backup_recursive, upload_pending_files, BackupState},
-    cleanup::{cleanup_archives, cleanup_blocks, CleanupState},
+    archive::{download_archive, upload_archive},
+    backup::{backup_all, upload_pending_files, BackupState},
+    cleanup::{cleanup_archives, cleanup_blocks, delete_archives_and_garbage_blocks, CleanupState},
     records::{
         download_archive_records, download_block_records, upload_archive_records,
         upload_block_records,
     },
-    restore::{download_pending_files, restore_recursive, RestoreState},
+    restore::{download_pending_files, restore_all, RestoreState},
 };
 
 pub async fn delete_blocks<'a, I: IntoIterator<Item = &'a Hash>>(
@@ -29,8 +29,7 @@ pub async fn delete_blocks<'a, I: IntoIterator<Item = &'a Hash>>(
     hashes: I,
 ) -> Result<()> {
     let keys = hashes.into_iter().map(keys::block);
-    storage.delete_many(keys).await?;
-    Ok(())
+    storage.delete_many(keys).await
 }
 
 pub async fn expand_hash(
@@ -38,26 +37,26 @@ pub async fn expand_hash(
     namespace: &str,
     short_hash: &ShortHash,
 ) -> Result<Hash> {
-    let partial_key = keys::archive(short_hash);
+    let partial_key = format!("{namespace}{short_hash}");
     let full_key = storage.expand_key(&partial_key).await?;
     hash_from_key(namespace, &full_key)
 }
 
-pub async fn expand_hashes(
+pub async fn expand_hashes<H: Borrow<ShortHash> + Display>(
     storage: Arc<Storage>,
     namespace: &str,
-    short_hashes: &[&ShortHash],
+    short_hashes: &[H],
 ) -> Result<Vec<Hash>> {
     match short_hashes {
         [short_hash] => {
-            let hash = expand_hash(storage, namespace, short_hash).await?;
+            let hash = expand_hash(storage, namespace, short_hash.borrow()).await?;
             return Ok(vec![hash]);
         }
         [] => return Ok(vec![]),
         _ => {}
     };
 
-    let partial_keys = short_hashes.iter().map(keys::archive);
+    let partial_keys = short_hashes.iter().map(|hash| format!("{namespace}{hash}"));
     let full_keys = storage.expand_keys(partial_keys).await?;
     full_keys
         .into_iter()

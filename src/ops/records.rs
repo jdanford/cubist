@@ -28,8 +28,7 @@ pub async fn upload_archive_records(
     archive_records: Arc<RwLock<ArchiveRecords>>,
 ) -> Result<()> {
     let bytes = spawn_blocking(move || serialize(&*archive_records.blocking_read())).await??;
-    storage.put(keys::ARCHIVE_RECORDS_KEY, bytes).await?;
-    Ok(())
+    storage.put(keys::ARCHIVE_RECORDS_KEY, bytes).await
 }
 
 pub async fn download_block_records(storage: Arc<Storage>) -> Result<BlockRecords> {
@@ -49,6 +48,5 @@ pub async fn upload_block_records(
     block_records: Arc<RwLock<BlockRecords>>,
 ) -> Result<()> {
     let bytes = spawn_blocking(move || serialize(&*block_records.blocking_read())).await??;
-    storage.put(keys::BLOCK_RECORDS_KEY, bytes).await?;
-    Ok(())
+    storage.put(keys::BLOCK_RECORDS_KEY, bytes).await
 }

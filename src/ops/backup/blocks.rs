@@ -25,8 +25,7 @@ impl UploadTree {
     pub async fn add_leaf(&mut self, data: Vec<u8>) -> Result<()> {
         let block = Block::leaf(data).await?;
         let hash = self.upload_block(block).await?;
-        self.add_inner(hash, false).await?;
-        Ok(())
+        self.add_inner(hash, false).await
     }
 
     pub async fn finalize(mut self) -> Result<Option<Hash>> {

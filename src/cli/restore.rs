@@ -9,7 +9,7 @@ use crate::{
     format::format_size,
     keys,
     locks::BlockLocks,
-    ops::{download_archive, download_pending_files, expand_hash, restore_recursive, RestoreState},
+    ops::{download_archive, download_pending_files, expand_hash, restore_all, RestoreState},
     stats::CommandStats,
 };
 
@@ -29,11 +29,10 @@ pub async fn main(cli: RestoreArgs) -> Result<()> {
     let archive = download_archive(storage.clone(), &archive_hash).await?;
 
     let state = Arc::new(RestoreState {
-        archive,
-        paths: cli.paths,
         order: cli.order,
         task_count: cli.tasks,
         dry_run: cli.dry_run,
+        archive,
         stats,
         storage,
         local_blocks,
@@ -42,7 +41,7 @@ pub async fn main(cli: RestoreArgs) -> Result<()> {
     let (sender, receiver) = async_channel::bounded(state.task_count);
 
     try_join!(
-        restore_recursive(state.clone(), sender),
+        restore_all(state.clone(), sender, &cli.paths),
         download_pending_files(state.clone(), receiver)
     )?;
 

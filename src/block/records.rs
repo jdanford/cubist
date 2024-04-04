@@ -77,11 +77,10 @@ impl BlockRecords {
     }
 
     #[allow(dead_code)]
-    pub fn remove(&mut self, hash: &Hash) -> Result<()> {
+    pub fn remove(&mut self, hash: &Hash) -> Result<BlockRecord> {
         self.records
             .remove(hash)
-            .ok_or_else(|| Error::BlockRecordNotFound(*hash))?;
-        Ok(())
+            .ok_or_else(|| Error::BlockRecordNotFound(*hash))
     }
 
     pub fn remove_refs(&mut self, refs: &BlockRefs) -> Result<Vec<(Hash, BlockRecord)>> {

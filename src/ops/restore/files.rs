@@ -27,33 +27,38 @@ pub struct PendingDownload {
     pub path: PathBuf,
 }
 
-pub async fn restore_recursive(
+pub async fn restore_all<P: AsRef<Path>>(
     state: Arc<RestoreState>,
     sender: Sender<PendingDownload>,
+    paths: &[P],
 ) -> Result<()> {
-    let root_paths = if state.paths.is_empty() {
-        vec![None]
+    if paths.is_empty() {
+        restore_recursive(state, sender, None).await?;
     } else {
-        state
-            .paths
-            .iter()
-            .map(|path| Option::Some(path.as_path()))
-            .collect()
-    };
+        for root in paths {
+            restore_recursive(state.clone(), sender.clone(), Some(root.as_ref())).await?;
+        }
+    }
 
-    for root_path in root_paths {
-        let walker = state.archive.walk(root_path, state.order)?;
-        for (child_path, node) in walker {
-            let path = if let Some(path) = root_path {
-                path.join(&child_path)
-            } else {
-                child_path
-            };
+    Ok(())
+}
 
-            let maybe_file = restore_from_node(state.clone(), &path, node).await?;
-            if let Some(pending_file) = maybe_file {
-                sender.send(pending_file).await?;
-            }
+async fn restore_recursive(
+    state: Arc<RestoreState>,
+    sender: Sender<PendingDownload>,
+    root: Option<&Path>,
+) -> Result<()> {
+    let walker = state.archive.walk(root, state.order)?;
+    for (child_path, node) in walker {
+        let path = if let Some(path) = root {
+            path.join(&child_path)
+        } else {
+            child_path
+        };
+
+        let maybe_file = restore_from_node(state.clone(), &path, node).await?;
+        if let Some(pending_file) = maybe_file {
+            sender.send(pending_file).await?;
         }
     }
 

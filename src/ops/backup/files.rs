@@ -33,24 +33,35 @@ pub struct PendingUpload {
     archive_path: PathBuf,
 }
 
+pub async fn backup_all<P: AsRef<Path>>(
+    state: Arc<BackupState>,
+    sender: Sender<PendingUpload>,
+    paths: &[P],
+) -> Result<()> {
+    for path in paths {
+        backup_recursive(state.clone(), sender.clone(), path.as_ref()).await?;
+    }
+
+    Ok(())
+}
+
 pub async fn backup_recursive(
     state: Arc<BackupState>,
     sender: Sender<PendingUpload>,
+    path: &Path,
 ) -> Result<()> {
-    for path in &state.paths {
-        let mut walker = WalkDir::new(path);
-        loop {
-            match walker.try_next().await {
-                Ok(Some(entry)) => {
-                    let maybe_file = backup_from_entry(state.clone(), entry, path).await?;
-                    if let Some(pending_file) = maybe_file {
-                        sender.send(pending_file).await?;
-                    }
+    let mut walker = WalkDir::new(path);
+    loop {
+        match walker.try_next().await {
+            Ok(Some(entry)) => {
+                let maybe_file = backup_from_entry(state.clone(), entry, path).await?;
+                if let Some(pending_file) = maybe_file {
+                    sender.send(pending_file).await?;
                 }
-                Ok(None) => break,
-                Err(err) => {
-                    handle_walkdir_error(err)?;
-                }
+            }
+            Ok(None) => break,
+            Err(err) => {
+                handle_walkdir_error(err)?;
             }
         }
     }
