@@ -952,7 +952,6 @@ dependencies = [
  "concolor-clap",
  "env_logger",
  "fastcdc",
- "hex",
  "humansize",
  "humantime",
  "itertools",

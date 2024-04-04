@@ -41,6 +41,20 @@ impl fmt::Display for ShortHash {
     }
 }
 
+pub fn leaf(data: &[u8]) -> Hash {
+    blake3::hash(data)
+}
+
+pub fn branch(children: &[Hash]) -> Hash {
+    let mut hasher = blake3::Hasher::new();
+
+    for hash in children {
+        hasher.update(hash.as_bytes());
+    }
+
+    hasher.finalize()
+}
+
 pub fn archive(archive: &ArchiveRecord) -> Hash {
     let mut hasher = blake3::Hasher::new();
 
@@ -52,20 +66,6 @@ pub fn archive(archive: &ArchiveRecord) -> Hash {
 
     for tag in sorted_tags {
         hasher.update(tag.as_bytes());
-    }
-
-    hasher.finalize()
-}
-
-pub fn leaf(data: &[u8]) -> Hash {
-    blake3::hash(data)
-}
-
-pub fn branch(children: &[Hash]) -> Hash {
-    let mut hasher = blake3::Hasher::new();
-
-    for hash in children {
-        hasher.update(hash.as_bytes());
     }
 
     hasher.finalize()
@@ -92,8 +92,8 @@ pub fn format_short(hash: &Hash, block_count: usize) -> String {
     hash.to_hex()[..len].to_string()
 }
 
-const MIN_PREFIX_LENGTH: usize = 6;
-const MAX_PREFIX_LENGTH: usize = SIZE * 2;
+pub const MIN_PREFIX_LENGTH: usize = 6;
+pub const MAX_PREFIX_LENGTH: usize = SIZE * 2;
 pub const PREFIX_LENGTH_RANGE: RangeInclusive<usize> = MIN_PREFIX_LENGTH..=MAX_PREFIX_LENGTH;
 
 #[allow(
@@ -102,7 +102,7 @@ pub const PREFIX_LENGTH_RANGE: RangeInclusive<usize> = MIN_PREFIX_LENGTH..=MAX_P
     clippy::cast_precision_loss
 )]
 pub fn safe_prefix_length(block_count: usize) -> usize {
-    // see `https://github.com/git/git/commit/e6c587c733b4634030b353f4024794b08bc86892`
+    // see https://github.com/git/git/commit/e6c587c733b4634030b353f4024794b08bc86892
     // 2^(2N) > block_count
     //     2N > log2(block_count)
     //      N > log2(block_count) / 2

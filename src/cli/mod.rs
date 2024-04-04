@@ -10,8 +10,8 @@ mod storage;
 
 use std::{
     fmt::Display,
-    io::{stdout, Write},
-    process::exit,
+    io::{self, Write},
+    process::ExitCode,
 };
 
 use clap::{
@@ -73,7 +73,7 @@ impl Command {
     }
 }
 
-pub async fn main() {
+pub async fn main() -> ExitCode {
     let cli = Cli::parse();
     let global = cli.command.global();
 
@@ -91,7 +91,9 @@ pub async fn main() {
 
     if let Err(err) = result {
         error!("{err}");
-        exit(1);
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
     }
 }
 
@@ -130,7 +132,7 @@ fn print_stat<T: Display>(name: &str, value: T) {
 }
 
 fn print_stats_json(stats: &FinalizedCommandStats) -> Result<()> {
-    serde_json::to_writer_pretty(stdout(), stats)?;
-    writeln!(stdout())?;
+    serde_json::to_writer_pretty(io::stdout(), stats)?;
+    writeln!(io::stdout())?;
     Ok(())
 }

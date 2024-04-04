@@ -173,15 +173,15 @@ pub struct GlobalArgs {
 #[derive(Args, Debug)]
 pub struct LoggerArgs {
     /// When to use color in output
-    #[arg(short, long, default_value_t = ColorChoice::Auto)]
+    #[arg(long, default_value_t = ColorChoice::Auto)]
     pub color: ColorChoice,
 
     /// Print more output
-    #[arg(short, long, action = ArgAction::Count, group = "verbosity")]
+    #[arg(short = 'v', long, action = ArgAction::Count, group = "verbosity")]
     pub verbose: u8,
 
     /// Print less output
-    #[arg(short, long, action = ArgAction::Count, group = "verbosity")]
+    #[arg(short = 'q', long, action = ArgAction::Count, group = "verbosity")]
     pub quiet: u8,
 }
 

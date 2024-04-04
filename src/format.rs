@@ -1,11 +1,16 @@
-use std::path::Path;
+use std::{borrow::Cow, path::Path};
 
 use chrono::{DateTime, Local, Utc};
 use humansize::{ToF64, Unsigned, DECIMAL};
 
 pub fn format_path(path: &Path) -> String {
-    let s: &str = &path.to_string_lossy();
-    snailquote::escape(s).to_string()
+    let path_str = path.to_string_lossy();
+    let escaped_path = snailquote::escape(&path_str);
+    if let Cow::Owned(owned_path) = escaped_path {
+        owned_path
+    } else {
+        path_str.to_string()
+    }
 }
 
 pub fn format_size<T: ToF64 + Unsigned>(input: T) -> String {
