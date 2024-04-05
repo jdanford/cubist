@@ -5,7 +5,7 @@ use crate::{
 };
 
 pub const COMPRESSION_LEVEL: u8 = 3;
-pub const NULL_HASH: Hash = Hash::from_bytes([0; hash::SIZE]);
+pub const NULL_HASH: Hash<Block> = Hash::from_bytes([0; hash::SIZE]);
 
 async fn roundtrip_block(block: &Block) -> Block {
     let bytes = block.clone().encode(COMPRESSION_LEVEL).await.unwrap();

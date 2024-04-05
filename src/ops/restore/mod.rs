@@ -3,16 +3,18 @@ mod files;
 
 use std::{collections::HashMap, sync::Arc};
 
-use blake3::Hash;
 use tokio::sync::RwLock;
 
 use crate::{
-    archive::Archive, file::WalkOrder, locks::BlockLocks, stats::CommandStats, storage::Storage,
+    archive::Archive, block::Block, file::WalkOrder, hash::Hash, locks::BlockLocks,
+    stats::CommandStats, storage::Storage,
 };
 
 use self::blocks::LocalBlock;
 
 pub use self::files::{download_pending_files, restore_all};
+
+type LocalBlocks = HashMap<Hash<Block>, LocalBlock>;
 
 #[derive(Debug)]
 pub struct RestoreState {
@@ -22,6 +24,6 @@ pub struct RestoreState {
     pub archive: Archive,
     pub stats: Arc<RwLock<CommandStats>>,
     pub storage: Arc<Storage>,
-    pub local_blocks: Arc<RwLock<HashMap<Hash, LocalBlock>>>,
+    pub local_blocks: Arc<RwLock<LocalBlocks>>,
     pub block_locks: Arc<RwLock<BlockLocks>>,
 }

@@ -8,9 +8,9 @@ use tokio::try_join;
 use crate::{
     arc::{rwarc, unarc, unrwarc},
     archive::Archive,
+    entity::EntityIndex,
     error::Result,
     format::format_size,
-    hash,
     locks::BlockLocks,
     ops::{
         backup_all, delete_blocks, download_archive_records, download_block_records,
@@ -85,8 +85,8 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
             )?;
         }
 
-        let block_count = block_records.read().await.unique_count();
-        let short_hash = hash::format_short(&hash, block_count);
+        let block_count = block_records.read().await.len();
+        let short_hash = hash.format_short(block_count);
         let style = AnsiColor::Green.on_default();
         info!("{style}created archive{style:#} {short_hash}");
     }

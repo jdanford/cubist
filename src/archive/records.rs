@@ -1,10 +1,15 @@
 use std::collections::{BTreeMap, HashMap};
 
-use blake3::Hash;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::error::{Error, Result};
+use crate::{
+    entity::{EntityIndex, EntityRecord},
+    error::{Error, Result},
+    hash::Hash,
+};
+
+use super::Archive;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ArchiveRecord {
@@ -12,10 +17,16 @@ pub struct ArchiveRecord {
     pub size: u64,
 }
 
+impl EntityRecord<Archive> for ArchiveRecord {
+    fn size(&self) -> u64 {
+        self.size
+    }
+}
+
 #[derive(Debug)]
 pub struct ArchiveRecords {
-    records: HashMap<Hash, ArchiveRecord>,
-    by_created: BTreeMap<DateTime<Utc>, Hash>,
+    records: HashMap<Hash<Archive>, ArchiveRecord>,
+    by_created: BTreeMap<DateTime<Utc>, Hash<Archive>>,
 }
 
 impl ArchiveRecords {
@@ -26,7 +37,7 @@ impl ArchiveRecords {
         }
     }
 
-    pub fn from_records(records: HashMap<Hash, ArchiveRecord>) -> Self {
+    pub fn from_records(records: HashMap<Hash<Archive>, ArchiveRecord>) -> Self {
         let mut by_created = BTreeMap::new();
 
         for (hash, record) in &records {
@@ -39,39 +50,45 @@ impl ArchiveRecords {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn keys(&self) -> impl Iterator<Item = &Hash> {
-        self.records.keys()
+    pub fn iter_by_created(&self) -> impl Iterator<Item = (&Hash<Archive>, &ArchiveRecord)> {
+        self.by_created.values().map(|hash| {
+            let record = self.records.get(hash).unwrap();
+            (hash, record)
+        })
+    }
+}
+
+impl EntityIndex<Archive> for ArchiveRecords {
+    type Record = ArchiveRecord;
+
+    fn len(&self) -> usize {
+        self.records.len()
     }
 
-    pub fn contains(&self, hash: &Hash) -> bool {
+    fn contains(&self, hash: &Hash<Archive>) -> bool {
         self.records.contains_key(hash)
     }
 
-    #[allow(dead_code)]
-    pub fn get(&self, hash: &Hash) -> Option<&ArchiveRecord> {
+    fn get(&self, hash: &Hash<Archive>) -> Option<&ArchiveRecord> {
         self.records.get(hash)
     }
 
-    pub fn insert(&mut self, hash: Hash, record: ArchiveRecord) {
+    fn get_mut(&mut self, hash: &Hash<Archive>) -> Option<&mut ArchiveRecord> {
+        self.records.get_mut(hash)
+    }
+
+    fn insert(&mut self, hash: Hash<Archive>, record: ArchiveRecord) {
         self.by_created.insert(record.created, hash);
         self.records.insert(hash, record);
     }
 
-    pub fn remove(&mut self, hash: &Hash) -> Result<ArchiveRecord> {
+    fn remove(&mut self, hash: &Hash<Archive>) -> Result<ArchiveRecord> {
         let record = self
             .records
             .remove(hash)
             .ok_or_else(|| Error::ArchiveRecordNotFound(*hash))?;
         self.by_created.remove(&record.created);
         Ok(record)
-    }
-
-    pub fn iter_by_created(&self) -> impl Iterator<Item = (&Hash, &ArchiveRecord)> {
-        self.by_created.values().map(|hash| {
-            let record = self.records.get(hash).unwrap();
-            (hash, record)
-        })
     }
 }
 

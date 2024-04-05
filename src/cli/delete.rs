@@ -7,7 +7,6 @@ use crate::{
     arc::{rwarc, unarc, unrwarc},
     error::Result,
     format::format_size,
-    keys,
     ops::{
         delete_archives_and_garbage_blocks, download_archive_records, download_block_records,
         expand_hashes, upload_archive_records, upload_block_records, CleanupState,
@@ -25,8 +24,7 @@ pub async fn main(cli: DeleteArgs) -> Result<()> {
     let stats = rwarc(CommandStats::new());
     let storage = Arc::new(create_storage(&cli.global).await?);
 
-    let archive_hashes =
-        expand_hashes(storage.clone(), keys::ARCHIVE_NAMESPACE, &cli.archives).await?;
+    let archive_hashes = expand_hashes(storage.clone(), &cli.archives).await?;
 
     let (archive_records, block_records) = try_join!(
         download_archive_records(storage.clone()),

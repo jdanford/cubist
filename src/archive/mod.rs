@@ -4,7 +4,12 @@ use std::ops::{Deref, DerefMut};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{block::BlockRefs, file::FileTree, hash::Hash};
+use crate::{
+    block::{Block, BlockRefs},
+    entity::Entity,
+    file::FileTree,
+    hash::Hash,
+};
 
 pub use self::records::{ArchiveRecord, ArchiveRecords};
 
@@ -22,9 +27,14 @@ impl Archive {
         }
     }
 
-    pub fn add_ref(&mut self, hash: &Hash) {
+    pub fn add_ref(&mut self, hash: &Hash<Block>) {
         self.block_refs.add_count(hash, 1);
     }
+}
+
+impl Entity for Archive {
+    const NAME: &'static str = "archive";
+    const KEY_PREFIX: &'static str = "archives/";
 }
 
 impl Deref for Archive {

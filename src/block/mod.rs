@@ -2,6 +2,8 @@ mod records;
 #[cfg(test)]
 mod tests;
 
+use std::borrow::Borrow;
+
 use fastcdc::v2020::AsyncStreamCDC;
 use tokio::{
     io::{AsyncRead, AsyncWriteExt},
@@ -10,6 +12,7 @@ use tokio::{
 
 use crate::{
     compression::{compress, decompress},
+    entity::Entity,
     error::{assert_block_level_eq, assert_hash_eq, assert_size_multiple_of_hash, Error, Result},
     hash::{self, Hash},
 };
@@ -19,14 +22,19 @@ pub use self::records::{BlockRecord, BlockRecords, BlockRefs};
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Block {
     Leaf {
-        hash: Hash,
+        hash: Hash<Block>,
         data: Vec<u8>,
     },
     Branch {
-        hash: Hash,
+        hash: Hash<Block>,
         level: u8,
-        children: Vec<Hash>,
+        children: Vec<Hash<Block>>,
     },
+}
+
+impl Entity for Block {
+    const NAME: &'static str = "block";
+    const KEY_PREFIX: &'static str = "blocks/";
 }
 
 impl Block {
@@ -36,7 +44,7 @@ impl Block {
         }
 
         let (data, hash) = spawn_blocking(move || {
-            let hash = hash::leaf(&data);
+            let hash = Hash::leaf_block(&data);
             (data, hash)
         })
         .await?;
@@ -44,7 +52,7 @@ impl Block {
         Ok(Block::Leaf { hash, data })
     }
 
-    pub async fn branch(level: u8, children: Vec<Hash>) -> Result<Self> {
+    pub async fn branch(level: u8, children: Vec<Hash<Block>>) -> Result<Self> {
         if level == 0 {
             return Err(Error::BranchLevelZero);
         }
@@ -54,7 +62,7 @@ impl Block {
         }
 
         let (children, hash) = spawn_blocking(move || {
-            let hash = hash::branch(&children);
+            let hash = Hash::branch_block(&children);
             (children, hash)
         })
         .await?;
@@ -74,7 +82,7 @@ impl Block {
         }
     }
 
-    pub fn hash(&self) -> &Hash {
+    pub fn hash(&self) -> &Hash<Block> {
         match self {
             Block::Leaf { hash, .. } | Block::Branch { hash, .. } => hash,
         }
@@ -89,7 +97,7 @@ impl Block {
     }
 
     pub async fn decode(
-        expected_hash: &Hash,
+        expected_hash: &Hash<Block>,
         expected_level: Option<u8>,
         bytes: &[u8],
     ) -> Result<Self> {
@@ -109,13 +117,13 @@ impl Block {
             Block::Branch {
                 level, children, ..
             } => {
-                let bytes = hash::concat(children);
+                let bytes = concat(children);
                 Ok((level, bytes))
             }
         }
     }
 
-    async fn from_raw(expected_hash: &Hash, level: u8, bytes: Vec<u8>) -> Result<Self> {
+    async fn from_raw(expected_hash: &Hash<Block>, level: u8, bytes: Vec<u8>) -> Result<Self> {
         let block = if level == 0 {
             Block::leaf_from_raw(bytes).await?
         } else {
@@ -129,7 +137,7 @@ impl Block {
     async fn leaf_from_raw(bytes: Vec<u8>) -> Result<Self> {
         let data = spawn_blocking(move || decompress(&bytes)).await??;
         let (data, hash) = spawn_blocking(move || {
-            let hash = hash::leaf(&data);
+            let hash = Hash::leaf_block(&data);
             (data, hash)
         })
         .await?;
@@ -141,9 +149,9 @@ impl Block {
         let size = bytes.len() as u64;
         assert_size_multiple_of_hash(size)?;
 
-        let children = hash::split(&bytes).collect::<Vec<_>>();
+        let children = split(&bytes).collect::<Vec<_>>();
         let (children, hash) = spawn_blocking(move || {
-            let hash = hash::branch(&children);
+            let hash = Hash::branch_block(&children);
             (children, hash)
         })
         .await?;
@@ -160,4 +168,17 @@ pub fn chunker<R: AsyncRead + Unpin>(reader: R, target_size: u32) -> AsyncStream
     let min_size = target_size / 2;
     let max_size = target_size * 4;
     AsyncStreamCDC::new(reader, min_size, target_size, max_size)
+}
+
+pub fn concat<H: Borrow<Hash<Block>>, I: IntoIterator<Item = H>>(hashes: I) -> Vec<u8> {
+    hashes
+        .into_iter()
+        .flat_map(|hash| *hash.borrow().as_bytes())
+        .collect()
+}
+
+pub fn split(bytes: &[u8]) -> impl Iterator<Item = Hash<Block>> + '_ {
+    bytes
+        .chunks_exact(hash::SIZE)
+        .map(|bytes| Hash::from_bytes(bytes.try_into().unwrap()))
 }

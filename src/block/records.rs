@@ -3,13 +3,16 @@ use std::{cmp::Ordering, collections::HashMap};
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    entity::{EntityIndex, EntityRecord},
     error::{Error, Result},
     hash::Hash,
 };
 
+use super::Block;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BlockRefs {
-    refs: HashMap<Hash, u64>,
+    refs: HashMap<Hash<Block>, u64>,
 }
 
 impl BlockRefs {
@@ -19,12 +22,7 @@ impl BlockRefs {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn contains(&self, hash: &Hash) -> bool {
-        self.refs.contains_key(hash)
-    }
-
-    pub fn add_count(&mut self, hash: &Hash, count: u64) {
+    pub fn add_count(&mut self, hash: &Hash<Block>, count: u64) {
         self.refs
             .entry(*hash)
             .and_modify(|lhs_count| *lhs_count += count)
@@ -38,9 +36,15 @@ pub struct BlockRecord {
     pub size: u64,
 }
 
+impl EntityRecord<Block> for BlockRecord {
+    fn size(&self) -> u64 {
+        self.size
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BlockRecords {
-    records: HashMap<Hash, BlockRecord>,
+    records: HashMap<Hash<Block>, BlockRecord>,
 }
 
 impl BlockRecords {
@@ -50,40 +54,7 @@ impl BlockRecords {
         }
     }
 
-    pub fn unique_count(&self) -> usize {
-        self.records.len()
-    }
-
-    #[allow(dead_code)]
-    pub fn keys(&self) -> impl Iterator<Item = &Hash> {
-        self.records.keys()
-    }
-
-    pub fn contains(&self, hash: &Hash) -> bool {
-        self.records.contains_key(hash)
-    }
-
-    #[allow(dead_code)]
-    pub fn get(&self, hash: &Hash) -> Option<&BlockRecord> {
-        self.records.get(hash)
-    }
-
-    pub fn get_mut(&mut self, hash: &Hash) -> Option<&mut BlockRecord> {
-        self.records.get_mut(hash)
-    }
-
-    pub fn insert(&mut self, hash: Hash, record: BlockRecord) {
-        self.records.insert(hash, record);
-    }
-
-    #[allow(dead_code)]
-    pub fn remove(&mut self, hash: &Hash) -> Result<BlockRecord> {
-        self.records
-            .remove(hash)
-            .ok_or_else(|| Error::BlockRecordNotFound(*hash))
-    }
-
-    pub fn remove_refs(&mut self, refs: &BlockRefs) -> Result<Vec<(Hash, BlockRecord)>> {
+    pub fn remove_refs(&mut self, refs: &BlockRefs) -> Result<Vec<(Hash<Block>, BlockRecord)>> {
         let mut removed = vec![];
 
         for (&hash, &ref_count) in &refs.refs {
@@ -109,5 +80,35 @@ impl BlockRecords {
         }
 
         Ok(removed)
+    }
+}
+
+impl EntityIndex<Block> for BlockRecords {
+    type Record = BlockRecord;
+
+    fn len(&self) -> usize {
+        self.records.len()
+    }
+
+    fn contains(&self, hash: &Hash<Block>) -> bool {
+        self.records.contains_key(hash)
+    }
+
+    fn get(&self, hash: &Hash<Block>) -> Option<&BlockRecord> {
+        self.records.get(hash)
+    }
+
+    fn get_mut(&mut self, hash: &Hash<Block>) -> Option<&mut BlockRecord> {
+        self.records.get_mut(hash)
+    }
+
+    fn insert(&mut self, hash: Hash<Block>, record: BlockRecord) {
+        self.records.insert(hash, record);
+    }
+
+    fn remove(&mut self, hash: &Hash<Block>) -> Result<BlockRecord> {
+        self.records
+            .remove(hash)
+            .ok_or_else(|| Error::BlockRecordNotFound(*hash))
     }
 }

@@ -14,7 +14,6 @@ use crate::{
     block::Block,
     error::{assert_block_level_eq, Error, Result},
     hash::Hash,
-    keys,
 };
 
 use super::{files::PendingDownload, RestoreState};
@@ -74,7 +73,7 @@ impl DerefMut for ActiveDownload {
 pub async fn download_block_recursive(
     state: Arc<RestoreState>,
     file: &mut ActiveDownload,
-    hash: Hash,
+    hash: Hash<Block>,
     level: Option<u8>,
 ) -> Result<u64> {
     state.stats.write().await.blocks_referenced += 1;
@@ -92,7 +91,7 @@ pub async fn download_block_recursive(
         return Ok(size);
     }
 
-    let key = keys::block(&hash);
+    let key = hash.key();
     let bytes = state.storage.get(&key).await?;
     state.stats.write().await.blocks_downloaded += 1;
     state.stats.write().await.content_bytes_downloaded += bytes.len() as u64;

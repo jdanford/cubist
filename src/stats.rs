@@ -1,7 +1,9 @@
 use std::{ops::Deref, time::Duration};
 
 use chrono::{DateTime, Utc};
-use serde::{ser::SerializeMap, Serialize};
+use serde::{ser::SerializeMap, Serialize, Serializer};
+
+use crate::{archive::Archive, block::Block, entity::Entity};
 
 #[derive(Debug, Clone)]
 pub struct CommandStats {
@@ -45,6 +47,22 @@ impl CommandStats {
             storage: storage_stats,
             end_time: Utc::now(),
         }
+    }
+}
+
+pub trait EntityStats<E: Entity> {
+    fn add_entities_deleted(&mut self, count: u64);
+}
+
+impl EntityStats<Archive> for CommandStats {
+    fn add_entities_deleted(&mut self, count: u64) {
+        self.archives_deleted += count;
+    }
+}
+
+impl EntityStats<Block> for CommandStats {
+    fn add_entities_deleted(&mut self, count: u64) {
+        self.blocks_deleted += count;
     }
 }
 
@@ -152,7 +170,7 @@ impl Deref for FinalizedCommandStats {
 impl Serialize for FinalizedCommandStats {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer,
+        S: Serializer,
     {
         let mut map = serializer.serialize_map(None)?;
 

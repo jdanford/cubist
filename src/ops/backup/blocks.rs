@@ -2,16 +2,17 @@ use std::sync::Arc;
 
 use crate::{
     block::{Block, BlockRecord},
+    entity::EntityIndex,
     error::{Error, Result},
     hash::{self, Hash},
-    keys,
 };
 
 use super::BackupState;
 
+#[derive(Debug)]
 pub struct UploadTree {
     state: Arc<BackupState>,
-    layers: Vec<Vec<Hash>>,
+    layers: Vec<Vec<Hash<Block>>>,
 }
 
 impl UploadTree {
@@ -28,7 +29,7 @@ impl UploadTree {
         self.add_inner(hash, false).await
     }
 
-    pub async fn finalize(mut self) -> Result<Option<Hash>> {
+    pub async fn finalize(mut self) -> Result<Option<Hash<Block>>> {
         if self.layers.is_empty() {
             return Ok(None);
         }
@@ -42,7 +43,7 @@ impl UploadTree {
         Ok(Some(hash))
     }
 
-    async fn add_inner(&mut self, mut hash: Hash, finalize: bool) -> Result<()> {
+    async fn add_inner(&mut self, mut hash: Hash<Block>, finalize: bool) -> Result<()> {
         let max_layer_size = self.state.target_block_size as usize / hash::SIZE;
 
         for i in 0.. {
@@ -70,7 +71,7 @@ impl UploadTree {
         Ok(())
     }
 
-    async fn upload_block(&mut self, block: Block) -> Result<Hash> {
+    async fn upload_block(&mut self, block: Block) -> Result<Hash<Block>> {
         let hash = block.hash().to_owned();
         let lock = self.state.block_locks.write().await.lock(&hash);
         let permit = lock.acquire().await?;
@@ -81,7 +82,7 @@ impl UploadTree {
             let record = block_records.get_mut(&hash).unwrap();
             record.ref_count += 1;
         } else {
-            let key = keys::block(&hash);
+            let key = hash.key();
             let bytes = block.encode(self.state.compression_level).await?;
             let size = bytes.len() as u64;
 

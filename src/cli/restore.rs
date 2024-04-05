@@ -7,7 +7,6 @@ use crate::{
     arc::{rwarc, unarc, unrwarc},
     error::Result,
     format::format_size,
-    keys,
     locks::BlockLocks,
     ops::{download_archive, download_pending_files, expand_hash, restore_all, RestoreState},
     stats::CommandStats,
@@ -25,7 +24,7 @@ pub async fn main(cli: RestoreArgs) -> Result<()> {
     let local_blocks = rwarc(HashMap::new());
     let block_locks = rwarc(BlockLocks::new());
 
-    let archive_hash = expand_hash(storage.clone(), keys::ARCHIVE_NAMESPACE, &cli.archive).await?;
+    let archive_hash = expand_hash(storage.clone(), &cli.archive).await?;
     let archive = download_archive(storage.clone(), &archive_hash).await?;
 
     let state = Arc::new(RestoreState {

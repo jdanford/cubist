@@ -3,9 +3,9 @@ use std::{fmt, ops::RangeInclusive, path::PathBuf};
 use clap::{ArgAction, Args, ValueEnum};
 use concolor_clap::ColorChoice;
 
-use crate::{file::WalkOrder, hash::ShortHash};
+use crate::{archive::Archive, file::WalkOrder, hash::ShortHash};
 
-use super::parse::{parse_range_inclusive, parse_short_hash};
+use super::parse::{parse_archive_hash, parse_range_inclusive};
 
 const COMPRESSION_LEVEL_RANGE: RangeInclusive<u8> = 1..=19;
 const DEFAULT_COMPRESSION_LEVEL: u8 = 3;
@@ -79,8 +79,8 @@ pub struct BackupArgs {
 #[derive(Args, Debug)]
 pub struct RestoreArgs {
     /// Archive to restore from
-    #[arg(value_parser = parse_short_hash)]
-    pub archive: ShortHash,
+    #[arg(value_parser = parse_archive_hash)]
+    pub archive: ShortHash<Archive>,
 
     /// Files to restore (or all files if empty)
     pub paths: Vec<PathBuf>,
@@ -110,8 +110,8 @@ pub struct RestoreArgs {
 #[derive(Args, Debug)]
 pub struct DeleteArgs {
     /// Archive(s) to delete
-    #[arg(required = true, value_parser = parse_short_hash)]
-    pub archives: Vec<ShortHash>,
+    #[arg(required = true, value_parser = parse_archive_hash)]
+    pub archives: Vec<ShortHash<Archive>>,
 
     /// Number of background tasks to use
     #[arg(

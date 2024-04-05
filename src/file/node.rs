@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, ffi::OsString, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::hash::Hash;
+use crate::{block::Block, hash::Hash};
 
 use super::metadata::Metadata;
 
@@ -12,7 +12,7 @@ pub type NodeChildren = BTreeMap<OsString, Node>;
 pub enum Node {
     File {
         metadata: Metadata,
-        hash: Option<Hash>,
+        hash: Option<Hash<Block>>,
     },
     Symlink {
         metadata: Metadata,

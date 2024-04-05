@@ -2,11 +2,11 @@ use std::{collections::HashMap, sync::Arc};
 
 use tokio::sync::Semaphore;
 
-use crate::hash::Hash;
+use crate::{block::Block, hash::Hash};
 
 #[derive(Debug)]
 pub struct BlockLocks {
-    locks: HashMap<Hash, Arc<Semaphore>>,
+    locks: HashMap<Hash<Block>, Arc<Semaphore>>,
 }
 
 impl BlockLocks {
@@ -16,7 +16,7 @@ impl BlockLocks {
         }
     }
 
-    pub fn lock(&mut self, hash: &Hash) -> Arc<Semaphore> {
+    pub fn lock(&mut self, hash: &Hash<Block>) -> Arc<Semaphore> {
         self.locks
             .entry(*hash)
             .or_insert_with(|| Arc::new(Semaphore::new(1)))

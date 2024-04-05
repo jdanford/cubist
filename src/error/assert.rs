@@ -1,8 +1,11 @@
-use crate::hash::{self, Hash};
+use crate::{
+    block::Block,
+    hash::{self, Hash},
+};
 
 use super::{Error, Result};
 
-pub fn assert_block_level_eq(hash: Hash, actual: u8, expected: Option<u8>) -> Result<()> {
+pub fn assert_block_level_eq(hash: Hash<Block>, actual: u8, expected: Option<u8>) -> Result<()> {
     if let Some(expected) = expected {
         if expected != actual {
             return Err(Error::WrongBlockLevel {
@@ -16,7 +19,7 @@ pub fn assert_block_level_eq(hash: Hash, actual: u8, expected: Option<u8>) -> Re
     Ok(())
 }
 
-pub fn assert_hash_eq(actual: &Hash, expected: &Hash) -> Result<()> {
+pub fn assert_hash_eq(actual: &Hash<Block>, expected: &Hash<Block>) -> Result<()> {
     if expected != actual {
         return Err(Error::WrongBlockHash {
             actual: *actual,

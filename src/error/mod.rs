@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
-use crate::hash::Hash;
+use crate::{archive::Archive, block::Block, hash::Hash};
 
 pub use assert::{assert_block_level_eq, assert_hash_eq, assert_size_multiple_of_hash};
 
@@ -47,24 +47,27 @@ pub enum Error {
     FileAlreadyExists(PathBuf),
 
     #[error("no archive record found for {0}")]
-    ArchiveRecordNotFound(Hash),
+    ArchiveRecordNotFound(Hash<Archive>),
 
     #[error("no block record found for {0}")]
-    BlockRecordNotFound(Hash),
+    BlockRecordNotFound(Hash<Block>),
 
     #[error("block {hash} has ref count {actual}, expected at least {expected}")]
     WrongRefCount {
-        hash: Hash,
+        hash: Hash<Block>,
         actual: u64,
         expected: u64,
     },
 
     #[error("block has hash {actual}, expected {expected}")]
-    WrongBlockHash { actual: Hash, expected: Hash },
+    WrongBlockHash {
+        actual: Hash<Block>,
+        expected: Hash<Block>,
+    },
 
     #[error("block has level {actual}, expected {expected}")]
     WrongBlockLevel {
-        hash: Hash,
+        hash: Hash<Block>,
         actual: u8,
         expected: u8,
     },

@@ -1,24 +1,25 @@
 use std::{pin::pin, sync::Arc};
 
-use async_channel::{Receiver, Sender};
-use clap::builder::styling::AnsiColor;
-use log::debug;
+use async_channel::Sender;
 use tokio::{sync::Semaphore, task::JoinSet, try_join};
 use tokio_stream::StreamExt;
 
 use crate::{
+    block::Block,
+    entity::{Entity, EntityIndex},
     error::Result,
-    keys::{self, hash_from_key},
+    hash::Hash,
+    ops::cleanup::delete_entities,
     storage::MAX_KEYS_PER_REQUEST,
 };
 
-use super::{CleanupState, RemovedBlock};
+use super::{CleanupState, RemovedBlock, RemovedEntity};
 
 pub async fn cleanup_blocks(state: Arc<CleanupState>) -> Result<()> {
     let (sender, receiver) = async_channel::bounded(MAX_KEYS_PER_REQUEST);
     try_join!(
         find_garbage_blocks(state.clone(), sender),
-        delete_garbage_blocks(state.clone(), receiver),
+        delete_entities(state.clone(), receiver),
     )?;
     Ok(())
 }
@@ -27,7 +28,7 @@ async fn find_garbage_blocks(state: Arc<CleanupState>, sender: Sender<RemovedBlo
     let semaphore = Arc::new(Semaphore::new(state.task_count));
     let mut tasks = JoinSet::new();
 
-    let mut key_chunks = pin!(state.storage.keys_paginated(Some(keys::BLOCK_NAMESPACE)));
+    let mut key_chunks = pin!(state.storage.keys_paginated(Some(Block::KEY_PREFIX)));
     while let Some(keys) = key_chunks.try_next().await? {
         let state = state.clone();
         let sender = sender.clone();
@@ -37,9 +38,9 @@ async fn find_garbage_blocks(state: Arc<CleanupState>, sender: Sender<RemovedBlo
             let block_records = state.block_records.blocking_read();
 
             for key in keys {
-                let hash = hash_from_key(keys::BLOCK_NAMESPACE, &key)?;
+                let hash = Hash::from_key(&key)?;
                 if !block_records.contains(&hash) {
-                    let removed_block = RemovedBlock { hash, record: None };
+                    let removed_block = RemovedEntity { hash, record: None };
                     sender.send_blocking(removed_block)?;
                 }
             }
@@ -51,59 +52,6 @@ async fn find_garbage_blocks(state: Arc<CleanupState>, sender: Sender<RemovedBlo
 
     while let Some(result) = tasks.join_next().await {
         result??;
-    }
-
-    Ok(())
-}
-
-pub async fn delete_garbage_blocks(
-    state: Arc<CleanupState>,
-    receiver: Receiver<RemovedBlock>,
-) -> Result<()> {
-    let chunk_size = MAX_KEYS_PER_REQUEST;
-    let mut keys = vec![];
-    let mut bytes = 0;
-
-    while let Ok(removed_block) = receiver.recv().await {
-        let key = keys::block(&removed_block.hash);
-        keys.push(key);
-
-        if let Some(record) = removed_block.record {
-            bytes += record.size;
-        }
-
-        let count = keys.len();
-        if count >= chunk_size {
-            let deleted_keys = keys.drain(..chunk_size).collect::<Vec<_>>();
-
-            if !state.dry_run {
-                state.storage.delete_many(&deleted_keys).await?;
-            }
-
-            state.stats.write().await.blocks_deleted += count as u64;
-            state.stats.write().await.bytes_deleted += bytes;
-            bytes = 0;
-
-            for key in deleted_keys {
-                let style = AnsiColor::Yellow.on_default();
-                debug!("{style}deleted{style:#} {key}");
-            }
-        }
-    }
-
-    let count = keys.len();
-    if count > 0 {
-        if !state.dry_run {
-            state.storage.delete_many(&keys).await?;
-        }
-
-        state.stats.write().await.blocks_deleted += count as u64;
-        state.stats.write().await.bytes_deleted += bytes;
-
-        for key in keys {
-            let style = AnsiColor::Yellow.on_default();
-            debug!("{style}deleted{style:#} {key}");
-        }
     }
 
     Ok(())

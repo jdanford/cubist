@@ -7,9 +7,10 @@ mod restore;
 use std::{borrow::Borrow, fmt::Display, sync::Arc};
 
 use crate::{
+    block::Block,
+    entity::Entity,
     error::Result,
     hash::{Hash, ShortHash},
-    keys::{self, hash_from_key},
     storage::Storage,
 };
 
@@ -24,42 +25,42 @@ pub use self::{
     restore::{download_pending_files, restore_all, RestoreState},
 };
 
-pub async fn delete_blocks<'a, I: IntoIterator<Item = &'a Hash>>(
+pub async fn delete_blocks<H: Borrow<Hash<Block>>, I: IntoIterator<Item = H>>(
     storage: Arc<Storage>,
     hashes: I,
 ) -> Result<()> {
-    let keys = hashes.into_iter().map(keys::block);
+    let keys = hashes.into_iter().map(|hash| hash.borrow().key());
     storage.delete_many(keys).await
 }
 
-pub async fn expand_hash(
+pub async fn expand_hash<E: Entity>(
     storage: Arc<Storage>,
-    namespace: &str,
-    short_hash: &ShortHash,
-) -> Result<Hash> {
-    let partial_key = format!("{namespace}{short_hash}");
+    short_hash: &ShortHash<E>,
+) -> Result<Hash<E>> {
+    let partial_key = short_hash.to_key_prefix();
     let full_key = storage.expand_key(&partial_key).await?;
-    hash_from_key(namespace, &full_key)
+    Hash::from_key(&full_key)
 }
 
-pub async fn expand_hashes<H: Borrow<ShortHash> + Display>(
+pub async fn expand_hashes<E: Entity, H: Borrow<ShortHash<E>> + Display>(
     storage: Arc<Storage>,
-    namespace: &str,
     short_hashes: &[H],
-) -> Result<Vec<Hash>> {
+) -> Result<Vec<Hash<E>>> {
     match short_hashes {
         [short_hash] => {
-            let hash = expand_hash(storage, namespace, short_hash.borrow()).await?;
+            let hash = expand_hash(storage, short_hash.borrow()).await?;
             return Ok(vec![hash]);
         }
         [] => return Ok(vec![]),
         _ => {}
     };
 
-    let partial_keys = short_hashes.iter().map(|hash| format!("{namespace}{hash}"));
+    let partial_keys = short_hashes
+        .iter()
+        .map(|hash| hash.borrow().to_key_prefix());
     let full_keys = storage.expand_keys(partial_keys).await?;
     full_keys
         .into_iter()
-        .map(|key| hash_from_key(namespace, key.as_str()))
+        .map(|key| Hash::from_key(key.as_str()))
         .collect()
 }

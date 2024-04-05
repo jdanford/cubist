@@ -18,7 +18,7 @@ use tokio::{
 use tokio_stream::StreamExt;
 
 use crate::{
-    block,
+    block::{self, Block},
     error::{Error, Result},
     file::{read_metadata, Node},
     format::{format_path, format_size},
@@ -160,7 +160,10 @@ async fn upload_pending_file(state: Arc<BackupState>, pending_file: PendingUploa
     Ok(())
 }
 
-pub async fn upload_file(state: Arc<BackupState>, file: &mut File) -> Result<(Option<Hash>, u64)> {
+pub async fn upload_file(
+    state: Arc<BackupState>,
+    file: &mut File,
+) -> Result<(Option<Hash<Block>>, u64)> {
     let reader = BufReader::new(file);
     let mut chunker = block::chunker(reader, state.target_block_size);
     let mut chunks = pin!(chunker.as_stream());

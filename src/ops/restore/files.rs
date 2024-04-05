@@ -9,6 +9,7 @@ use log::debug;
 use tokio::{fs, sync::Semaphore, task::JoinSet};
 
 use crate::{
+    block::Block,
     error::{Error, Result},
     file::{restore_metadata, restore_metadata_from_node, try_exists, FileType, Metadata, Node},
     format::{format_path, format_size},
@@ -23,7 +24,7 @@ use super::{
 #[derive(Debug)]
 pub struct PendingDownload {
     pub metadata: Metadata,
-    pub hash: Option<Hash>,
+    pub hash: Option<Hash<Block>>,
     pub path: PathBuf,
 }
 
