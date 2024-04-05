@@ -168,10 +168,7 @@ impl Deref for FinalizedCommandStats {
 }
 
 impl Serialize for FinalizedCommandStats {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut map = serializer.serialize_map(None)?;
 
         map.serialize_entry("start_time", &self.start_time)?;

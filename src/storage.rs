@@ -139,10 +139,11 @@ impl Storage {
         }
     }
 
-    pub async fn expand_keys<S: AsRef<str>, I: IntoIterator<Item = S>>(
-        &self,
-        prefixes: I,
-    ) -> Result<Vec<String>> {
+    pub async fn expand_keys<S, I>(&self, prefixes: I) -> Result<Vec<String>>
+    where
+        S: AsRef<str>,
+        I: IntoIterator<Item = S>,
+    {
         let prefixes = prefixes.into_iter().collect::<Vec<_>>();
         let common_prefix = longest_common_prefix(&prefixes);
         let keys = self.keys_vec(common_prefix).await?;
@@ -230,11 +231,15 @@ impl Storage {
         Ok(())
     }
 
-    pub async fn delete_many<S: ToString, I: IntoIterator<Item = S>>(&self, keys: I) -> Result<()> {
+    pub async fn delete_many<S, I>(&self, keys: I) -> Result<()>
+    where
+        S: Into<String>,
+        I: IntoIterator<Item = S>,
+    {
         for keys in &keys.into_iter().chunks(MAX_KEYS_PER_REQUEST) {
             let mut delete_builder = Delete::builder().quiet(true);
             for key in keys {
-                let object = ObjectIdentifier::builder().key(key.to_string()).build()?;
+                let object = ObjectIdentifier::builder().key(key.into()).build()?;
                 delete_builder = delete_builder.objects(object);
             }
 

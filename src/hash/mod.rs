@@ -120,20 +120,14 @@ impl<T> std::hash::Hash for Hash<T> {
 }
 
 impl<T> Serialize for Hash<T> {
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
         self.inner.serialize(serializer)
     }
 }
 
 impl<'de, T> Deserialize<'de> for Hash<T> {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Deserialize::deserialize(deserializer).map(blake3::Hash::into)
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
+        Deserialize::deserialize(deserializer).map(Hash::from_hash)
     }
 }
 

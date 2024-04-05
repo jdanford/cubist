@@ -170,11 +170,17 @@ pub fn chunker<R: AsyncRead + Unpin>(reader: R, target_size: u32) -> AsyncStream
     AsyncStreamCDC::new(reader, min_size, target_size, max_size)
 }
 
-pub fn concat<H: Borrow<Hash<Block>>, I: IntoIterator<Item = H>>(hashes: I) -> Vec<u8> {
-    hashes
-        .into_iter()
-        .flat_map(|hash| *hash.borrow().as_bytes())
-        .collect()
+pub fn concat<H, I>(hashes: I) -> Vec<u8>
+where
+    H: Borrow<Hash<Block>>,
+    I: IntoIterator<Item = H>,
+{
+    let mut bytes = vec![];
+    for hash in hashes {
+        bytes.extend(hash.borrow().as_bytes());
+    }
+
+    bytes
 }
 
 pub fn split(bytes: &[u8]) -> impl Iterator<Item = Hash<Block>> + '_ {

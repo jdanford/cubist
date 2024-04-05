@@ -70,8 +70,10 @@ impl From<clap::Error> for Error {
     }
 }
 
-impl<E: std::error::Error + Send + Sync + 'static, R: Debug + Send + Sync + 'static>
-    From<SdkError<E, R>> for Error
+impl<E, R> From<SdkError<E, R>> for Error
+where
+    E: std::error::Error + Send + Sync + 'static,
+    R: Debug + Send + Sync + 'static,
 {
     fn from(error: SdkError<E, R>) -> Self {
         Error::other(error)
@@ -84,7 +86,10 @@ impl From<BuildError> for Error {
     }
 }
 
-impl<T: Send + Sync + 'static> From<SendError<T>> for Error {
+impl<T> From<SendError<T>> for Error
+where
+    T: Send + Sync + 'static,
+{
     fn from(error: SendError<T>) -> Self {
         Error::other(error)
     }

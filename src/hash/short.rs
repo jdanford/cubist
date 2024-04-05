@@ -43,7 +43,7 @@ impl<T> ShortHash<T> {
 }
 
 impl<E: Entity> ShortHash<E> {
-    pub fn to_key_prefix(&self) -> String {
+    pub fn key_prefix(&self) -> String {
         format!("{}{}", E::KEY_PREFIX, self.inner)
     }
 }

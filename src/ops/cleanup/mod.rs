@@ -118,11 +118,13 @@ where
     Ok(())
 }
 
-pub async fn delete_entities<E: Entity, I: EntityIndex<E>>(
+pub async fn delete_entities<E, I>(
     state: Arc<CleanupState>,
     receiver: Receiver<RemovedEntity<E, I>>,
 ) -> Result<()>
 where
+    E: Entity,
+    I: EntityIndex<E>,
     CommandStats: EntityStats<E>,
 {
     let chunk_size = MAX_KEYS_PER_REQUEST;
@@ -143,13 +145,14 @@ where
     Ok(())
 }
 
-async fn maybe_delete_chunk<E: Entity>(
+async fn maybe_delete_chunk<E>(
     state: Arc<CleanupState>,
     hashes: &mut Vec<Hash<E>>,
     bytes: &mut u64,
     chunk_size: usize,
 ) -> Result<()>
 where
+    E: Entity,
     CommandStats: EntityStats<E>,
 {
     let count = hashes.len();
