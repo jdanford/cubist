@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
+use chrono::{DateTime, Utc};
 use tokio::{sync::RwLock, task::spawn_blocking};
 
 use crate::{
-    archive::Archive,
+    archive::{Archive, ArchiveRecord},
     compression::{compress, decompress},
     error::Result,
-    hash::Hash,
+    hash::{self, Hash},
     keys,
     serde::{deserialize, serialize},
     storage::Storage,
@@ -26,15 +27,19 @@ pub async fn download_archive(storage: Arc<Storage>, hash: &Hash) -> Result<Arch
 
 pub async fn upload_archive(
     storage: Arc<Storage>,
-    hash: &Hash,
+    created: DateTime<Utc>,
     archive: Arc<RwLock<Archive>>,
-) -> Result<()> {
-    let key = keys::archive(hash);
-    let archive_bytes = spawn_blocking(move || {
+) -> Result<(Hash, ArchiveRecord)> {
+    let compressed_bytes = spawn_blocking(move || {
         let bytes = serialize(&*archive.blocking_read())?;
-        let compressed_bytes = compress(&bytes, COMPRESSION_LEVEL)?;
-        Result::Ok(compressed_bytes)
+        compress(&bytes, COMPRESSION_LEVEL)
     })
     .await??;
-    storage.put(&key, archive_bytes).await
+    let size = compressed_bytes.len() as u64;
+    let record = ArchiveRecord { created, size };
+    let hash = hash::archive(&record);
+    let key = keys::archive(&hash);
+
+    storage.put(&key, compressed_bytes).await?;
+    Ok((hash, record))
 }

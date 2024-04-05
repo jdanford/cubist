@@ -71,9 +71,9 @@ pub async fn delete_garbage_archives(
         let key = keys::archive(&removed_archive.hash);
         keys.push(key);
 
-        // if let Some(record) = removed_block.record {
-        //     bytes += record.size;
-        // }
+        if let Some(record) = removed_archive.record {
+            bytes += record.size;
+        }
 
         let count = keys.len();
         if count >= chunk_size {

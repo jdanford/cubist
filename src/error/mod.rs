@@ -46,9 +46,6 @@ pub enum Error {
     #[error("`{0}` already exists")]
     FileAlreadyExists(PathBuf),
 
-    #[error("archive `{hash}` does not have tag `{tag}`")]
-    NoTagForArchive { hash: Hash, tag: String },
-
     #[error("no archive record found for {0}")]
     ArchiveRecordNotFound(Hash),
 
@@ -132,16 +129,7 @@ impl PartialEq for Error {
             (EmptyPath, EmptyPath) => false,
             (PathAlreadyArchived(path_l), PathAlreadyArchived(path_r)) => path_l == path_r,
             (FileAlreadyExists(path_l), FileAlreadyExists(path_r)) => path_l == path_r,
-            (
-                NoTagForArchive {
-                    hash: hash_l,
-                    tag: tag_l,
-                },
-                NoTagForArchive {
-                    hash: hash_r,
-                    tag: tag_r,
-                },
-            ) => hash_l == hash_r && tag_l == tag_r,
+            (ArchiveRecordNotFound(hash_l), ArchiveRecordNotFound(hash_r)) => hash_l == hash_r,
             (BlockRecordNotFound(hash_l), BlockRecordNotFound(hash_r)) => hash_l == hash_r,
             (
                 WrongRefCount {
@@ -181,6 +169,7 @@ impl PartialEq for Error {
             (BranchLevelZero, BranchLevelZero) => true,
             (TooManyBlockLevels, TooManyBlockLevels) => true,
             (EmptyBlock, EmptyBlock) => true,
+            (MissingEnvVar(var_l), MissingEnvVar(var_r)) => var_l == var_r,
             _ => false,
         }
     }

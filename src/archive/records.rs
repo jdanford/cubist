@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 
 use blake3::Hash;
 use chrono::{DateTime, Utc};
@@ -9,14 +9,13 @@ use crate::error::{Error, Result};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ArchiveRecord {
     pub created: DateTime<Utc>,
-    pub tags: HashSet<String>,
+    pub size: u64,
 }
 
 #[derive(Debug)]
 pub struct ArchiveRecords {
     records: HashMap<Hash, ArchiveRecord>,
     by_created: BTreeMap<DateTime<Utc>, Hash>,
-    by_tag: HashMap<String, HashSet<Hash>>,
 }
 
 impl ArchiveRecords {
@@ -24,23 +23,19 @@ impl ArchiveRecords {
         ArchiveRecords {
             records: HashMap::new(),
             by_created: BTreeMap::new(),
-            by_tag: HashMap::new(),
         }
     }
 
     pub fn from_records(records: HashMap<Hash, ArchiveRecord>) -> Self {
         let mut by_created = BTreeMap::new();
-        let mut by_tag = HashMap::new();
 
         for (hash, record) in &records {
-            insert_tags(&mut by_tag, *hash, &record.tags);
             by_created.insert(record.created, *hash);
         }
 
         ArchiveRecords {
             records,
             by_created,
-            by_tag,
         }
     }
 
@@ -59,7 +54,6 @@ impl ArchiveRecords {
     }
 
     pub fn insert(&mut self, hash: Hash, record: ArchiveRecord) {
-        insert_tags(&mut self.by_tag, hash, &record.tags);
         self.by_created.insert(record.created, hash);
         self.records.insert(hash, record);
     }
@@ -70,23 +64,7 @@ impl ArchiveRecords {
             .remove(hash)
             .ok_or_else(|| Error::ArchiveRecordNotFound(*hash))?;
         self.by_created.remove(&record.created);
-        self.remove_tags(hash, &record.tags)?;
         Ok(record)
-    }
-
-    fn remove_tags(&mut self, hash: &Hash, tags: &HashSet<String>) -> Result<()> {
-        for tag in tags {
-            let hashes =
-                self.by_tag
-                    .get_mut(tag.as_str())
-                    .ok_or_else(|| Error::NoTagForArchive {
-                        hash: *hash,
-                        tag: tag.to_string(),
-                    })?;
-            hashes.remove(hash);
-        }
-
-        Ok(())
     }
 
     pub fn iter_by_created(&self) -> impl Iterator<Item = (&Hash, &ArchiveRecord)> {
@@ -94,13 +72,6 @@ impl ArchiveRecords {
             let record = self.records.get(hash).unwrap();
             (hash, record)
         })
-    }
-}
-
-fn insert_tags(by_tag: &mut HashMap<String, HashSet<Hash>>, hash: Hash, tags: &HashSet<String>) {
-    for tag in tags {
-        let entry = by_tag.entry(tag.clone()).or_default();
-        entry.insert(hash);
     }
 }
 

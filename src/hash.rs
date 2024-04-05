@@ -59,14 +59,8 @@ pub fn archive(archive: &ArchiveRecord) -> Hash {
     let mut hasher = blake3::Hasher::new();
 
     let timestamp = archive.created.format("%+").to_string();
-    let mut sorted_tags = archive.tags.iter().collect::<Vec<_>>();
-    sorted_tags.sort();
-
     hasher.update(timestamp.as_bytes());
-
-    for tag in sorted_tags {
-        hasher.update(tag.as_bytes());
-    }
+    hasher.update(&archive.size.to_le_bytes());
 
     hasher.finalize()
 }
