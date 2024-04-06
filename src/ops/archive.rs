@@ -26,8 +26,8 @@ pub async fn download_archive(storage: Arc<Storage>, hash: &Hash<Archive>) -> Re
 
 pub async fn upload_archive(
     storage: Arc<Storage>,
-    created: DateTime<Utc>,
     archive: Arc<RwLock<Archive>>,
+    created: DateTime<Utc>,
 ) -> Result<(Hash<Archive>, ArchiveRecord)> {
     let compressed_bytes = spawn_blocking(move || {
         let bytes = serialize(&*archive.blocking_read())?;

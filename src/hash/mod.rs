@@ -35,7 +35,7 @@ impl<T> Hash<T> {
     }
 
     pub fn format_short(&self, block_count: usize) -> String {
-        ShortHash::from_hash(self, block_count).to_string()
+        ShortHash::from_hash(self, block_count).into()
     }
 }
 

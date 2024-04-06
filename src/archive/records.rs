@@ -58,8 +58,16 @@ impl ArchiveRecords {
     }
 }
 
+impl Default for ArchiveRecords {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EntityIndex<Archive> for ArchiveRecords {
     type Record = ArchiveRecord;
+
+    const KEY: &'static str = "metadata/archives";
 
     fn len(&self) -> usize {
         self.records.len()

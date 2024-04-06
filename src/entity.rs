@@ -12,6 +12,8 @@ pub trait EntityRecord<E: Entity> {
 pub trait EntityIndex<E: Entity> {
     type Record: EntityRecord<E>;
 
+    const KEY: &'static str;
+
     fn len(&self) -> usize;
     fn contains(&self, hash: &Hash<E>) -> bool;
     fn get(&self, hash: &Hash<E>) -> Option<&Self::Record>;

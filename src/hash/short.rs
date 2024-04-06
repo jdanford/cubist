@@ -42,6 +42,12 @@ impl<T> ShortHash<T> {
     }
 }
 
+impl<E> From<ShortHash<E>> for String {
+    fn from(hash: ShortHash<E>) -> String {
+        hash.inner
+    }
+}
+
 impl<E: Entity> ShortHash<E> {
     pub fn key_prefix(&self) -> String {
         format!("{}{}", E::KEY_PREFIX, self.inner)

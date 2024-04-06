@@ -1,30 +1,23 @@
-mod archives;
-mod blocks;
+use std::sync::Arc;
 
-use std::{mem, sync::Arc};
-
-use async_channel::{Receiver, Sender};
-use clap::builder::styling::AnsiColor;
-use log::debug;
-use tokio::{
-    sync::{RwLock, Semaphore},
-    task::{spawn_blocking, JoinSet},
-    try_join,
-};
+use tokio::{sync::RwLock, try_join};
 
 use crate::{
     archive::{Archive, ArchiveRecords},
     block::{Block, BlockRecords},
-    entity::{Entity, EntityIndex, EntityRecord},
+    entity::{Entity, EntityIndex},
     error::Result,
     hash::Hash,
-    stats::{CommandStats, EntityStats},
+    ops::cleanup::{
+        delete::delete_entities,
+        find::{find_archives_and_garbage_blocks, find_garbage_entities},
+    },
+    stats::CommandStats,
     storage::{Storage, MAX_KEYS_PER_REQUEST},
 };
 
-pub use self::{archives::cleanup_archives, blocks::cleanup_blocks};
-
-use super::download_archive;
+mod delete;
+mod find;
 
 #[derive(Debug)]
 pub struct CleanupState {
@@ -62,117 +55,20 @@ where
     Ok(())
 }
 
-async fn find_archives_and_garbage_blocks<'a, I>(
-    state: Arc<CleanupState>,
-    hashes: I,
-    archive_sender: Sender<RemovedArchive>,
-    block_sender: Sender<RemovedBlock>,
-) -> Result<()>
-where
-    I: IntoIterator<Item = &'a Hash<Archive>>,
-{
-    let semaphore = Arc::new(Semaphore::new(state.task_count));
-    let mut tasks = JoinSet::new();
-
-    for hash in hashes {
-        let state = state.clone();
-        let storage = state.storage.clone();
-        let hash = *hash;
-        let archive_sender = archive_sender.clone();
-        let block_sender = block_sender.clone();
-        let permit = semaphore.clone().acquire_owned().await?;
-
-        tasks.spawn(async move {
-            let archive = download_archive(storage.clone(), &hash).await?;
-            let record = state.archive_records.write().await.remove(&hash)?;
-            let removed_archive = RemovedArchive {
-                hash,
-                record: Some(record),
-            };
-            archive_sender.send(removed_archive).await?;
-
-            spawn_blocking(move || {
-                let mut block_records = state.block_records.blocking_write();
-                let garbage_blocks = block_records.remove_refs(&archive.block_refs)?;
-                for (hash, record) in garbage_blocks {
-                    let removed_block = RemovedBlock {
-                        hash,
-                        record: Some(record),
-                    };
-                    block_sender.send_blocking(removed_block)?;
-                }
-
-                Result::Ok(())
-            })
-            .await??;
-
-            drop(permit);
-            Result::Ok(())
-        });
-    }
-
-    while let Some(result) = tasks.join_next().await {
-        result??;
-    }
-
+pub async fn cleanup_archives(state: Arc<CleanupState>) -> Result<()> {
+    let (sender, receiver) = async_channel::bounded(MAX_KEYS_PER_REQUEST);
+    try_join!(
+        find_garbage_entities(state.clone(), state.archive_records.clone(), sender),
+        delete_entities(state.clone(), receiver),
+    )?;
     Ok(())
 }
 
-pub async fn delete_entities<E, I>(
-    state: Arc<CleanupState>,
-    receiver: Receiver<RemovedEntity<E, I>>,
-) -> Result<()>
-where
-    E: Entity,
-    I: EntityIndex<E>,
-    CommandStats: EntityStats<E>,
-{
-    let chunk_size = MAX_KEYS_PER_REQUEST;
-    let mut hashes = vec![];
-    let mut bytes = 0;
-
-    while let Ok(removed_block) = receiver.recv().await {
-        hashes.push(removed_block.hash);
-
-        if let Some(record) = removed_block.record {
-            bytes += record.size();
-        }
-
-        maybe_delete_chunk(state.clone(), &mut hashes, &mut bytes, chunk_size).await?;
-    }
-
-    maybe_delete_chunk(state.clone(), &mut hashes, &mut bytes, 1).await?;
-    Ok(())
-}
-
-async fn maybe_delete_chunk<E>(
-    state: Arc<CleanupState>,
-    hashes: &mut Vec<Hash<E>>,
-    bytes: &mut u64,
-    chunk_size: usize,
-) -> Result<()>
-where
-    E: Entity,
-    CommandStats: EntityStats<E>,
-{
-    let count = hashes.len();
-    if count >= chunk_size {
-        let deleted_hashes = mem::take(hashes);
-
-        if !state.dry_run {
-            let deleted_keys = deleted_hashes.iter().map(Hash::key);
-            state.storage.delete_many(deleted_keys).await?;
-        }
-
-        state.stats.write().await.bytes_deleted += mem::take(bytes);
-        state.stats.write().await.add_entities_deleted(count as u64);
-
-        for hash in deleted_hashes {
-            let entity_name = E::NAME;
-            let style = AnsiColor::Yellow.on_default();
-            debug!("{style}deleted {entity_name}{style:#} {hash}");
-        }
-    }
-
+pub async fn cleanup_blocks(state: Arc<CleanupState>) -> Result<()> {
+    let (sender, receiver) = async_channel::bounded(MAX_KEYS_PER_REQUEST);
+    try_join!(
+        find_garbage_entities(state.clone(), state.block_records.clone(), sender),
+        delete_entities(state.clone(), receiver),
+    )?;
     Ok(())
 }

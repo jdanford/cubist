@@ -36,6 +36,7 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
         download_archive_records(storage.clone()),
         download_block_records(storage.clone()),
     )?;
+
     let block_records = rwarc(block_records);
 
     let state = Arc::new(BackupState {
@@ -72,7 +73,7 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
         let removed_hashes = removed_blocks.iter().map(|(hash, _)| hash);
         delete_blocks(storage.clone(), removed_hashes).await?;
     } else {
-        let (hash, record) = upload_archive(storage.clone(), stats.start_time, archive).await?;
+        let (hash, record) = upload_archive(storage.clone(), archive, stats.start_time).await?;
         archive_records.insert(hash, record);
 
         if !cli.dry_run {

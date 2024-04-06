@@ -83,8 +83,16 @@ impl BlockRecords {
     }
 }
 
+impl Default for BlockRecords {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EntityIndex<Block> for BlockRecords {
     type Record = BlockRecord;
+
+    const KEY: &'static str = "metadata/blocks";
 
     fn len(&self) -> usize {
         self.records.len()
