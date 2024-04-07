@@ -4,11 +4,11 @@ use crate::{
     hash::{self, Hash},
 };
 
-pub fn assert_block_level_eq(hash: Hash<Block>, actual: u8, expected: Option<u8>) -> Result<()> {
+pub fn assert_block_level_eq(hash: &Hash<Block>, actual: u8, expected: Option<u8>) -> Result<()> {
     if let Some(expected) = expected {
         if expected != actual {
             return Err(Error::WrongBlockLevel {
-                hash,
+                hash: *hash,
                 actual,
                 expected,
             });

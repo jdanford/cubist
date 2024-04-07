@@ -40,7 +40,6 @@ where
     I: EntityIndex<E> + DeserializeOwned + Default + Send + Sync + 'static,
 {
     let maybe_bytes = storage.try_get(I::KEY).await?;
-
     let archive_records = if let Some(bytes) = maybe_bytes {
         spawn_blocking(move || deserialize(&bytes)).await??
     } else {

@@ -143,7 +143,7 @@ async fn download_pending_file(
     if !state.dry_run {
         let mut file = ActiveDownload::new(&pending_file).await?;
 
-        if let Some(hash) = pending_file.hash {
+        if let Some(ref hash) = pending_file.hash {
             size = download_block_recursive(state.clone(), &mut file, hash, None).await?;
             file.sync_all().await?;
         }

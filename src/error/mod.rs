@@ -126,7 +126,7 @@ impl PartialEq for Error {
             (FileIsNotDirectory(path_l), FileIsNotDirectory(path_r)) => path_l == path_r,
             (FileDoesNotExist(path_l), FileDoesNotExist(path_r)) => path_l == path_r,
             (InodeDoesNotExist(inode_l), InodeDoesNotExist(inode_r)) => inode_l == inode_r,
-            (EmptyPath, EmptyPath) => false,
+            (EmptyPath, EmptyPath) => true,
             (PathAlreadyArchived(path_l), PathAlreadyArchived(path_r)) => path_l == path_r,
             (FileAlreadyExists(path_l), FileAlreadyExists(path_r)) => path_l == path_r,
             (ArchiveRecordNotFound(hash_l), ArchiveRecordNotFound(hash_r)) => hash_l == hash_r,

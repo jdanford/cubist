@@ -3,7 +3,7 @@ use std::{pin::pin, sync::Arc};
 use async_channel::Sender;
 use tokio::{
     sync::{RwLock, Semaphore},
-    task::{spawn_blocking, JoinSet},
+    task::{block_in_place, JoinSet},
 };
 use tokio_stream::StreamExt;
 
@@ -87,7 +87,7 @@ where
             };
             archive_sender.send(removed_archive).await?;
 
-            spawn_blocking(move || {
+            block_in_place(move || {
                 let mut block_records = state.block_records.blocking_write();
                 let garbage_blocks = block_records.remove_refs(&archive.block_refs)?;
                 for (hash, record) in garbage_blocks {
@@ -99,8 +99,7 @@ where
                 }
 
                 Result::Ok(())
-            })
-            .await??;
+            })?;
 
             drop(permit);
             Result::Ok(())

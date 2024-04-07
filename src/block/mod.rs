@@ -5,10 +5,7 @@ mod tests;
 use std::borrow::Borrow;
 
 use fastcdc::v2020::AsyncStreamCDC;
-use tokio::{
-    io::{AsyncRead, AsyncWriteExt},
-    task::spawn_blocking,
-};
+use tokio::io::AsyncRead;
 
 use crate::{
     assert::{assert_block_level_eq, assert_hash_eq, assert_size_multiple_of_hash},
@@ -39,21 +36,16 @@ impl Entity for Block {
 }
 
 impl Block {
-    pub async fn leaf(data: Vec<u8>) -> Result<Self> {
+    pub fn leaf(data: Vec<u8>) -> Result<Self> {
         if data.is_empty() {
             return Err(Error::EmptyBlock);
         }
 
-        let (data, hash) = spawn_blocking(move || {
-            let hash = Hash::leaf_block(&data);
-            (data, hash)
-        })
-        .await?;
-
+        let hash = Hash::leaf_block(&data);
         Ok(Block::Leaf { hash, data })
     }
 
-    pub async fn branch(level: u8, children: Vec<Hash<Block>>) -> Result<Self> {
+    pub fn branch(level: u8, children: Vec<Hash<Block>>) -> Result<Self> {
         if level == 0 {
             return Err(Error::BranchLevelZero);
         }
@@ -62,12 +54,7 @@ impl Block {
             return Err(Error::EmptyBlock);
         }
 
-        let (children, hash) = spawn_blocking(move || {
-            let hash = Hash::branch_block(&children);
-            (children, hash)
-        })
-        .await?;
-
+        let hash = Hash::branch_block(&children);
         Ok(Block::Branch {
             hash,
             level,
@@ -89,15 +76,15 @@ impl Block {
         }
     }
 
-    pub async fn encode(self, compression_level: u8) -> Result<Vec<u8>> {
-        let (level, bytes) = self.into_raw(compression_level).await?;
+    pub fn encode(self, compression_level: u8) -> Result<Vec<u8>> {
+        let (level, bytes) = self.into_raw(compression_level)?;
         let mut buf = vec![];
-        buf.write_u8(level).await?;
-        buf.write_all(&bytes).await?;
+        buf.push(level);
+        buf.extend(&bytes);
         Ok(buf)
     }
 
-    pub async fn decode(
+    pub fn decode(
         expected_hash: &Hash<Block>,
         expected_level: Option<u8>,
         bytes: &[u8],
@@ -105,14 +92,14 @@ impl Block {
         let (&level, bytes) = bytes
             .split_first()
             .ok_or_else(|| Error::InvalidBlockSize(0))?;
-        assert_block_level_eq(*expected_hash, level, expected_level)?;
-        Block::from_raw(expected_hash, level, bytes.to_owned()).await
+        assert_block_level_eq(expected_hash, level, expected_level)?;
+        Block::from_raw(expected_hash, level, bytes)
     }
 
-    async fn into_raw(self, compression_level: u8) -> Result<(u8, Vec<u8>)> {
+    fn into_raw(self, compression_level: u8) -> Result<(u8, Vec<u8>)> {
         match self {
             Block::Leaf { data, .. } => {
-                let bytes = spawn_blocking(move || compress(&data, compression_level)).await??;
+                let bytes = compress(&data, compression_level)?;
                 Ok((0, bytes))
             }
             Block::Branch {
@@ -124,39 +111,29 @@ impl Block {
         }
     }
 
-    async fn from_raw(expected_hash: &Hash<Block>, level: u8, bytes: Vec<u8>) -> Result<Self> {
+    fn from_raw(expected_hash: &Hash<Block>, level: u8, bytes: &[u8]) -> Result<Self> {
         let block = if level == 0 {
-            Block::leaf_from_raw(bytes).await?
+            Block::leaf_from_raw(bytes)?
         } else {
-            Block::branch_from_raw(level, bytes).await?
+            Block::branch_from_raw(level, bytes)?
         };
 
         assert_hash_eq(block.hash(), expected_hash)?;
         Ok(block)
     }
 
-    async fn leaf_from_raw(bytes: Vec<u8>) -> Result<Self> {
-        let data = spawn_blocking(move || decompress(&bytes)).await??;
-        let (data, hash) = spawn_blocking(move || {
-            let hash = Hash::leaf_block(&data);
-            (data, hash)
-        })
-        .await?;
-
+    fn leaf_from_raw(bytes: &[u8]) -> Result<Self> {
+        let data = decompress(bytes)?;
+        let hash = Hash::leaf_block(&data);
         Ok(Block::Leaf { hash, data })
     }
 
-    async fn branch_from_raw(level: u8, bytes: Vec<u8>) -> Result<Self> {
+    fn branch_from_raw(level: u8, bytes: &[u8]) -> Result<Self> {
         let size = bytes.len() as u64;
         assert_size_multiple_of_hash(size)?;
 
-        let children = split(&bytes).collect::<Vec<_>>();
-        let (children, hash) = spawn_blocking(move || {
-            let hash = Hash::branch_block(&children);
-            (children, hash)
-        })
-        .await?;
-
+        let children = split(bytes).collect::<Vec<_>>();
+        let hash = Hash::branch_block(&children);
         Ok(Block::Branch {
             hash,
             level,
@@ -171,12 +148,13 @@ pub fn chunker<R: AsyncRead + Unpin>(reader: R, target_size: u32) -> AsyncStream
     AsyncStreamCDC::new(reader, min_size, target_size, max_size)
 }
 
-pub fn concat<H, I>(hashes: I) -> Vec<u8>
+fn concat<H, I>(hashes: I) -> Vec<u8>
 where
     H: Borrow<Hash<Block>>,
     I: IntoIterator<Item = H>,
 {
     let mut bytes = vec![];
+
     for hash in hashes {
         bytes.extend(hash.borrow().as_bytes());
     }
@@ -184,7 +162,7 @@ where
     bytes
 }
 
-pub fn split(bytes: &[u8]) -> impl Iterator<Item = Hash<Block>> + '_ {
+fn split(bytes: &[u8]) -> impl Iterator<Item = Hash<Block>> + '_ {
     bytes
         .chunks_exact(hash::SIZE)
         .map(|bytes| Hash::from_bytes(bytes.try_into().unwrap()))

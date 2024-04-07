@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use tokio::task::spawn_blocking;
+
 use crate::{
     block::{Block, BlockRecord},
     entity::EntityIndex,
@@ -24,7 +26,7 @@ impl UploadTree {
     }
 
     pub async fn add_leaf(&mut self, data: Vec<u8>) -> Result<()> {
-        let block = Block::leaf(data).await?;
+        let block = spawn_blocking(move || Block::leaf(data)).await??;
         let hash = self.upload_block(block).await?;
         self.add_inner(hash, false).await
     }
@@ -64,7 +66,7 @@ impl UploadTree {
             let level = (i + 1).try_into().map_err(|_| Error::TooManyBlockLevels)?;
             let range = if finalize { ..len } else { ..(len - 1) };
             let children = layer.drain(range).collect();
-            let block = Block::branch(level, children).await?;
+            let block = spawn_blocking(move || Block::branch(level, children)).await??;
             hash = self.upload_block(block).await?;
         }
 
@@ -82,12 +84,12 @@ impl UploadTree {
             let record = block_records.get_mut(&hash).unwrap();
             record.ref_count += 1;
         } else {
-            let key = hash.key();
-            let bytes = block.encode(self.state.compression_level).await?;
+            let compression_level = self.state.compression_level;
+            let bytes = spawn_blocking(move || block.encode(compression_level)).await??;
             let size = bytes.len() as u64;
 
             if !self.state.dry_run {
-                self.state.storage.put(&key, bytes).await?;
+                self.state.storage.put(&hash.key(), bytes).await?;
                 self.state.stats.write().await.blocks_uploaded += 1;
                 self.state.stats.write().await.content_bytes_uploaded += size;
             }
