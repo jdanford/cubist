@@ -14,12 +14,12 @@ pub const PREFIX_LENGTH_RANGE: RangeInclusive<usize> = MIN_PREFIX_LENGTH..=MAX_P
 static HEX_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[0-9a-fA-F]+$").unwrap());
 
 #[derive(Debug)]
-pub struct ShortHash<T> {
+pub struct ShortHash<E> {
     inner: String,
-    phantom: PhantomData<T>,
+    phantom: PhantomData<E>,
 }
 
-impl<T> ShortHash<T> {
+impl<E> ShortHash<E> {
     fn from_string(s: String) -> Self {
         ShortHash {
             inner: s,
@@ -35,7 +35,7 @@ impl<T> ShortHash<T> {
         }
     }
 
-    pub fn from_hash(hash: &Hash<T>, block_count: usize) -> Self {
+    pub fn from_hash(hash: &Hash<E>, block_count: usize) -> Self {
         let len = safe_prefix_length(block_count);
         let s = hash.to_hex()[..len].to_string();
         ShortHash::from_string(s)
@@ -54,7 +54,7 @@ impl<E: Entity> ShortHash<E> {
     }
 }
 
-impl<T> Clone for ShortHash<T> {
+impl<E> Clone for ShortHash<E> {
     fn clone(&self) -> Self {
         ShortHash {
             inner: self.inner.clone(),
@@ -63,15 +63,15 @@ impl<T> Clone for ShortHash<T> {
     }
 }
 
-impl<T> PartialEq for ShortHash<T> {
+impl<E> PartialEq for ShortHash<E> {
     fn eq(&self, other: &Self) -> bool {
         self.inner == other.inner
     }
 }
 
-impl<T> Eq for ShortHash<T> {}
+impl<E> Eq for ShortHash<E> {}
 
-impl<T> FromStr for ShortHash<T> {
+impl<E> FromStr for ShortHash<E> {
     type Err = Error;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
@@ -79,7 +79,7 @@ impl<T> FromStr for ShortHash<T> {
     }
 }
 
-impl<T> fmt::Display for ShortHash<T> {
+impl<E> fmt::Display for ShortHash<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.inner)
     }

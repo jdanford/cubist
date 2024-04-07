@@ -11,9 +11,10 @@ use tokio::{
 };
 
 use crate::{
+    assert::{assert_block_level_eq, assert_hash_eq, assert_size_multiple_of_hash},
     compression::{compress, decompress},
     entity::Entity,
-    error::{assert_block_level_eq, assert_hash_eq, assert_size_multiple_of_hash, Error, Result},
+    error::{Error, Result},
     hash::{self, Hash},
 };
 

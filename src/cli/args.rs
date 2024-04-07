@@ -5,7 +5,7 @@ use concolor_clap::ColorChoice;
 
 use crate::{archive::Archive, file::WalkOrder, hash::ShortHash};
 
-use super::parse::{parse_archive_hash, parse_range_inclusive};
+use super::parse::{parse_range_inclusive, parse_short_hash};
 
 const COMPRESSION_LEVEL_RANGE: RangeInclusive<u8> = 1..=19;
 const DEFAULT_COMPRESSION_LEVEL: u8 = 3;
@@ -26,6 +26,10 @@ fn parse_block_size(s: &str) -> Result<u32, String> {
 
 fn parse_task_count(s: &str) -> Result<usize, String> {
     parse_range_inclusive(s, TASK_COUNT_RANGE)
+}
+
+pub fn parse_archive_hash(s: &str) -> Result<ShortHash<Archive>, String> {
+    parse_short_hash(s)
 }
 
 #[derive(Args, Debug)]

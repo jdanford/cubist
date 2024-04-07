@@ -1,9 +1,6 @@
 use std::{fmt::Display, ops::RangeInclusive, str::FromStr};
 
-use crate::{
-    archive::Archive,
-    hash::{self, ShortHash},
-};
+use crate::hash::{self, ShortHash};
 
 pub fn parse_range_inclusive<N: PartialEq + PartialOrd + FromStr + Display>(
     s: &str,
@@ -35,8 +32,4 @@ pub fn parse_short_hash<T>(s: &str) -> Result<ShortHash<T>, String> {
             len_range.end(),
         ))
     }
-}
-
-pub fn parse_archive_hash(s: &str) -> Result<ShortHash<Archive>, String> {
-    parse_short_hash(s)
 }

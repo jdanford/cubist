@@ -16,13 +16,13 @@ use crate::{
 pub const SIZE: usize = blake3::OUT_LEN;
 
 #[derive(Debug)]
-pub struct Hash<T> {
+pub struct Hash<E> {
     inner: blake3::Hash,
-    phantom: PhantomData<T>,
+    phantom: PhantomData<E>,
 }
 
-impl<T> Hash<T> {
-    pub const fn from_hash(inner: blake3::Hash) -> Self {
+impl<E> Hash<E> {
+    const fn from_hash(inner: blake3::Hash) -> Self {
         Hash {
             inner,
             phantom: PhantomData,
@@ -39,7 +39,7 @@ impl<T> Hash<T> {
     }
 }
 
-impl<T> From<blake3::Hash> for Hash<T> {
+impl<E> From<blake3::Hash> for Hash<E> {
     fn from(inner: blake3::Hash) -> Self {
         Hash::from_hash(inner)
     }
@@ -74,10 +74,6 @@ impl Hash<Archive> {
 }
 
 impl<E: Entity> Hash<E> {
-    pub fn key(&self) -> String {
-        format!("{}{}", E::KEY_PREFIX, self.inner)
-    }
-
     pub fn from_key(s: &str) -> Result<Self> {
         let hash_str = s
             .strip_prefix(E::KEY_PREFIX)
@@ -87,9 +83,13 @@ impl<E: Entity> Hash<E> {
             .map_err(|_| Error::InvalidHash(hash_str.to_owned()))?;
         Ok(inner.into())
     }
+
+    pub fn key(&self) -> String {
+        format!("{}{}", E::KEY_PREFIX, self.inner)
+    }
 }
 
-impl<T> Deref for Hash<T> {
+impl<E> Deref for Hash<E> {
     type Target = blake3::Hash;
 
     fn deref(&self) -> &Self::Target {
@@ -97,41 +97,41 @@ impl<T> Deref for Hash<T> {
     }
 }
 
-impl<T> Clone for Hash<T> {
+impl<E> Clone for Hash<E> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<T> Copy for Hash<T> {}
+impl<E> Copy for Hash<E> {}
 
-impl<T> PartialEq for Hash<T> {
+impl<E> PartialEq for Hash<E> {
     fn eq(&self, other: &Self) -> bool {
         self.inner == other.inner
     }
 }
 
-impl<T> Eq for Hash<T> {}
+impl<E> Eq for Hash<E> {}
 
-impl<T> std::hash::Hash for Hash<T> {
+impl<E> std::hash::Hash for Hash<E> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.inner.hash(state);
     }
 }
 
-impl<T> Serialize for Hash<T> {
+impl<E> Serialize for Hash<E> {
     fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
         self.inner.serialize(serializer)
     }
 }
 
-impl<'de, T> Deserialize<'de> for Hash<T> {
+impl<'de, E> Deserialize<'de> for Hash<E> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
         Deserialize::deserialize(deserializer).map(Hash::from_hash)
     }
 }
 
-impl<T> fmt::Display for Hash<T> {
+impl<E> fmt::Display for Hash<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.inner)
     }

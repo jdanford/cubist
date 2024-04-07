@@ -126,9 +126,9 @@ fn cli_styles() -> Styles {
         .placeholder(AnsiColor::BrightMagenta.on_default())
 }
 
-fn print_stat<T: Display>(name: &str, value: T) {
+fn print_stat<T: Display>(label: &str, value: T) {
     let style = AnsiColor::Cyan.on_default();
-    println!("{style}{name}:{style:#} {value}");
+    println!("{style}{label}:{style:#} {value}");
 }
 
 fn print_stats_json(stats: &FinalizedCommandStats) -> Result<()> {

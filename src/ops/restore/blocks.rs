@@ -11,8 +11,9 @@ use tokio::{
 };
 
 use crate::{
+    assert::assert_block_level_eq,
     block::Block,
-    error::{assert_block_level_eq, Error, Result},
+    error::{Error, Result},
     hash::Hash,
 };
 
@@ -85,28 +86,27 @@ pub async fn download_block_recursive(
     let maybe_block = state.local_blocks.read().await.get(&hash).copied();
     if let Some(local_block) = maybe_block {
         assert_block_level_eq(hash, 0, level)?;
+
         let data = read_local_block(state.clone(), local_block).await?;
         write_local_block(state.clone(), file, &data).await?;
-        let size = file.offset;
-        return Ok(size);
-    }
+    } else {
+        let key = hash.key();
+        let bytes = state.storage.get(&key).await?;
+        state.stats.write().await.blocks_downloaded += 1;
+        state.stats.write().await.content_bytes_downloaded += bytes.len() as u64;
 
-    let key = hash.key();
-    let bytes = state.storage.get(&key).await?;
-    state.stats.write().await.blocks_downloaded += 1;
-    state.stats.write().await.content_bytes_downloaded += bytes.len() as u64;
-
-    let block = Block::decode(&hash, level, &bytes).await?;
-    match block {
-        Block::Leaf { data, .. } => {
-            let local_block = write_local_block(state.clone(), file, &data).await?;
-            state.local_blocks.write().await.insert(hash, local_block);
-        }
-        Block::Branch {
-            level, children, ..
-        } => {
-            for hash in children {
-                download_block_recursive(state.clone(), file, hash, Some(level - 1)).await?;
+        let block = Block::decode(&hash, level, &bytes).await?;
+        match block {
+            Block::Leaf { data, .. } => {
+                let local_block = write_local_block(state.clone(), file, &data).await?;
+                state.local_blocks.write().await.insert(hash, local_block);
+            }
+            Block::Branch {
+                level, children, ..
+            } => {
+                for hash in children {
+                    download_block_recursive(state.clone(), file, hash, Some(level - 1)).await?;
+                }
             }
         }
     }

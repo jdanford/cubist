@@ -1,4 +1,3 @@
-mod assert;
 mod from;
 
 use std::path::PathBuf;
@@ -6,8 +5,6 @@ use std::path::PathBuf;
 use thiserror::Error;
 
 use crate::{archive::Archive, block::Block, hash::Hash};
-
-pub use assert::{assert_block_level_eq, assert_hash_eq, assert_size_multiple_of_hash};
 
 pub type Result<T> = std::result::Result<T, Error>;
 

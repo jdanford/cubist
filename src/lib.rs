@@ -10,6 +10,7 @@ pub mod cli;
 
 mod arc;
 mod archive;
+mod assert;
 mod block;
 mod compression;
 mod entity;

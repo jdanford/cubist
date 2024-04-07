@@ -38,7 +38,6 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
     )?;
 
     let block_records = rwarc(block_records);
-
     let state = Arc::new(BackupState {
         compression_level: cli.compression_level,
         target_block_size: cli.target_block_size,

@@ -31,7 +31,6 @@ pub async fn main(cli: CleanupArgs) -> Result<()> {
 
     let archive_records = rwarc(archive_records);
     let block_records = rwarc(block_records);
-
     let state = Arc::new(CleanupState {
         task_count: cli.tasks,
         dry_run: cli.dry_run,
