@@ -54,8 +54,8 @@ pub async fn main(cli: CleanupArgs) -> Result<()> {
 
     if !cli.dry_run {
         try_join!(
-            Box::pin(upload_archive_records(storage.clone(), archive_records)),
-            Box::pin(upload_block_records(storage.clone(), block_records)),
+            upload_archive_records(storage.clone(), archive_records),
+            upload_block_records(storage.clone(), block_records),
         )?;
     }
 

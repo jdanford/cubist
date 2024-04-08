@@ -22,7 +22,7 @@ pub struct Hash<E> {
 }
 
 impl<E> Hash<E> {
-    const fn from_hash(inner: blake3::Hash) -> Self {
+    const fn from_inner(inner: blake3::Hash) -> Self {
         Hash {
             inner,
             phantom: PhantomData,
@@ -31,7 +31,7 @@ impl<E> Hash<E> {
 
     pub const fn from_bytes(bytes: [u8; SIZE]) -> Self {
         let inner = blake3::Hash::from_bytes(bytes);
-        Hash::from_hash(inner)
+        Hash::from_inner(inner)
     }
 
     pub fn format_short(&self, block_count: usize) -> String {
@@ -41,7 +41,7 @@ impl<E> Hash<E> {
 
 impl<E> From<blake3::Hash> for Hash<E> {
     fn from(inner: blake3::Hash) -> Self {
-        Hash::from_hash(inner)
+        Hash::from_inner(inner)
     }
 }
 
@@ -127,7 +127,7 @@ impl<E> Serialize for Hash<E> {
 
 impl<'de, E> Deserialize<'de> for Hash<E> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
-        Deserialize::deserialize(deserializer).map(Hash::from_hash)
+        Deserialize::deserialize(deserializer).map(Hash::from_inner)
     }
 }
 

@@ -13,25 +13,25 @@ use crate::{
 };
 
 pub async fn download_archive_records(storage: Arc<Storage>) -> Result<ArchiveRecords> {
-    download_records(storage).await
+    Box::pin(download_records(storage)).await
 }
 
 pub async fn download_block_records(storage: Arc<Storage>) -> Result<BlockRecords> {
-    download_records(storage).await
+    Box::pin(download_records(storage)).await
 }
 
 pub async fn upload_archive_records(
     storage: Arc<Storage>,
     records: Arc<RwLock<ArchiveRecords>>,
 ) -> Result<()> {
-    upload_records(storage, records).await
+    Box::pin(upload_records(storage, records)).await
 }
 
 pub async fn upload_block_records(
     storage: Arc<Storage>,
     records: Arc<RwLock<BlockRecords>>,
 ) -> Result<()> {
-    upload_records(storage, records).await
+    Box::pin(upload_records(storage, records)).await
 }
 
 async fn download_records<E, I>(storage: Arc<Storage>) -> Result<I>

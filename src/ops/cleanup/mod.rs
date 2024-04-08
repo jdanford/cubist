@@ -48,7 +48,12 @@ where
     let (archive_sender, archive_receiver) = async_channel::bounded(MAX_KEYS_PER_REQUEST);
     let (block_sender, block_receiver) = async_channel::bounded(MAX_KEYS_PER_REQUEST);
     try_join!(
-        find_archives_and_garbage_blocks(state.clone(), hashes, archive_sender, block_sender),
+        Box::pin(find_archives_and_garbage_blocks(
+            state.clone(),
+            hashes,
+            archive_sender,
+            block_sender
+        )),
         delete_entities(state.clone(), archive_receiver),
         delete_entities(state.clone(), block_receiver),
     )?;

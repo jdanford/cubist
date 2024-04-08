@@ -20,9 +20,13 @@ use clap::{
 };
 use concolor_clap::{color_choice, ColorChoice};
 use env_logger::WriteStyle;
-use log::{error, LevelFilter};
+use log::LevelFilter;
 
-use crate::{error::Result, logger, stats::FinalizedCommandStats};
+use crate::{
+    error::{handle_error, Result},
+    logger,
+    stats::FinalizedCommandStats,
+};
 
 use self::args::{
     ArchivesArgs, BackupArgs, CleanupArgs, DeleteArgs, GlobalArgs, LoggerArgs, RestoreArgs,
@@ -89,12 +93,7 @@ pub async fn main() -> ExitCode {
         Command::Cleanup(args) => cleanup::main(args).await,
     };
 
-    if let Err(err) = result {
-        error!("{err}");
-        ExitCode::FAILURE
-    } else {
-        ExitCode::SUCCESS
-    }
+    handle_error(result)
 }
 
 fn log_level_from_args(args: &LoggerArgs) -> LevelFilter {

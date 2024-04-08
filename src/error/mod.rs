@@ -1,7 +1,8 @@
 mod from;
 
-use std::path::PathBuf;
+use std::{path::PathBuf, process::ExitCode};
 
+use log::error;
 use thiserror::Error;
 
 use crate::{archive::Archive, block::Block, hash::Hash};
@@ -172,5 +173,14 @@ impl PartialEq for Error {
             (MissingEnvVar(var_l), MissingEnvVar(var_r)) => var_l == var_r,
             _ => false,
         }
+    }
+}
+
+pub fn handle_error<T>(result: Result<T>) -> ExitCode {
+    if let Err(err) = result {
+        error!("{err}");
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
     }
 }

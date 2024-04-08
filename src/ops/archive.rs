@@ -5,7 +5,7 @@ use tokio::{sync::RwLock, task::spawn_blocking};
 
 use crate::{
     archive::{Archive, ArchiveRecord},
-    compression::{compress, decompress},
+    compress::{compress, decompress},
     error::Result,
     hash::Hash,
     serde::{deserialize, serialize},

@@ -9,7 +9,7 @@ use tokio::io::AsyncRead;
 
 use crate::{
     assert::{assert_block_level_eq, assert_hash_eq, assert_size_multiple_of_hash},
-    compression::{compress, decompress},
+    compress::{compress, decompress},
     entity::Entity,
     error::{Error, Result},
     hash::{self, Hash},

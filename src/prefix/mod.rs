@@ -47,7 +47,7 @@ pub fn find_one_by_prefix<'a, S: AsRef<str>>(strings: &'a [S], prefix: &str) -> 
 }
 
 fn cmp_prefix(s: &str, prefix: &str) -> Ordering {
-    let len = prefix.len();
+    let len = prefix.len().min(s.len());
     let short = &s[..len];
     short.cmp(prefix)
 }

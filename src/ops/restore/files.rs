@@ -6,14 +6,15 @@ use std::{
 use async_channel::{Receiver, Sender};
 use clap::builder::styling::AnsiColor;
 use log::debug;
-use tokio::{fs, sync::Semaphore, task::JoinSet};
+use tokio::fs;
 
 use crate::{
     block::Block,
-    error::{Error, Result},
+    error::{handle_error, Error, Result},
     file::{restore_metadata, restore_metadata_from_node, try_exists, FileType, Metadata, Node},
     format::{format_path, format_size},
     hash::Hash,
+    task::BoundedJoinSet,
 };
 
 use super::{
@@ -113,22 +114,21 @@ pub async fn download_pending_files(
     state: Arc<RestoreState>,
     receiver: Receiver<PendingDownload>,
 ) -> Result<()> {
-    let semaphore = Arc::new(Semaphore::new(state.task_count));
-    let mut tasks = JoinSet::new();
+    let mut tasks = BoundedJoinSet::new(state.task_count);
 
     while let Ok(pending_file) = receiver.recv().await {
         let state = state.clone();
-        let permit = semaphore.clone().acquire_owned().await?;
+        tasks
+            .spawn(download_pending_file(state, pending_file))
+            .await?;
 
-        tasks.spawn(async move {
-            download_pending_file(state, pending_file).await?;
-            drop(permit);
-            Result::Ok(())
-        });
+        while let Some(result) = tasks.try_join_next() {
+            handle_error(result?);
+        }
     }
 
     while let Some(result) = tasks.join_next().await {
-        result??;
+        handle_error(result?);
     }
 
     Ok(())

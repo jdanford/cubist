@@ -17,6 +17,7 @@ use tokio::task::spawn_blocking;
 use tokio_stream::{Stream, StreamExt};
 
 use crate::{
+    arc::unarc,
     error::{Error, Result},
     prefix::{find_one_by_prefix, longest_common_prefix},
     stats::StorageStats,
@@ -170,7 +171,6 @@ impl Storage {
                 GetObjectError::NoSuchKey(_) => Error::ItemNotFound(key.to_owned()),
                 err => Error::other(err),
             })?;
-
         let bytes = response.body.collect().await?.to_vec();
 
         let end_time = Utc::now();
@@ -261,7 +261,7 @@ impl Storage {
     }
 
     pub fn stats(self) -> StorageStats {
-        Arc::into_inner(self.stats).unwrap().into_inner().unwrap()
+        unarc(self.stats).into_inner().unwrap()
     }
 }
 

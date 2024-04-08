@@ -77,11 +77,8 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
 
         if !cli.dry_run {
             try_join!(
-                Box::pin(upload_block_records(storage.clone(), block_records.clone())),
-                Box::pin(upload_archive_records(
-                    storage.clone(),
-                    rwarc(archive_records)
-                )),
+                upload_block_records(storage.clone(), block_records.clone()),
+                upload_archive_records(storage.clone(), rwarc(archive_records)),
             )?;
         }
 

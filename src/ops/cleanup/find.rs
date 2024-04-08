@@ -1,18 +1,16 @@
 use std::{pin::pin, sync::Arc};
 
 use async_channel::Sender;
-use tokio::{
-    sync::{RwLock, Semaphore},
-    task::{block_in_place, JoinSet},
-};
+use tokio::{sync::RwLock, task::block_in_place};
 use tokio_stream::StreamExt;
 
 use crate::{
     archive::Archive,
     entity::{Entity, EntityIndex},
-    error::Result,
+    error::{handle_error, Result},
     hash::Hash,
     ops::download_archive,
+    task::BoundedJoinSet,
 };
 
 use super::{CleanupState, RemovedArchive, RemovedBlock, RemovedEntity};
@@ -27,33 +25,36 @@ where
     I: EntityIndex<E> + Send + Sync + 'static,
     I::Record: Send + Sync,
 {
-    let semaphore = Arc::new(Semaphore::new(state.task_count));
-    let mut tasks = JoinSet::new();
-
+    let mut tasks = BoundedJoinSet::new(state.task_count);
     let mut key_chunks = pin!(state.storage.keys_paginated(Some(E::KEY_PREFIX)));
+
     while let Some(keys) = key_chunks.try_next().await? {
         let records = records.clone();
         let sender = sender.clone();
-        let permit = semaphore.clone().acquire_owned().await?;
 
-        tasks.spawn_blocking(move || {
-            let records = records.blocking_read();
+        tasks
+            .spawn_blocking(move || {
+                let records = records.blocking_read();
 
-            for key in keys {
-                let hash = Hash::from_key(&key)?;
-                if !records.contains(&hash) {
-                    let removed_entity = RemovedEntity { hash, record: None };
-                    sender.send_blocking(removed_entity)?;
+                for key in keys {
+                    let hash = Hash::from_key(&key)?;
+                    if !records.contains(&hash) {
+                        let removed_entity = RemovedEntity { hash, record: None };
+                        sender.send_blocking(removed_entity)?;
+                    }
                 }
-            }
 
-            drop(permit);
-            Result::Ok(())
-        });
+                Result::Ok(())
+            })
+            .await?;
+
+        while let Some(result) = tasks.try_join_next() {
+            handle_error(result?);
+        }
     }
 
     while let Some(result) = tasks.join_next().await {
-        result??;
+        handle_error(result?);
     }
 
     Ok(())
@@ -68,46 +69,47 @@ pub async fn find_archives_and_garbage_blocks<'a, I>(
 where
     I: IntoIterator<Item = &'a Hash<Archive>>,
 {
-    let semaphore = Arc::new(Semaphore::new(state.task_count));
-    let mut tasks = JoinSet::new();
+    let mut tasks = BoundedJoinSet::new(state.task_count);
 
     for hash in hashes {
         let state = state.clone();
         let hash = *hash;
         let archive_sender = archive_sender.clone();
         let block_sender = block_sender.clone();
-        let permit = semaphore.clone().acquire_owned().await?;
 
-        tasks.spawn(async move {
-            let archive = download_archive(state.storage.clone(), &hash).await?;
-            let record = state.archive_records.write().await.remove(&hash)?;
-            let removed_archive = RemovedArchive {
-                hash,
-                record: Some(record),
-            };
-            archive_sender.send(removed_archive).await?;
+        tasks
+            .spawn(async move {
+                let archive = download_archive(state.storage.clone(), &hash).await?;
+                let record = state.archive_records.write().await.remove(&hash)?;
+                let removed_archive = RemovedArchive {
+                    hash,
+                    record: Some(record),
+                };
+                archive_sender.send(removed_archive).await?;
 
-            block_in_place(move || {
-                let mut block_records = state.block_records.blocking_write();
-                let garbage_blocks = block_records.remove_refs(&archive.block_refs)?;
-                for (hash, record) in garbage_blocks {
-                    let removed_block = RemovedBlock {
-                        hash,
-                        record: Some(record),
-                    };
-                    block_sender.send_blocking(removed_block)?;
-                }
+                block_in_place(move || {
+                    let mut block_records = state.block_records.blocking_write();
+                    let garbage_blocks = block_records.remove_refs(&archive.block_refs)?;
+                    for (hash, record) in garbage_blocks {
+                        let removed_block = RemovedBlock {
+                            hash,
+                            record: Some(record),
+                        };
+                        block_sender.send_blocking(removed_block)?;
+                    }
 
-                Result::Ok(())
-            })?;
+                    Result::Ok(())
+                })
+            })
+            .await?;
 
-            drop(permit);
-            Result::Ok(())
-        });
+        while let Some(result) = tasks.try_join_next() {
+            handle_error(result?);
+        }
     }
 
     while let Some(result) = tasks.join_next().await {
-        result??;
+        handle_error(result?);
     }
 
     Ok(())

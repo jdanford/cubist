@@ -12,17 +12,16 @@ use log::{debug, warn};
 use tokio::{
     fs::{self, File},
     io::BufReader,
-    sync::Semaphore,
-    task::JoinSet,
 };
 use tokio_stream::StreamExt;
 
 use crate::{
     block::{self, Block},
-    error::{Error, Result},
+    error::{handle_error, Result},
     file::{read_metadata, Node},
     format::{format_path, format_size},
     hash::Hash,
+    task::BoundedJoinSet,
 };
 
 use super::{blocks::UploadTree, BackupState};
@@ -114,26 +113,21 @@ pub async fn upload_pending_files(
     state: Arc<BackupState>,
     receiver: Receiver<PendingUpload>,
 ) -> Result<()> {
-    let semaphore = Arc::new(Semaphore::new(state.task_count));
-    let mut tasks = JoinSet::new();
+    let mut tasks = BoundedJoinSet::new(state.task_count);
 
     while let Ok(pending_file) = receiver.recv().await {
         let state = state.clone();
-        let permit = semaphore.clone().acquire_owned().await?;
+        tasks
+            .spawn(Box::pin(upload_pending_file(state, pending_file)))
+            .await?;
 
-        tasks.spawn(async move {
-            let result = upload_pending_file(state, pending_file).await;
-            if let Err(Error::WalkDir(err)) = result {
-                handle_walkdir_error(err)?;
-            }
-
-            drop(permit);
-            Result::Ok(())
-        });
+        while let Some(result) = tasks.try_join_next() {
+            handle_error(result?);
+        }
     }
 
     while let Some(result) = tasks.join_next().await {
-        result??;
+        handle_error(result?);
     }
 
     Ok(())
