@@ -13,7 +13,7 @@ use crate::{
     format::format_size,
     locks::BlockLocks,
     ops::{
-        backup_all, delete_blocks, download_archive_records, download_block_records,
+        backup_all, download_archive_records, download_block_records, try_delete_blocks_parallel,
         upload_archive, upload_archive_records, upload_block_records, upload_pending_files,
         BackupState,
     },
@@ -68,9 +68,9 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
     if cli.transient {
         let archive = unrwarc(archive);
         let mut block_records = unrwarc(block_records);
-        let removed_blocks = block_records.remove_refs(&archive.block_refs)?;
-        let removed_hashes = removed_blocks.iter().map(|(hash, _)| hash);
-        delete_blocks(storage.clone(), removed_hashes).await?;
+        let removed_blocks = block_records.remove_refs(archive.block_refs);
+        let removed_hashes = removed_blocks.map(|result| result.map(|(hash, _)| hash));
+        try_delete_blocks_parallel(storage.clone(), removed_hashes, cli.tasks).await?;
     } else {
         let (hash, record) = upload_archive(storage.clone(), archive, stats.start_time).await?;
         archive_records.insert(hash, record);

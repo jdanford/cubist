@@ -1,4 +1,7 @@
-use std::{cmp::Ordering, collections::HashMap};
+use std::{
+    cmp::Ordering,
+    collections::{hash_map, HashMap},
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -12,18 +15,18 @@ use super::Block;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BlockRefs {
-    refs: HashMap<Hash<Block>, u64>,
+    inner: HashMap<Hash<Block>, u64>,
 }
 
 impl BlockRefs {
     pub fn new() -> Self {
         BlockRefs {
-            refs: HashMap::new(),
+            inner: HashMap::new(),
         }
     }
 
     pub fn add_count(&mut self, hash: &Hash<Block>, count: u64) {
-        self.refs
+        self.inner
             .entry(*hash)
             .and_modify(|lhs_count| *lhs_count += count)
             .or_insert(count);
@@ -54,32 +57,8 @@ impl BlockRecords {
         }
     }
 
-    pub fn remove_refs(&mut self, refs: &BlockRefs) -> Result<Vec<(Hash<Block>, BlockRecord)>> {
-        let mut removed = vec![];
-
-        for (&hash, &ref_count) in &refs.refs {
-            let record = self
-                .get_mut(&hash)
-                .ok_or_else(|| Error::BlockRecordNotFound(hash))?;
-            match record.ref_count.cmp(&ref_count) {
-                Ordering::Greater => {
-                    record.ref_count -= ref_count;
-                }
-                Ordering::Equal => {
-                    let record = self.records.remove(&hash).unwrap();
-                    removed.push((hash, record));
-                }
-                Ordering::Less => {
-                    return Err(Error::WrongRefCount {
-                        hash,
-                        actual: record.ref_count,
-                        expected: ref_count,
-                    });
-                }
-            }
-        }
-
-        Ok(removed)
+    pub fn remove_refs(&mut self, refs: BlockRefs) -> RemoveRefs<'_> {
+        RemoveRefs::new(self, refs)
     }
 }
 
@@ -118,5 +97,50 @@ impl EntityIndex<Block> for BlockRecords {
         self.records
             .remove(hash)
             .ok_or_else(|| Error::BlockRecordNotFound(*hash))
+    }
+}
+
+pub struct RemoveRefs<'a> {
+    records: &'a mut BlockRecords,
+    refs_iter: hash_map::IntoIter<Hash<Block>, u64>,
+}
+
+impl<'a> RemoveRefs<'a> {
+    fn new(records: &'a mut BlockRecords, refs: BlockRefs) -> Self {
+        RemoveRefs {
+            records,
+            refs_iter: refs.inner.into_iter(),
+        }
+    }
+}
+
+impl<'a> Iterator for RemoveRefs<'a> {
+    type Item = Result<(Hash<Block>, BlockRecord)>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        for (hash, ref_count) in self.refs_iter.by_ref() {
+            if let Some(record) = self.records.get_mut(&hash) {
+                match record.ref_count.cmp(&ref_count) {
+                    Ordering::Greater => {
+                        record.ref_count -= ref_count;
+                    }
+                    Ordering::Equal => {
+                        let record = self.records.remove(&hash).unwrap();
+                        return Some(Ok((hash, record)));
+                    }
+                    Ordering::Less => {
+                        return Some(Err(Error::WrongRefCount {
+                            hash,
+                            actual: record.ref_count,
+                            expected: ref_count,
+                        }));
+                    }
+                }
+            } else {
+                return Some(Err(Error::BlockRecordNotFound(hash)));
+            }
+        }
+
+        None
     }
 }

@@ -89,8 +89,9 @@ where
 
                 block_in_place(move || {
                     let mut block_records = state.block_records.blocking_write();
-                    let garbage_blocks = block_records.remove_refs(&archive.block_refs)?;
-                    for (hash, record) in garbage_blocks {
+                    let removed_records = block_records.remove_refs(archive.block_refs);
+                    for result in removed_records {
+                        let (hash, record) = result?;
                         let removed_block = RemovedBlock {
                             hash,
                             record: Some(record),

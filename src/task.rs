@@ -7,17 +7,14 @@ use tokio::{
 
 pub struct BoundedJoinSet<T> {
     semaphore: Arc<Semaphore>,
-    join_set: JoinSet<T>,
+    inner: JoinSet<T>,
 }
 
 impl<T: 'static> BoundedJoinSet<T> {
     pub fn new(max_tasks: usize) -> Self {
         let semaphore = Arc::new(Semaphore::new(max_tasks));
-        let join_set = JoinSet::new();
-        BoundedJoinSet {
-            semaphore,
-            join_set,
-        }
+        let inner = JoinSet::new();
+        BoundedJoinSet { semaphore, inner }
     }
 
     pub async fn spawn<F>(&mut self, task: F) -> Result<AbortHandle, AcquireError>
@@ -26,7 +23,7 @@ impl<T: 'static> BoundedJoinSet<T> {
         T: Send,
     {
         let permit = self.semaphore.clone().acquire_owned().await?;
-        let handle = self.join_set.spawn(async move {
+        let handle = self.inner.spawn(async move {
             let value = task.await;
             drop(permit);
             value
@@ -40,7 +37,7 @@ impl<T: 'static> BoundedJoinSet<T> {
         T: Send,
     {
         let permit = self.semaphore.clone().acquire_owned().await?;
-        let handle = self.join_set.spawn_blocking(move || {
+        let handle = self.inner.spawn_blocking(move || {
             let value = task();
             drop(permit);
             value
@@ -49,10 +46,10 @@ impl<T: 'static> BoundedJoinSet<T> {
     }
 
     pub async fn join_next(&mut self) -> Option<Result<T, JoinError>> {
-        self.join_set.join_next().await
+        self.inner.join_next().await
     }
 
     pub fn try_join_next(&mut self) -> Option<Result<T, JoinError>> {
-        self.join_set.try_join_next()
+        self.inner.try_join_next()
     }
 }

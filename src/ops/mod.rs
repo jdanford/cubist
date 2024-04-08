@@ -6,12 +6,15 @@ mod restore;
 
 use std::{borrow::Borrow, fmt::Display, sync::Arc};
 
+use itertools::Itertools;
+
 use crate::{
     block::Block,
     entity::Entity,
-    error::Result,
+    error::{handle_error, Result},
     hash::{Hash, ShortHash},
-    storage::Storage,
+    storage::{Storage, MAX_KEYS_PER_REQUEST},
+    task::BoundedJoinSet,
 };
 
 pub use self::{
@@ -25,13 +28,37 @@ pub use self::{
     restore::{download_pending_files, restore_all, RestoreState},
 };
 
-pub async fn delete_blocks<H, I>(storage: Arc<Storage>, hashes: I) -> Result<()>
+pub async fn try_delete_blocks_parallel<H, I>(
+    storage: Arc<Storage>,
+    hashes: I,
+    task_count: usize,
+) -> Result<()>
 where
     H: Borrow<Hash<Block>>,
-    I: IntoIterator<Item = H>,
+    I: IntoIterator<Item = Result<H>>,
 {
-    let keys = hashes.into_iter().map(|hash| hash.borrow().key());
-    storage.delete_many(keys).await
+    let mut tasks = BoundedJoinSet::new(task_count);
+    let keys = hashes
+        .into_iter()
+        .map(|result| result.map(|hash| hash.borrow().key()));
+
+    for chunk in &keys.chunks(MAX_KEYS_PER_REQUEST) {
+        let keys: Vec<Result<String>> = chunk.collect();
+        let storage = storage.clone();
+        tasks
+            .spawn(async move { storage.try_delete_chunk(keys).await })
+            .await?;
+
+        while let Some(result) = tasks.try_join_next() {
+            handle_error(result?);
+        }
+    }
+
+    while let Some(result) = tasks.join_next().await {
+        handle_error(result?);
+    }
+
+    Ok(())
 }
 
 pub async fn expand_hash<E: Entity>(
