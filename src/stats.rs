@@ -157,6 +157,18 @@ impl FinalizedCommandStats {
     pub fn metadata_bytes_uploaded(&self) -> u64 {
         self.storage.bytes_uploaded - self.command.content_bytes_uploaded
     }
+
+    pub fn download_speed(&self) -> u64 {
+        bits_per_second(self.storage.bytes_downloaded, self.elapsed_time())
+    }
+
+    pub fn upload_speed(&self) -> u64 {
+        bits_per_second(self.storage.bytes_uploaded, self.elapsed_time())
+    }
+}
+
+fn bits_per_second(bytes: u64, elapsed_time: Duration) -> u64 {
+    bytes * 8 / elapsed_time.as_secs()
 }
 
 impl Deref for FinalizedCommandStats {

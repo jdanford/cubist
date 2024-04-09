@@ -236,29 +236,20 @@ impl Storage {
         S: Into<String>,
         I: IntoIterator<Item = S>,
     {
-        self.try_delete_many(keys.into_iter().map(Result::Ok)).await
-    }
-
-    pub async fn try_delete_many<S, I>(&self, keys: I) -> Result<()>
-    where
-        S: Into<String>,
-        I: IntoIterator<Item = Result<S>>,
-    {
         for keys in &keys.into_iter().chunks(MAX_KEYS_PER_REQUEST) {
-            self.try_delete_chunk(keys).await?;
+            self.delete_chunk(keys).await?;
         }
 
         Ok(())
     }
 
-    pub async fn try_delete_chunk<S, I>(&self, keys: I) -> Result<()>
+    pub async fn delete_chunk<S, I>(&self, keys: I) -> Result<()>
     where
         S: Into<String>,
-        I: IntoIterator<Item = Result<S>>,
+        I: IntoIterator<Item = S>,
     {
         let mut delete_builder = Delete::builder().quiet(true);
-        for result in keys {
-            let key = result?;
+        for key in keys {
             let object = ObjectIdentifier::builder().key(key.into()).build()?;
             delete_builder = delete_builder.objects(object);
         }

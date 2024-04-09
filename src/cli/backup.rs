@@ -10,10 +10,10 @@ use crate::{
     archive::Archive,
     entity::EntityIndex,
     error::Result,
-    format::format_size,
+    format::{format_size, format_speed},
     locks::BlockLocks,
     ops::{
-        backup_all, download_archive_records, download_block_records, try_delete_blocks_parallel,
+        backup_all, download_archive_records, download_block_records, try_delete_blocks,
         upload_archive, upload_archive_records, upload_block_records, upload_pending_files,
         BackupState,
     },
@@ -70,7 +70,7 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
         let mut block_records = unrwarc(block_records);
         let removed_blocks = block_records.remove_refs(archive.block_refs);
         let removed_hashes = removed_blocks.map(|result| result.map(|(hash, _)| hash));
-        try_delete_blocks_parallel(storage.clone(), removed_hashes, cli.tasks).await?;
+        try_delete_blocks(storage.clone(), removed_hashes, cli.tasks).await?;
     } else {
         let (hash, record) = upload_archive(storage.clone(), archive, stats.start_time).await?;
         archive_records.insert(hash, record);
@@ -110,6 +110,7 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
             print_stat("blocks uploaded", full_stats.blocks_uploaded);
             print_stat("blocks referenced", full_stats.blocks_referenced);
             print_stat("elapsed time", format_duration(full_stats.elapsed_time()));
+            print_stat("upload speed", format_speed(full_stats.upload_speed()));
         }
         Some(StatsType::Json) => {
             print_stats_json(&full_stats)?;

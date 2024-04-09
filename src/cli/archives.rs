@@ -21,6 +21,7 @@ use super::{
 pub async fn main(cli: ArchivesArgs) -> Result<()> {
     let stats = CommandStats::new();
     let storage = Arc::new(create_storage(&cli.global).await?);
+
     let archive_records = download_archive_records(storage.clone()).await?;
 
     for (hash, archive_record) in archive_records.iter_by_created() {

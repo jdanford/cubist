@@ -4,7 +4,7 @@ mod cleanup;
 mod records;
 mod restore;
 
-use std::{borrow::Borrow, fmt::Display, sync::Arc};
+use std::{borrow::Borrow, sync::Arc};
 
 use itertools::Itertools;
 
@@ -28,7 +28,7 @@ pub use self::{
     restore::{download_pending_files, restore_all, RestoreState},
 };
 
-pub async fn try_delete_blocks_parallel<H, I>(
+pub async fn try_delete_blocks<H, I>(
     storage: Arc<Storage>,
     hashes: I,
     task_count: usize,
@@ -43,10 +43,10 @@ where
         .map(|result| result.map(|hash| hash.borrow().key()));
 
     for chunk in &keys.chunks(MAX_KEYS_PER_REQUEST) {
-        let keys: Vec<Result<String>> = chunk.collect();
+        let keys = chunk.collect::<Result<Vec<_>>>()?;
         let storage = storage.clone();
         tasks
-            .spawn(async move { storage.try_delete_chunk(keys).await })
+            .spawn(async move { storage.delete_chunk(keys).await })
             .await?;
 
         while let Some(result) = tasks.try_join_next() {
@@ -73,7 +73,7 @@ pub async fn expand_hash<E: Entity>(
 pub async fn expand_hashes<E, H>(storage: Arc<Storage>, short_hashes: &[H]) -> Result<Vec<Hash<E>>>
 where
     E: Entity,
-    H: Borrow<ShortHash<E>> + Display,
+    H: Borrow<ShortHash<E>>,
 {
     let partial_keys = short_hashes.iter().map(|hash| hash.borrow().key_prefix());
     let full_keys = storage.expand_keys(partial_keys).await?;

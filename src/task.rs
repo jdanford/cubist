@@ -5,6 +5,7 @@ use tokio::{
     task::{AbortHandle, JoinError, JoinSet},
 };
 
+#[derive(Debug)]
 pub struct BoundedJoinSet<T> {
     semaphore: Arc<Semaphore>,
     inner: JoinSet<T>,

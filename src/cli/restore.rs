@@ -6,7 +6,7 @@ use tokio::try_join;
 use crate::{
     arc::{rwarc, unarc, unrwarc},
     error::Result,
-    format::format_size,
+    format::{format_size, format_speed},
     locks::BlockLocks,
     ops::{download_archive, download_pending_files, expand_hash, restore_all, RestoreState},
     stats::CommandStats,
@@ -64,6 +64,7 @@ pub async fn main(cli: RestoreArgs) -> Result<()> {
             print_stat("blocks downloaded", full_stats.blocks_downloaded);
             print_stat("blocks referenced", full_stats.blocks_referenced);
             print_stat("elapsed time", format_duration(full_stats.elapsed_time()));
+            print_stat("download speed", format_speed(full_stats.download_speed()));
         }
         Some(StatsType::Json) => {
             print_stats_json(&full_stats)?;

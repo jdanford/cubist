@@ -30,9 +30,9 @@ pub async fn main(cli: DeleteArgs) -> Result<()> {
         download_archive_records(storage.clone()),
         download_block_records(storage.clone()),
     )?;
+
     let archive_records = rwarc(archive_records);
     let block_records = rwarc(block_records);
-
     let state = Arc::new(CleanupState {
         task_count: cli.tasks,
         dry_run: cli.dry_run,
