@@ -167,10 +167,6 @@ impl FinalizedCommandStats {
     }
 }
 
-fn bits_per_second(bytes: u64, elapsed_time: Duration) -> u64 {
-    bytes * 8 / elapsed_time.as_secs()
-}
-
 impl Deref for FinalizedCommandStats {
     type Target = CommandStats;
 
@@ -206,4 +202,13 @@ impl Serialize for FinalizedCommandStats {
 
         map.end()
     }
+}
+
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss
+)]
+fn bits_per_second(bytes: u64, elapsed_time: Duration) -> u64 {
+    (bytes as f64 * 8.0 / elapsed_time.as_secs_f64()) as u64
 }

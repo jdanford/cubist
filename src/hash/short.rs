@@ -91,9 +91,9 @@ impl<E> fmt::Display for ShortHash<E> {
 }
 
 #[allow(
-    clippy::cast_sign_loss,
     clippy::cast_possible_truncation,
-    clippy::cast_precision_loss
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss
 )]
 fn safe_prefix_length(block_count: usize) -> usize {
     // see https://github.com/git/git/commit/e6c587c733b4634030b353f4024794b08bc86892
