@@ -16,6 +16,7 @@ pub trait EntityIndex<E: Entity> {
 
     fn len(&self) -> usize;
     fn contains(&self, hash: &Hash<E>) -> bool;
+    #[allow(dead_code)]
     fn get(&self, hash: &Hash<E>) -> Option<&Self::Record>;
     fn get_mut(&mut self, hash: &Hash<E>) -> Option<&mut Self::Record>;
     fn insert(&mut self, hash: Hash<E>, record: Self::Record);
