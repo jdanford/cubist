@@ -21,7 +21,6 @@ Each node of a file tree is one of:
 
 Each node contains the following metadata:
 
-- inode
 - mode
 - group
 - owner
@@ -40,12 +39,12 @@ hash of all its constituent hashes
 
 ## Files
 
-Files are split up into leaf blocks in a streaming fashion using the
-[FastCDC](https://github.com/nlfiedler/fastcdc-rs) v2020. Due to the nature of content-defined
-chunking, block size is specified as a range instead of a single number, which allows the algorithm to split
-the file at relatively consistent points, in contrast to fixed-size chunking in which any inserted or deleted
-data results in a completely different stream of blocks. Specifying `--target-block-size=<N>` will result
-block sizes in the range [N / 2, N * 4].
+Files are split up into leaf blocks in a streaming fashion using
+[FastCDC](https://github.com/nlfiedler/fastcdc-rs) v2020. Due to the nature of content-defined chunking,
+block size is specified as a range instead of a single number, which allows the algorithm to split the file
+at relatively consistent points, in contrast to fixed-size chunking in which any inserted or deleted data
+results in a completely different stream of blocks. Specifying `--target-block-size=<N>` will result block
+sizes in the range [N / 2, N * 4].
 
 The default block size is 1 MiB, which is selected to compress well, work well with block storage systems,
 and minimize the number of requests necessary to read and write large files. To keep block sizes consistent,

@@ -1,6 +1,6 @@
 mod from;
 
-use std::{path::PathBuf, process::ExitCode};
+use std::{io, path::PathBuf, process::ExitCode};
 
 use log::error;
 use thiserror::Error;
@@ -86,7 +86,7 @@ pub enum Error {
     MissingEnvVar(String),
 
     #[error(transparent)]
-    Io(#[from] std::io::Error),
+    Io(#[from] io::Error),
 
     #[error(transparent)]
     WalkDir(#[from] async_walkdir::Error),

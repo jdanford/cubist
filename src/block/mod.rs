@@ -96,6 +96,17 @@ impl Block {
         Block::from_raw(expected_hash, level, bytes)
     }
 
+    fn from_raw(expected_hash: &Hash<Block>, level: u8, bytes: &[u8]) -> Result<Self> {
+        let block = if level == 0 {
+            Block::leaf_from_raw(bytes)?
+        } else {
+            Block::branch_from_raw(level, bytes)?
+        };
+
+        assert_hash_eq(block.hash(), expected_hash)?;
+        Ok(block)
+    }
+
     fn into_raw(self, compression_level: u8) -> Result<(u8, Vec<u8>)> {
         match self {
             Block::Leaf { data, .. } => {
@@ -109,17 +120,6 @@ impl Block {
                 Ok((level, bytes))
             }
         }
-    }
-
-    fn from_raw(expected_hash: &Hash<Block>, level: u8, bytes: &[u8]) -> Result<Self> {
-        let block = if level == 0 {
-            Block::leaf_from_raw(bytes)?
-        } else {
-            Block::branch_from_raw(level, bytes)?
-        };
-
-        assert_hash_eq(block.hash(), expected_hash)?;
-        Ok(block)
     }
 
     fn leaf_from_raw(bytes: &[u8]) -> Result<Self> {

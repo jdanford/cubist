@@ -1,4 +1,4 @@
-use std::os::unix::fs::MetadataExt;
+use std::{fs, os::unix::fs::MetadataExt};
 
 use chrono::{serde::ts_milliseconds_option, DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,7 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    pub fn from_native(native: &std::fs::Metadata) -> Self {
+    pub fn from_native(native: &fs::Metadata) -> Self {
         Metadata {
             inode: native.ino(),
             mode: native.mode(),

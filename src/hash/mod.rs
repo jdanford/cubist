@@ -2,7 +2,7 @@ mod short;
 
 pub use self::short::{ShortHash, PREFIX_LENGTH_RANGE};
 
-use std::{fmt, marker::PhantomData, ops::Deref};
+use std::{fmt, hash, marker::PhantomData, ops::Deref};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -78,8 +78,8 @@ impl<E: Entity> Hash<E> {
         let hash_str = s
             .strip_prefix(E::KEY_PREFIX)
             .ok_or_else(|| Error::InvalidKey(s.to_owned()))?;
-        let inner: blake3::Hash = hash_str
-            .parse()
+        let inner = hash_str
+            .parse::<blake3::Hash>()
             .map_err(|_| Error::InvalidHash(hash_str.to_owned()))?;
         Ok(inner.into())
     }
@@ -113,8 +113,8 @@ impl<E> PartialEq for Hash<E> {
 
 impl<E> Eq for Hash<E> {}
 
-impl<E> std::hash::Hash for Hash<E> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+impl<E> hash::Hash for Hash<E> {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
         self.inner.hash(state);
     }
 }
