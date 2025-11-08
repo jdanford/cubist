@@ -7,7 +7,7 @@ use tokio_stream::StreamExt;
 use crate::{
     archive::Archive,
     entity::{Entity, EntityIndex},
-    error::{handle_error, Result},
+    error::{Result, handle_error},
     hash::Hash,
     ops::download_archive,
     task::BoundedJoinSet,

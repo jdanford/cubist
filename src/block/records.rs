@@ -1,6 +1,6 @@
 use std::{
     cmp::Ordering,
-    collections::{hash_map, HashMap},
+    collections::{HashMap, hash_map},
 };
 
 use serde::{Deserialize, Serialize};
@@ -114,7 +114,7 @@ impl<'a> RemoveRefs<'a> {
     }
 }
 
-impl<'a> Iterator for RemoveRefs<'a> {
+impl Iterator for RemoveRefs<'_> {
     type Item = Result<(Hash<Block>, BlockRecord)>;
 
     fn next(&mut self) -> Option<Self::Item> {

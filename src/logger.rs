@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 
-use env_logger::{fmt::Formatter, WriteStyle};
+use env_logger::{WriteStyle, fmt::Formatter};
 use log::{Level, LevelFilter, Record};
 
 pub fn init(level: LevelFilter, style: WriteStyle) {

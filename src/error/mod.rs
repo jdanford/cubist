@@ -178,7 +178,7 @@ impl PartialEq for Error {
 
 pub fn handle_error<T>(result: Result<T>) -> ExitCode {
     if let Err(err) = result {
-        error!("{err}");
+        error!("{err:#?}");
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS

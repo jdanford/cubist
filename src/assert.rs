@@ -5,14 +5,14 @@ use crate::{
 };
 
 pub fn assert_block_level_eq(hash: &Hash<Block>, actual: u8, expected: Option<u8>) -> Result<()> {
-    if let Some(expected) = expected {
-        if expected != actual {
-            return Err(Error::WrongBlockLevel {
-                hash: *hash,
-                actual,
-                expected,
-            });
-        }
+    if let Some(expected) = expected
+        && expected != actual
+    {
+        return Err(Error::WrongBlockLevel {
+            hash: *hash,
+            actual,
+            expected,
+        });
     }
 
     Ok(())
@@ -30,7 +30,7 @@ pub fn assert_hash_eq(actual: &Hash<Block>, expected: &Hash<Block>) -> Result<()
 }
 
 pub fn assert_size_multiple_of_hash(size: u64) -> Result<()> {
-    if size % hash::SIZE as u64 != 0 {
+    if !size.is_multiple_of(hash::SIZE as u64) {
         return Err(Error::InvalidBlockSize(size));
     }
 

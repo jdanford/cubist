@@ -5,12 +5,12 @@ use std::{
 
 use async_stream::try_stream;
 use aws_sdk_s3::{
+    Client,
     error::SdkError,
     operation::{get_object::GetObjectError, head_object::HeadObjectError},
     types::{Delete, ObjectIdentifier},
-    Client,
 };
-use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use chrono::Utc;
 use itertools::Itertools;
 use tokio::task::spawn_blocking;

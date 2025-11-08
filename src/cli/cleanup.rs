@@ -8,8 +8,8 @@ use crate::{
     error::Result,
     format::format_size,
     ops::{
-        cleanup_archives, cleanup_blocks, download_archive_records, download_block_records,
-        upload_archive_records, upload_block_records, CleanupState,
+        CleanupState, cleanup_archives, cleanup_blocks, download_archive_records,
+        download_block_records, upload_archive_records, upload_block_records,
     },
     stats::CommandStats,
 };

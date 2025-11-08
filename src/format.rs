@@ -1,7 +1,7 @@
 use std::{borrow::Cow, path::Path};
 
 use chrono::{DateTime, Local, Utc};
-use humansize::{BaseUnit, FormatSizeOptions, ToF64, Unsigned, DECIMAL};
+use humansize::{BaseUnit, DECIMAL, FormatSizeOptions, ToF64, Unsigned};
 
 const BITS_PER_SECOND: FormatSizeOptions = FormatSizeOptions::from(DECIMAL)
     .base_unit(BaseUnit::Bit)

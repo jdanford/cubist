@@ -1,6 +1,6 @@
 use std::{fs, os::unix::fs::MetadataExt};
 
-use chrono::{serde::ts_milliseconds_option, DateTime, Utc};
+use chrono::{DateTime, Utc, serde::ts_milliseconds_option};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

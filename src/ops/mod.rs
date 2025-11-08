@@ -11,21 +11,21 @@ use itertools::Itertools;
 use crate::{
     block::Block,
     entity::Entity,
-    error::{handle_error, Result},
+    error::{Result, handle_error},
     hash::{Hash, ShortHash},
-    storage::{Storage, MAX_KEYS_PER_REQUEST},
+    storage::{MAX_KEYS_PER_REQUEST, Storage},
     task::BoundedJoinSet,
 };
 
 pub use self::{
     archive::{download_archive, upload_archive},
-    backup::{backup_all, upload_pending_files, BackupState},
-    cleanup::{cleanup_archives, cleanup_blocks, delete_archives_and_garbage_blocks, CleanupState},
+    backup::{BackupState, backup_all, upload_pending_files},
+    cleanup::{CleanupState, cleanup_archives, cleanup_blocks, delete_archives_and_garbage_blocks},
     records::{
         download_archive_records, download_block_records, upload_archive_records,
         upload_block_records,
     },
-    restore::{download_pending_files, restore_all, RestoreState},
+    restore::{RestoreState, download_pending_files, restore_all},
 };
 
 pub async fn try_delete_blocks<H, I>(

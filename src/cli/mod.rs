@@ -15,15 +15,15 @@ use std::{
 };
 
 use clap::{
-    builder::{styling::AnsiColor, Styles},
     Parser, Subcommand,
+    builder::{Styles, styling::AnsiColor},
 };
-use concolor_clap::{color_choice, ColorChoice};
+use concolor_clap::{ColorChoice, color_choice};
 use env_logger::WriteStyle;
 use log::LevelFilter;
 
 use crate::{
-    error::{handle_error, Result},
+    error::{Result, handle_error},
     logger,
     stats::FinalizedCommandStats,
 };

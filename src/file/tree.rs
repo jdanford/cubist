@@ -38,7 +38,7 @@ impl FileTree {
         FileTree { children, paths }
     }
 
-    pub fn walk(&self, maybe_path: Option<&Path>, order: WalkOrder) -> Result<WalkNode> {
+    pub fn walk(&self, maybe_path: Option<&Path>, order: WalkOrder) -> Result<WalkNode<'_>> {
         let walker = if let Some(path) = maybe_path {
             let node = self
                 .get(path)
@@ -127,7 +127,7 @@ fn path_keys(path: &Path) -> Result<(Vec<&OsStr>, &OsStr)> {
     Ok((keys, name))
 }
 
-fn get_normal_component(component: Component) -> Option<&OsStr> {
+fn get_normal_component(component: Component<'_>) -> Option<&OsStr> {
     if let Component::Normal(s) = component {
         Some(s)
     } else {

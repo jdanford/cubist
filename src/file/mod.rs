@@ -5,7 +5,7 @@ mod walk;
 
 use std::{
     io,
-    os::unix::fs::{chown, lchown, PermissionsExt},
+    os::unix::fs::{PermissionsExt, chown, lchown},
     path::Path,
 };
 

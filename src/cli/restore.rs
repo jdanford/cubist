@@ -8,7 +8,7 @@ use crate::{
     error::Result,
     format::{format_size, format_speed},
     locks::BlockLocks,
-    ops::{download_archive, download_pending_files, expand_hash, restore_all, RestoreState},
+    ops::{RestoreState, download_archive, download_pending_files, expand_hash, restore_all},
     stats::CommandStats,
 };
 

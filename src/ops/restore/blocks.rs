@@ -18,7 +18,7 @@ use crate::{
     hash::Hash,
 };
 
-use super::{files::PendingDownload, RestoreState};
+use super::{RestoreState, files::PendingDownload};
 
 #[derive(Debug, Clone, Copy)]
 pub struct LocalBlock {

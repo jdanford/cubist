@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use tokio::{sync::RwLock, task::spawn_blocking};
 
 use crate::{

@@ -1,7 +1,7 @@
 use std::{ops::Deref, time::Duration};
 
 use chrono::{DateTime, Utc};
-use serde::{ser::SerializeMap, Serialize, Serializer};
+use serde::{Serialize, Serializer, ser::SerializeMap};
 
 use crate::{archive::Archive, block::Block, entity::Entity};
 

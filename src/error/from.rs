@@ -16,8 +16,14 @@ impl From<VarError> for Error {
     }
 }
 
-impl From<bincode::Error> for Error {
-    fn from(error: bincode::Error) -> Self {
+impl From<bincode::error::EncodeError> for Error {
+    fn from(error: bincode::error::EncodeError) -> Self {
+        Error::other(error)
+    }
+}
+
+impl From<bincode::error::DecodeError> for Error {
+    fn from(error: bincode::error::DecodeError) -> Self {
         Error::other(error)
     }
 }

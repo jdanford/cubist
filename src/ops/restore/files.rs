@@ -10,16 +10,16 @@ use tokio::fs;
 
 use crate::{
     block::Block,
-    error::{handle_error, Error, Result},
-    file::{restore_metadata, restore_metadata_from_node, try_exists, FileType, Metadata, Node},
+    error::{Error, Result, handle_error},
+    file::{FileType, Metadata, Node, restore_metadata, restore_metadata_from_node, try_exists},
     format::{format_path, format_size},
     hash::Hash,
     task::BoundedJoinSet,
 };
 
 use super::{
-    blocks::{download_block_recursive, ActiveDownload},
     RestoreState,
+    blocks::{ActiveDownload, download_block_recursive},
 };
 
 #[derive(Debug)]
@@ -157,6 +157,8 @@ async fn download_pending_file(
     let formatted_size = format_size(size);
     let msg_style = AnsiColor::Blue.on_default();
     let size_style = AnsiColor::BrightBlack.on_default();
-    debug!("{msg_style}downloaded file{msg_style:#} {formatted_path} {size_style}({formatted_size}){size_style:#}");
+    debug!(
+        "{msg_style}downloaded file{msg_style:#} {formatted_path} {size_style}({formatted_size}){size_style:#}"
+    );
     Ok(())
 }

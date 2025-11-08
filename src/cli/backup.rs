@@ -13,9 +13,9 @@ use crate::{
     format::{format_size, format_speed},
     locks::BlockLocks,
     ops::{
-        backup_all, download_archive_records, download_block_records, try_delete_blocks,
-        upload_archive, upload_archive_records, upload_block_records, upload_pending_files,
-        BackupState,
+        BackupState, backup_all, download_archive_records, download_block_records,
+        try_delete_blocks, upload_archive, upload_archive_records, upload_block_records,
+        upload_pending_files,
     },
     stats::CommandStats,
 };

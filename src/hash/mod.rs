@@ -1,6 +1,6 @@
 mod short;
 
-pub use self::short::{ShortHash, PREFIX_LENGTH_RANGE};
+pub use self::short::{PREFIX_LENGTH_RANGE, ShortHash};
 
 use std::{fmt, hash, marker::PhantomData, ops::Deref};
 

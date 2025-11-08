@@ -13,7 +13,7 @@ use crate::{
         find::{find_archives_and_garbage_blocks, find_garbage_entities},
     },
     stats::CommandStats,
-    storage::{Storage, MAX_KEYS_PER_REQUEST},
+    storage::{MAX_KEYS_PER_REQUEST, Storage},
 };
 
 mod delete;

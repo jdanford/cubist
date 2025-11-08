@@ -1,6 +1,5 @@
-use std::{fmt, marker::PhantomData, ops::RangeInclusive, str::FromStr};
+use std::{fmt, marker::PhantomData, ops::RangeInclusive, str::FromStr, sync::LazyLock};
 
-use once_cell::sync::Lazy;
 use regex::{Regex, RegexBuilder};
 
 use crate::error::{Error, Result};
@@ -11,7 +10,7 @@ const MIN_PREFIX_LENGTH: usize = 6;
 const MAX_PREFIX_LENGTH: usize = SIZE * 2;
 pub const PREFIX_LENGTH_RANGE: RangeInclusive<usize> = MIN_PREFIX_LENGTH..=MAX_PREFIX_LENGTH;
 
-static HEX_REGEX: Lazy<Regex> = Lazy::new(|| {
+static HEX_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     RegexBuilder::new(r"^[0-9a-f]+$")
         .case_insensitive(true)
         .build()

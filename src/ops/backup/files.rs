@@ -17,14 +17,14 @@ use tokio_stream::StreamExt;
 
 use crate::{
     block::{self, Block},
-    error::{handle_error, Result},
-    file::{read_metadata, Node},
+    error::{Result, handle_error},
+    file::{Node, read_metadata},
     format::{format_path, format_size},
     hash::Hash,
     task::BoundedJoinSet,
 };
 
-use super::{blocks::UploadTree, BackupState};
+use super::{BackupState, blocks::UploadTree};
 
 #[derive(Debug)]
 pub struct PendingUpload {
@@ -104,7 +104,7 @@ async fn backup_from_entry(
         debug!("{style}added directory{style:#} {formatted_path}");
     } else {
         warn!("skipped special file {formatted_path}");
-    };
+    }
 
     Ok(None)
 }
@@ -150,7 +150,9 @@ async fn upload_pending_file(state: Arc<BackupState>, pending_file: PendingUploa
     let formatted_size = format_size(size);
     let msg_style = AnsiColor::Blue.on_default();
     let size_style = AnsiColor::BrightBlack.on_default();
-    debug!("{msg_style}uploaded file{msg_style:#} {formatted_path} {size_style}({formatted_size}){size_style:#}");
+    debug!(
+        "{msg_style}uploaded file{msg_style:#} {formatted_path} {size_style}({formatted_size}){size_style:#}"
+    );
     Ok(())
 }
 
