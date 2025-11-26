@@ -48,10 +48,11 @@ impl ActiveDownload {
     pub async fn new(pending_file: &PendingDownload) -> Result<Self> {
         let file = File::create(&pending_file.path).await?;
         let writer = BufWriter::new(file);
+        let inode = pending_file.metadata.inode;
 
         Ok(ActiveDownload {
             writer,
-            inode: pending_file.metadata.inode,
+            inode,
             offset: 0,
         })
     }

@@ -1,9 +1,6 @@
 #![deny(unsafe_code)]
 #![warn(clippy::pedantic)]
-#![allow(
-    clippy::new_without_default,
-    clippy::similar_names
-)]
+#![allow(clippy::new_without_default, clippy::similar_names)]
 
 pub mod cli;
 

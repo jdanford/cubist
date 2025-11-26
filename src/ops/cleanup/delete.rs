@@ -62,9 +62,9 @@ where
     if !state.dry_run {
         let deleted_keys = deleted_hashes.iter().map(Hash::key);
         state.storage.delete_many(deleted_keys).await?;
+        state.stats.write().await.bytes_deleted += bytes;
     }
 
-    state.stats.write().await.bytes_deleted += bytes;
     state.stats.write().await.add_entities_deleted(count as u64);
 
     for hash in deleted_hashes {

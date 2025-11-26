@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{mem::replace, sync::Arc};
 
 use tokio::task::spawn_blocking;
 
@@ -45,27 +45,30 @@ impl UploadTree {
         Ok(Some(hash))
     }
 
-    async fn add_inner(&mut self, mut hash: Hash<Block>, finalize: bool) -> Result<()> {
+    async fn add_inner(&mut self, mut hash: Hash<Block>, finalizing: bool) -> Result<()> {
         let max_layer_size = self.state.target_block_size as usize / hash::SIZE;
 
         for i in 0.. {
             if i >= self.layers.len() {
-                let layer = vec![hash];
+                let layer = Vec::with_capacity(max_layer_size);
                 self.layers.push(layer);
-                break;
             }
 
             let layer = self.layers.get_mut(i).unwrap();
             layer.push(hash);
+
             let len = layer.len();
 
-            if !finalize && len <= max_layer_size {
+            if !finalizing && len < max_layer_size {
+                break;
+            }
+
+            if finalizing && len == 1 {
                 break;
             }
 
             let level = (i + 1).try_into().map_err(|_| Error::TooManyBlockLevels)?;
-            let range = if finalize { ..len } else { ..(len - 1) };
-            let children = layer.drain(range).collect();
+            let children = replace(layer, Vec::with_capacity(max_layer_size));
             let block = spawn_blocking(move || Block::branch(level, children)).await??;
             hash = self.upload_block(block).await?;
         }
