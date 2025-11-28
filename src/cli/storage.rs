@@ -1,9 +1,4 @@
-use std::env::{self};
-
-use crate::{
-    error::{Error, Result},
-    storage::Storage,
-};
+use crate::{env, error::Result, storage::Storage};
 
 use super::GlobalArgs;
 
@@ -13,7 +8,7 @@ pub async fn create_storage(args: &GlobalArgs) -> Result<Storage> {
     let bucket = if let Some(bucket) = &args.bucket {
         bucket.clone()
     } else {
-        env::var(ENV_VAR_STORAGE).map_err(|_| Error::MissingEnvVar(ENV_VAR_STORAGE.to_owned()))?
+        env::var(ENV_VAR_STORAGE)?
     };
 
     Ok(Storage::new(bucket).await)

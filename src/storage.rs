@@ -276,5 +276,5 @@ impl Storage {
 
 fn md5_base64(bytes: &[u8]) -> String {
     let digest = md5::compute(bytes);
-    BASE64_STANDARD.encode(digest.0)
+    BASE64_STANDARD.encode(*digest)
 }

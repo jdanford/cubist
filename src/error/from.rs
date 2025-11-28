@@ -1,4 +1,4 @@
-use std::{env::VarError, fmt::Debug, path::StripPrefixError};
+use std::{fmt::Debug, path::StripPrefixError};
 
 use async_channel::SendError;
 use aws_sdk_s3::{
@@ -9,12 +9,6 @@ use humantime::DurationError;
 use tokio::{sync::AcquireError, task::JoinError};
 
 use super::Error;
-
-impl From<VarError> for Error {
-    fn from(error: VarError) -> Self {
-        Error::other(error)
-    }
-}
 
 impl From<bincode::error::EncodeError> for Error {
     fn from(error: bincode::error::EncodeError) -> Self {

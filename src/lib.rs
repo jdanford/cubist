@@ -10,6 +10,7 @@ mod assert;
 mod block;
 mod compress;
 mod entity;
+mod env;
 mod error;
 mod file;
 mod format;
