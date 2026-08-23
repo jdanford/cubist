@@ -264,12 +264,18 @@ impl Storage {
         let delete = delete_builder.build()?;
 
         let start_time = Utc::now();
-        self.client
+        let response = self
+            .client
             .delete_objects()
             .bucket(&self.bucket)
             .delete(delete)
             .send()
             .await?;
+
+        if !response.errors().is_empty() {
+            let details = response.errors().iter().map(format_delete_error).join(", ");
+            return Err(Error::DeleteFailed(details));
+        }
 
         let end_time = Utc::now();
         self.stats.lock().unwrap().add_delete(start_time, end_time);
@@ -284,4 +290,14 @@ impl Storage {
 fn md5_base64(bytes: &[u8]) -> String {
     let digest = md5::compute(bytes);
     BASE64_STANDARD.encode(*digest)
+}
+
+fn format_delete_error(error: &aws_sdk_s3::types::Error) -> String {
+    let key = error.key().unwrap_or("<unknown>");
+    match (error.code(), error.message()) {
+        (Some(code), Some(message)) => format!("`{key}` ({code}): {message}"),
+        (Some(code), None) => format!("`{key}` ({code})"),
+        (None, Some(message)) => format!("`{key}`: {message}"),
+        (None, None) => format!("`{key}`"),
+    }
 }
