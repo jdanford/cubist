@@ -13,9 +13,8 @@ use crate::{
     format::{format_size, format_speed},
     locks::BlockLocks,
     ops::{
-        BackupState, backup_all, download_archive_records, download_block_records,
-        try_delete_blocks, upload_archive, upload_archive_records, upload_block_records,
-        upload_pending_files,
+        BackupState, backup_all, download_archive_records, download_block_records, upload_archive,
+        upload_archive_records, upload_block_records, upload_pending_files,
     },
     stats::CommandStats,
 };
@@ -64,7 +63,8 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
         ..
     } = unarc(state);
     let stats = unrwarc(stats);
-    let (hash, record) = upload_archive(storage.clone(), archive, stats.start_time).await?;
+    let (hash, record) =
+        upload_archive(storage.clone(), archive, stats.start_time, cli.dry_run).await?;
     archive_records.insert(hash, record);
 
     if !cli.dry_run {
