@@ -1,5 +1,5 @@
 use std::{
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     sync::Arc,
 };
 
@@ -50,6 +50,10 @@ async fn restore_recursive(
     sender: Sender<PendingDownload>,
     root: Option<&Path>,
 ) -> Result<()> {
+    if let Some(root) = root {
+        restore_missing_ancestors(state.clone(), root).await?;
+    }
+
     let walker = state.archive.walk(root, state.order)?;
     for (child_path, node) in walker {
         let path = if let Some(path) = root {
@@ -62,6 +66,43 @@ async fn restore_recursive(
         if let Some(pending_file) = maybe_file {
             sender.send(pending_file).await?;
         }
+    }
+
+    Ok(())
+}
+
+async fn restore_missing_ancestors(state: Arc<RestoreState>, path: &Path) -> Result<()> {
+    let mut ancestor = PathBuf::new();
+    let mut parts = path
+        .components()
+        .filter(|component| matches!(component, Component::Normal(_)))
+        .peekable();
+
+    while let Some(part) = parts.next() {
+        if parts.peek().is_none() {
+            break;
+        }
+
+        ancestor.push(part);
+
+        if try_exists(&ancestor).await? {
+            let metadata = fs::symlink_metadata(&ancestor).await?;
+            if !metadata.is_dir() {
+                return Err(Error::FileIsNotDirectory(ancestor));
+            }
+            continue;
+        }
+
+        let node = state
+            .archive
+            .get(&ancestor)
+            .ok_or_else(|| Error::FileDoesNotExist(ancestor.clone()))?;
+
+        if !matches!(node, Node::Directory { .. }) {
+            return Err(Error::FileIsNotDirectory(ancestor));
+        }
+
+        restore_from_node(state.clone(), &ancestor, node).await?;
     }
 
     Ok(())
