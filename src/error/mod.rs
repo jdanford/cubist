@@ -85,6 +85,9 @@ pub enum Error {
     #[error("`{0}` must be set")]
     MissingEnvVar(String),
 
+    #[error("failed to delete {0}")]
+    DeleteFailed(String),
+
     #[error(transparent)]
     Io(#[from] io::Error),
 
@@ -165,6 +168,7 @@ impl PartialEq for Error {
             (TooManyBlockLevels, TooManyBlockLevels) => true,
             (EmptyBlock, EmptyBlock) => true,
             (MissingEnvVar(var_l), MissingEnvVar(var_r)) => var_l == var_r,
+            (DeleteFailed(details_l), DeleteFailed(details_r)) => details_l == details_r,
             _ => false,
         }
     }
