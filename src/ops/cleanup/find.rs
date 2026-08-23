@@ -77,32 +77,31 @@ where
         let archive_sender = archive_sender.clone();
         let block_sender = block_sender.clone();
 
-        tasks
-            .spawn(async move {
-                let archive = download_archive(state.storage.clone(), &hash).await?;
-                let record = state.archive_records.write().await.remove(&hash)?;
-                let removed_archive = RemovedArchive {
-                    hash,
-                    record: Some(record),
-                };
-                archive_sender.send(removed_archive).await?;
+        Box::pin(tasks.spawn(async move {
+            let archive = download_archive(state.storage.clone(), &hash).await?;
+            let record = state.archive_records.write().await.remove(&hash)?;
+            let removed_archive = RemovedArchive {
+                hash,
+                record: Some(record),
+            };
+            archive_sender.send(removed_archive).await?;
 
-                block_in_place(move || {
-                    let mut block_records = state.block_records.blocking_write();
-                    let removed_records = block_records.remove_refs(archive.block_refs);
-                    for result in removed_records {
-                        let (hash, record) = result?;
-                        let removed_block = RemovedBlock {
-                            hash,
-                            record: Some(record),
-                        };
-                        block_sender.send_blocking(removed_block)?;
-                    }
+            block_in_place(move || {
+                let mut block_records = state.block_records.blocking_write();
+                let removed_records = block_records.remove_refs(archive.block_refs);
+                for result in removed_records {
+                    let (hash, record) = result?;
+                    let removed_block = RemovedBlock {
+                        hash,
+                        record: Some(record),
+                    };
+                    block_sender.send_blocking(removed_block)?;
+                }
 
-                    Result::Ok(())
-                })
+                Result::Ok(())
             })
-            .await?;
+        }))
+        .await?;
 
         while let Some(result) = tasks.try_join_next() {
             handle_error(result?);

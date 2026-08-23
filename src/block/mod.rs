@@ -4,15 +4,12 @@ mod tests;
 
 use std::borrow::Borrow;
 
-use fastcdc::v2020::AsyncStreamCDC;
-use tokio::io::AsyncRead;
-
 use crate::{
     assert::{assert_block_level_eq, assert_hash_eq, assert_size_multiple_of_hash},
     compress::{compress, decompress},
     entity::Entity,
     error::{Error, Result},
-    hash::{self, Hash},
+    hash::Hash,
 };
 
 pub use self::records::{BlockRecord, BlockRecords, BlockRefs};
@@ -98,9 +95,11 @@ impl Block {
 
     fn from_raw(expected_hash: &Hash<Block>, level: u8, bytes: &[u8]) -> Result<Self> {
         let block = if level == 0 {
-            Block::leaf_from_raw(bytes)?
+            let data = decompress(bytes)?;
+            Self::leaf(data)?
         } else {
-            Block::branch_from_raw(level, bytes)?
+            let children = split(bytes)?.collect::<Vec<_>>();
+            Self::branch(level, children)?
         };
 
         assert_hash_eq(block.hash(), expected_hash)?;
@@ -121,31 +120,14 @@ impl Block {
             }
         }
     }
-
-    fn leaf_from_raw(bytes: &[u8]) -> Result<Self> {
-        let data = decompress(bytes)?;
-        let hash = Hash::leaf_block(&data);
-        Ok(Block::Leaf { hash, data })
-    }
-
-    fn branch_from_raw(level: u8, bytes: &[u8]) -> Result<Self> {
-        let size = bytes.len() as u64;
-        assert_size_multiple_of_hash(size)?;
-
-        let children = split(bytes).collect::<Vec<_>>();
-        let hash = Hash::branch_block(&children);
-        Ok(Block::Branch {
-            hash,
-            level,
-            children,
-        })
-    }
 }
 
-pub fn chunker<R: AsyncRead + Unpin>(reader: R, target_size: u32) -> AsyncStreamCDC<R> {
-    let min_size = target_size / 2;
-    let max_size = target_size * 4;
-    AsyncStreamCDC::new(reader, min_size, target_size, max_size)
+fn split(bytes: &[u8]) -> Result<impl Iterator<Item = Hash<Block>> + '_> {
+    let size = bytes.len() as u64;
+    assert_size_multiple_of_hash(size)?;
+
+    let (chunks, _) = bytes.as_chunks();
+    Ok(chunks.iter().map(|&bytes| Hash::from_bytes(bytes)))
 }
 
 fn concat<H, I>(hashes: I) -> Vec<u8>
@@ -160,10 +142,4 @@ where
     }
 
     bytes
-}
-
-fn split(bytes: &[u8]) -> impl Iterator<Item = Hash<Block>> + '_ {
-    bytes
-        .chunks_exact(hash::SIZE)
-        .map(|bytes| Hash::from_bytes(bytes.try_into().unwrap()))
 }
