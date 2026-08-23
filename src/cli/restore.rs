@@ -18,7 +18,7 @@ use super::{
     storage::create_storage,
 };
 
-pub async fn main(cli: RestoreArgs) -> Result<()> {
+pub async fn main(cli: RestoreArgs) -> Result<u64> {
     let stats = rwarc(CommandStats::new());
     let storage = Arc::new(create_storage(&cli.global).await?);
     let local_blocks = rwarc(HashMap::new());
@@ -49,6 +49,7 @@ pub async fn main(cli: RestoreArgs) -> Result<()> {
     let RestoreState { stats, storage, .. } = unarc(state);
     let stats = unrwarc(stats);
     let storage = unarc(storage);
+    let warnings = stats.warnings;
     let full_stats = stats.finalize(storage.stats());
 
     match cli.global.stats {
@@ -74,5 +75,5 @@ pub async fn main(cli: RestoreArgs) -> Result<()> {
         None => {}
     }
 
-    Ok(())
+    Ok(warnings)
 }

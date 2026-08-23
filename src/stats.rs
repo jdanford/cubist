@@ -20,6 +20,7 @@ pub struct CommandStats {
     pub blocks_uploaded: u64,
     pub blocks_deleted: u64,
     pub blocks_referenced: u64,
+    pub warnings: u64,
 }
 
 impl CommandStats {
@@ -38,6 +39,7 @@ impl CommandStats {
             blocks_uploaded: 0,
             blocks_deleted: 0,
             blocks_referenced: 0,
+            warnings: 0,
         }
     }
 
@@ -198,6 +200,7 @@ impl Serialize for FinalizedCommandStats {
         map.serialize_entry("blocks_uploaded", &self.blocks_uploaded)?;
         map.serialize_entry("blocks_deleted", &self.blocks_deleted)?;
         map.serialize_entry("blocks_referenced", &self.blocks_referenced)?;
+        map.serialize_entry("warnings", &self.warnings)?;
         map.serialize_entry("requests", &self.storage.requests)?;
 
         map.end()

@@ -7,7 +7,7 @@ use tokio_stream::StreamExt;
 use crate::{
     archive::Archive,
     entity::{Entity, EntityIndex},
-    error::{Result, handle_error},
+    error::Result,
     hash::Hash,
     ops::download_archive,
     task::BoundedJoinSet,
@@ -49,12 +49,12 @@ where
             .await?;
 
         while let Some(result) = tasks.try_join_next() {
-            handle_error(result?);
+            result??;
         }
     }
 
     while let Some(result) = tasks.join_next().await {
-        handle_error(result?);
+        result??;
     }
 
     Ok(())
@@ -104,12 +104,12 @@ where
         .await?;
 
         while let Some(result) = tasks.try_join_next() {
-            handle_error(result?);
+            result??;
         }
     }
 
     while let Some(result) = tasks.join_next().await {
-        handle_error(result?);
+        result??;
     }
 
     Ok(())

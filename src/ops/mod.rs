@@ -11,7 +11,7 @@ use itertools::Itertools;
 use crate::{
     block::Block,
     entity::Entity,
-    error::{Result, handle_error},
+    error::Result,
     hash::{Hash, ShortHash},
     storage::{MAX_KEYS_PER_REQUEST, Storage},
     task::BoundedJoinSet,
@@ -51,12 +51,12 @@ where
             .await?;
 
         while let Some(result) = tasks.try_join_next() {
-            handle_error(result?);
+            result??;
         }
     }
 
     while let Some(result) = tasks.join_next().await {
-        handle_error(result?);
+        result??;
     }
 
     Ok(())

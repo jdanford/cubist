@@ -20,7 +20,7 @@ use super::{
     storage::create_storage,
 };
 
-pub async fn main(cli: DeleteArgs) -> Result<()> {
+pub async fn main(cli: DeleteArgs) -> Result<u64> {
     let stats = rwarc(CommandStats::new());
     let storage = Arc::new(create_storage(&cli.global).await?);
 
@@ -61,6 +61,7 @@ pub async fn main(cli: DeleteArgs) -> Result<()> {
     }
 
     let storage = unarc(storage);
+    let warnings = stats.warnings;
     let full_stats = stats.finalize(storage.stats());
 
     match cli.global.stats {
@@ -84,5 +85,5 @@ pub async fn main(cli: DeleteArgs) -> Result<()> {
         None => {}
     }
 
-    Ok(())
+    Ok(warnings)
 }

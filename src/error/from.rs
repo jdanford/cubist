@@ -1,4 +1,4 @@
-use std::{fmt::Debug, path::StripPrefixError};
+use std::{fmt::Debug, io, path::StripPrefixError};
 
 use async_channel::SendError;
 use aws_sdk_s3::{
@@ -42,7 +42,11 @@ impl From<AcquireError> for Error {
 
 impl From<fastcdc::v2020::Error> for Error {
     fn from(error: fastcdc::v2020::Error) -> Self {
-        Error::other(error)
+        match error {
+            fastcdc::v2020::Error::IoError(error) => error.into(),
+            fastcdc::v2020::Error::Empty => io::Error::from(io::ErrorKind::UnexpectedEof).into(),
+            error @ fastcdc::v2020::Error::Other(_) => Error::other(error),
+        }
     }
 }
 

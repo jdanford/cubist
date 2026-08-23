@@ -10,7 +10,7 @@ use tokio::fs;
 
 use crate::{
     block::Block,
-    error::{Error, Result, handle_error},
+    error::{Error, Result},
     file::{FileType, Metadata, Node, restore_metadata, restore_metadata_from_node, try_exists},
     format::{format_path, format_size},
     hash::Hash,
@@ -164,12 +164,12 @@ pub async fn download_pending_files(
             .await?;
 
         while let Some(result) = tasks.try_join_next() {
-            handle_error(result?);
+            result??;
         }
     }
 
     while let Some(result) = tasks.join_next().await {
-        handle_error(result?);
+        result??;
     }
 
     Ok(())
