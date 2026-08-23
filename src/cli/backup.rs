@@ -25,7 +25,7 @@ use super::{
     storage::create_storage,
 };
 
-pub async fn main(cli: BackupArgs) -> Result<()> {
+pub async fn main(cli: BackupArgs) -> Result<u64> {
     let stats = rwarc(CommandStats::new());
     let storage = Arc::new(create_storage(&cli.global).await?);
     let archive = rwarc(Archive::new());
@@ -82,6 +82,7 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
     info!("{style}created archive{style:#} {short_hash}");
 
     let storage = unarc(storage);
+    let warnings = stats.warnings;
     let full_stats = stats.finalize(storage.stats());
 
     match cli.global.stats {
@@ -111,5 +112,5 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
         None => {}
     }
 
-    Ok(())
+    Ok(warnings)
 }

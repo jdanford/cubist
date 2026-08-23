@@ -1,5 +1,6 @@
 use std::{
     collections::BTreeMap,
+    fmt::Display,
     path::{Path, PathBuf},
     pin::pin,
     sync::Arc,
@@ -20,7 +21,7 @@ use tokio_stream::StreamExt;
 
 use crate::{
     block::Block,
-    error::{Result, handle_error},
+    error::Result,
     file::{Node, read_metadata},
     format::{format_path, format_size},
     hash::Hash,
@@ -63,7 +64,7 @@ pub async fn backup_recursive(
             }
             Ok(None) => break,
             Err(err) => {
-                handle_walkdir_error(err)?;
+                handle_walkdir_error(&state, err).await?;
             }
         }
     }
@@ -72,6 +73,22 @@ pub async fn backup_recursive(
 }
 
 async fn backup_from_entry(
+    state: Arc<BackupState>,
+    entry: DirEntry,
+    base_path: &Path,
+) -> Result<Option<PendingUpload>> {
+    let local_path = entry.path();
+    match try_backup_from_entry(state.clone(), entry, base_path).await {
+        Ok(pending) => Ok(pending),
+        Err(err) if err.is_source() => {
+            skip_source(&state, &local_path, &err).await;
+            Ok(None)
+        }
+        Err(err) => Err(err),
+    }
+}
+
+async fn try_backup_from_entry(
     state: Arc<BackupState>,
     entry: DirEntry,
     base_path: &Path,
@@ -125,18 +142,33 @@ pub async fn upload_pending_files(
             .await?;
 
         while let Some(result) = tasks.try_join_next() {
-            handle_error(result?);
+            result??;
         }
     }
 
     while let Some(result) = tasks.join_next().await {
-        handle_error(result?);
+        result??;
     }
 
     Ok(())
 }
 
 async fn upload_pending_file(state: Arc<BackupState>, pending_file: PendingUpload) -> Result<()> {
+    let local_path = pending_file.local_path.clone();
+    match try_upload_pending_file(state.clone(), pending_file).await {
+        Ok(()) => Ok(()),
+        Err(err) if err.is_source() => {
+            skip_source(&state, &local_path, &err).await;
+            Ok(())
+        }
+        Err(err) => Err(err),
+    }
+}
+
+async fn try_upload_pending_file(
+    state: Arc<BackupState>,
+    pending_file: PendingUpload,
+) -> Result<()> {
     let PendingUpload {
         local_path,
         archive_path,
@@ -183,19 +215,25 @@ pub async fn upload_file(
     Ok((hash, size))
 }
 
-fn handle_walkdir_error(err: async_walkdir::Error) -> Result<()> {
+async fn handle_walkdir_error(state: &BackupState, err: async_walkdir::Error) -> Result<()> {
     if let Some(io_err) = err.io() {
         if let Some(path) = err.path() {
-            let formatted_path = format_path(path);
-            warn!("skipped file {formatted_path} ({io_err})");
+            skip_source(state, path, io_err).await;
         } else {
             warn!("skipped file ({io_err})");
+            state.stats.write().await.warnings += 1;
         }
 
         Ok(())
     } else {
         Err(err.into())
     }
+}
+
+async fn skip_source(state: &BackupState, path: &Path, err: impl Display) {
+    let formatted_path = format_path(path);
+    warn!("skipped file {formatted_path} ({err})");
+    state.stats.write().await.warnings += 1;
 }
 
 fn build_chunker<R: AsyncRead + Unpin>(reader: R, target_size: usize) -> AsyncStreamCDC<R> {

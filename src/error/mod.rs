@@ -105,6 +105,10 @@ impl Error {
     {
         Error::Other(error.to_string())
     }
+
+    pub fn is_source(&self) -> bool {
+        matches!(self, Error::Io(_) | Error::WalkDir(_))
+    }
 }
 
 #[allow(clippy::match_same_arms)]
@@ -174,11 +178,13 @@ impl PartialEq for Error {
     }
 }
 
-pub fn handle_error<T>(result: Result<T>) -> ExitCode {
-    if let Err(err) = result {
-        error!("{err:#?}");
-        ExitCode::FAILURE
-    } else {
-        ExitCode::SUCCESS
+pub fn handle_error(result: Result<u64>) -> ExitCode {
+    match result {
+        Ok(0) => ExitCode::SUCCESS,
+        Ok(_) => ExitCode::from(3),
+        Err(err) => {
+            error!("{err:#?}");
+            ExitCode::from(1)
+        }
     }
 }
