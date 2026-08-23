@@ -27,6 +27,7 @@ pub async fn upload_archive(
     storage: Arc<Storage>,
     archive: Arc<RwLock<Archive>>,
     created: DateTime<Utc>,
+    dry_run: bool,
 ) -> Result<(Hash<Archive>, ArchiveRecord)> {
     let (compressed_bytes, hash, record) = spawn_blocking(move || {
         let bytes = serialize(&*archive.blocking_read())?;
@@ -38,6 +39,9 @@ pub async fn upload_archive(
     })
     .await??;
 
-    storage.put(&hash.key(), compressed_bytes).await?;
+    if !dry_run {
+        storage.put(&hash.key(), compressed_bytes).await?;
+    }
+
     Ok((hash, record))
 }
