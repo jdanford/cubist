@@ -5,6 +5,9 @@ use std::{
     sync::Arc,
 };
 
+use fastcdc::v2020::AsyncStreamCDC;
+use tokio::io::AsyncRead;
+
 use async_channel::{Receiver, Sender};
 use async_walkdir::{DirEntry, WalkDir};
 use clap::builder::styling::AnsiColor;
@@ -16,7 +19,7 @@ use tokio::{
 use tokio_stream::StreamExt;
 
 use crate::{
-    block::{self, Block},
+    block::Block,
     error::{Result, handle_error},
     file::{Node, read_metadata},
     format::{format_path, format_size},
@@ -160,15 +163,17 @@ pub async fn upload_file(
     state: Arc<BackupState>,
     file: &mut File,
 ) -> Result<(Option<Hash<Block>>, u64)> {
-    let reader = BufReader::new(file);
-    let mut chunker = block::chunker(reader, state.target_block_size);
-    let mut chunks = pin!(chunker.as_stream());
     let mut tree = UploadTree::new(state.clone());
     let mut size = 0;
 
+    let reader = BufReader::new(file);
+    let mut chunker = build_chunker(reader, state.target_block_size);
+    let mut chunks = pin!(chunker.as_stream());
+
     while let Some(chunk) = chunks.try_next().await? {
-        size += chunk.data.len() as u64;
+        let chunk_size = chunk.data.len() as u64;
         tree.add_leaf(chunk.data).await?;
+        size += chunk_size;
     }
 
     state.stats.write().await.bytes_read += size;
@@ -191,4 +196,10 @@ fn handle_walkdir_error(err: async_walkdir::Error) -> Result<()> {
     } else {
         Err(err.into())
     }
+}
+
+fn build_chunker<R: AsyncRead + Unpin>(reader: R, target_size: u32) -> AsyncStreamCDC<R> {
+    let min_size = target_size / 2;
+    let max_size = target_size * 4;
+    AsyncStreamCDC::new(reader, min_size, target_size, max_size)
 }
