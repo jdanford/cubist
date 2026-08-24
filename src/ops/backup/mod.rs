@@ -21,5 +21,5 @@ pub struct BackupState {
     pub storage: Arc<Storage>,
     pub archive: Arc<RwLock<Archive>>,
     pub block_records: Arc<RwLock<BlockRecords>>,
-    pub block_locks: Arc<RwLock<BlockLocks>>,
+    pub block_locks: Arc<BlockLocks>,
 }

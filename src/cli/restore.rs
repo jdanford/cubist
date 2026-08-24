@@ -22,7 +22,9 @@ pub async fn main(cli: RestoreArgs) -> Result<()> {
     let stats = rwarc(CommandStats::new());
     let storage = Arc::new(create_storage(&cli.global).await?);
     let local_blocks = rwarc(HashMap::new());
-    let block_locks = rwarc(BlockLocks::new());
+
+    let lock_count = cli.tasks * 4;
+    let block_locks = Arc::new(BlockLocks::new(lock_count));
 
     let archive_hash = expand_hash(storage.clone(), &cli.archive).await?;
     let archive = download_archive(storage.clone(), &archive_hash).await?;

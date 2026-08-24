@@ -25,5 +25,5 @@ pub struct RestoreState {
     pub stats: Arc<RwLock<CommandStats>>,
     pub storage: Arc<Storage>,
     pub local_blocks: Arc<RwLock<LocalBlocks>>,
-    pub block_locks: Arc<RwLock<BlockLocks>>,
+    pub block_locks: Arc<BlockLocks>,
 }
