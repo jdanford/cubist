@@ -78,8 +78,7 @@ impl UploadTree {
 
     async fn upload_block(&mut self, block: Block) -> Result<Hash<Block>> {
         let hash = *block.hash();
-        let lock = self.state.block_locks.write().await.lock(&hash);
-        let permit = lock.acquire().await?;
+        let _guard = self.state.block_locks.acquire(&hash).await;
 
         let block_exists = self.state.block_records.read().await.contains(&hash);
         if block_exists {
@@ -103,8 +102,6 @@ impl UploadTree {
 
         self.state.archive.write().await.add_ref(&hash);
         self.state.stats.write().await.blocks_referenced += 1;
-
-        drop(permit);
         Ok(hash)
     }
 }

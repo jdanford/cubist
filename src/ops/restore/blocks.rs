@@ -81,38 +81,42 @@ pub async fn download_block_recursive(
 ) -> Result<u64> {
     state.stats.write().await.blocks_referenced += 1;
 
-    let lock = state.block_locks.write().await.lock(hash);
-    let permit = lock.acquire().await?;
+    let children = {
+        let _guard = state.block_locks.acquire(hash).await;
 
-    // copied to avoid holding lock
-    let maybe_block = state.local_blocks.read().await.get(hash).copied();
-    if let Some(local_block) = maybe_block {
-        assert_block_level_eq(hash, 0, level)?;
-        let data = read_local_block(state.clone(), local_block).await?;
-        write_local_block(state.clone(), file, &data).await?;
-    } else {
-        let bytes = state.storage.get(&hash.key()).await?;
-        state.stats.write().await.blocks_downloaded += 1;
-        state.stats.write().await.content_bytes_downloaded += bytes.len() as u64;
+        // copied to avoid holding lock
+        let maybe_block = state.local_blocks.read().await.get(hash).copied();
+        if let Some(local_block) = maybe_block {
+            assert_block_level_eq(hash, 0, level)?;
+            let data = read_local_block(state.clone(), local_block).await?;
+            write_local_block(state.clone(), file, &data).await?;
+            None
+        } else {
+            let bytes = state.storage.get(&hash.key()).await?;
+            state.stats.write().await.blocks_downloaded += 1;
+            state.stats.write().await.content_bytes_downloaded += bytes.len() as u64;
 
-        let hash = *hash;
-        let block = spawn_blocking(move || Block::decode(&hash, level, &bytes)).await??;
-        match block {
-            Block::Leaf { data, .. } => {
-                let local_block = write_local_block(state.clone(), file, &data).await?;
-                state.local_blocks.write().await.insert(hash, local_block);
-            }
-            Block::Branch {
-                level, children, ..
-            } => {
-                for hash in &children {
-                    download_block_recursive(state.clone(), file, hash, Some(level - 1)).await?;
+            let hash = *hash;
+            let block = spawn_blocking(move || Block::decode(&hash, level, &bytes)).await??;
+            match block {
+                Block::Leaf { data, .. } => {
+                    let local_block = write_local_block(state.clone(), file, &data).await?;
+                    state.local_blocks.write().await.insert(hash, local_block);
+                    None
                 }
+                Block::Branch {
+                    level, children, ..
+                } => Some((level, children)),
             }
+        }
+    };
+
+    if let Some((level, children)) = children {
+        for hash in &children {
+            download_block_recursive(state.clone(), file, hash, Some(level - 1)).await?;
         }
     }
 
-    drop(permit);
     let size = file.offset;
     Ok(size)
 }

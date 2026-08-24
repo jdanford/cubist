@@ -29,7 +29,9 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
     let stats = rwarc(CommandStats::new());
     let storage = Arc::new(create_storage(&cli.global).await?);
     let archive = rwarc(Archive::new());
-    let block_locks = rwarc(BlockLocks::new());
+
+    let lock_count = cli.tasks * 4;
+    let block_locks = Arc::new(BlockLocks::new(lock_count));
 
     let (mut archive_records, block_records) = try_join!(
         download_archive_records(storage.clone()),
