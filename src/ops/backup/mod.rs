@@ -14,7 +14,7 @@ pub use self::files::{backup_all, upload_pending_files};
 #[derive(Debug)]
 pub struct BackupState {
     pub compression_level: u8,
-    pub target_block_size: u32,
+    pub target_block_size: usize,
     pub task_count: usize,
     pub dry_run: bool,
     pub stats: Arc<RwLock<CommandStats>>,

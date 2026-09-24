@@ -15,10 +15,9 @@ use std::{
 };
 
 use clap::{
-    Parser, Subcommand,
+    ColorChoice, Parser, Subcommand,
     builder::{Styles, styling::AnsiColor},
 };
-use concolor_clap::{ColorChoice, color_choice};
 use env_logger::WriteStyle;
 use log::LevelFilter;
 
@@ -40,7 +39,7 @@ use self::args::{
     long_about = None,
     propagate_version = true,
     styles = cli_styles(),
-    color = color_choice(),
+    color = ColorChoice::Auto,
 )]
 pub struct Cli {
     #[command(subcommand)]

@@ -46,7 +46,7 @@ impl UploadTree {
     }
 
     async fn add_inner(&mut self, mut hash: Hash<Block>, finalizing: bool) -> Result<()> {
-        let max_layer_size = self.state.target_block_size as usize / hash::SIZE;
+        let max_layer_size = self.state.target_block_size / hash::SIZE;
 
         for i in 0.. {
             if i >= self.layers.len() {
