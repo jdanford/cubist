@@ -198,7 +198,7 @@ fn handle_walkdir_error(err: async_walkdir::Error) -> Result<()> {
     }
 }
 
-fn build_chunker<R: AsyncRead + Unpin>(reader: R, target_size: u32) -> AsyncStreamCDC<R> {
+fn build_chunker<R: AsyncRead + Unpin>(reader: R, target_size: usize) -> AsyncStreamCDC<R> {
     let min_size = target_size / 2;
     let max_size = target_size * 4;
     AsyncStreamCDC::new(reader, min_size, target_size, max_size)
