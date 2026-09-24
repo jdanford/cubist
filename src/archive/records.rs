@@ -94,7 +94,7 @@ impl EntityIndex<Archive> for ArchiveRecords {
         let record = self
             .records
             .remove(hash)
-            .ok_or_else(|| Error::ArchiveRecordNotFound(*hash))?;
+            .ok_or(Error::ArchiveRecordNotFound(*hash))?;
         self.by_created.remove(&record.created);
         Ok(record)
     }

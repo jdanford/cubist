@@ -96,7 +96,7 @@ impl EntityIndex<Block> for BlockRecords {
     fn remove(&mut self, hash: &Hash<Block>) -> Result<BlockRecord> {
         self.records
             .remove(hash)
-            .ok_or_else(|| Error::BlockRecordNotFound(*hash))
+            .ok_or(Error::BlockRecordNotFound(*hash))
     }
 }
 

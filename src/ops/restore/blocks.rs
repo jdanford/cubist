@@ -137,7 +137,7 @@ async fn read_local_block(state: Arc<RestoreState>, local_block: LocalBlock) -> 
     let path = state
         .archive
         .path(local_block.inode)
-        .ok_or_else(|| Error::InodeDoesNotExist(local_block.inode))?;
+        .ok_or(Error::InodeDoesNotExist(local_block.inode))?;
     let file = File::open(path).await?;
     let mut reader = BufReader::new(file);
 

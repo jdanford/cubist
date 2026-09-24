@@ -91,8 +91,8 @@ pub enum Error {
     #[error(transparent)]
     WalkDir(#[from] async_walkdir::Error),
 
-    #[error(transparent)]
-    Other(anyhow::Error),
+    #[error("{0}")]
+    Other(String),
 }
 
 impl Error {
@@ -100,13 +100,7 @@ impl Error {
     where
         E: std::error::Error + Send + Sync + 'static,
     {
-        Error::Other(error.into())
-    }
-}
-
-impl From<anyhow::Error> for Error {
-    fn from(error: anyhow::Error) -> Self {
-        Error::Other(error)
+        Error::Other(error.to_string())
     }
 }
 
