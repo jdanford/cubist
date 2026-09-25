@@ -25,8 +25,6 @@ cubist gets/puts objects with the following keys:
 | ---------------- | ------------------- |
 | Archive          | `archives/<hash>`   |
 | Block            | `blocks/<hash>`     |
-| Archive metadata | `metadata/archives` |
-| Block metadata   | `metadata/blocks`   |
 
 ## Subcommands
 
@@ -46,7 +44,6 @@ Options:
   -l, --compression-level <NUM>  Compression level (1-19) [default: 3]
   -s, --target-block-size <NUM>  Target size for blocks [default: 1048576]
   -j, --tasks <NUM>              Number of background tasks to use [default: 8]
-  -t, --transient                Undo all changes when finished
   -n, --dry-run                  Show operations that would be performed without actually doing them
   -b, --bucket <BUCKET>          S3 bucket
       --stats <STATS>            Format to use for stats [possible values: basic, json]

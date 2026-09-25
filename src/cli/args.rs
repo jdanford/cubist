@@ -67,10 +67,6 @@ pub struct BackupArgs {
     )]
     pub tasks: usize,
 
-    /// Undo all changes when finished
-    #[arg(short = 't', long, default_value_t = false)]
-    pub transient: bool,
-
     /// Show operations that would be performed without actually doing them
     #[arg(short = 'n', long, default_value_t = false)]
     pub dry_run: bool,
