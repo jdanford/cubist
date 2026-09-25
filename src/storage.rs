@@ -34,8 +34,15 @@ pub struct Storage {
 
 impl Storage {
     pub async fn new(bucket: String) -> Self {
-        let s3_config = aws_config::load_from_env().await;
-        let client = Client::new(&s3_config);
+        let sdk_config = aws_config::load_from_env().await;
+        let mut s3_config = aws_sdk_s3::config::Builder::from(&sdk_config);
+        if std::env::var_os("AWS_ENDPOINT_URL").is_some()
+            || std::env::var_os("AWS_ENDPOINT_URL_S3").is_some()
+        {
+            s3_config = s3_config.force_path_style(true);
+        }
+
+        let client = Client::from_conf(s3_config.build());
         let stats = Arc::new(Mutex::new(StorageStats::new()));
 
         Storage {
