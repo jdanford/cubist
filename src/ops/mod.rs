@@ -28,6 +28,7 @@ pub use self::{
     restore::{RestoreState, download_pending_files, restore_all},
 };
 
+#[allow(dead_code)]
 pub async fn try_delete_blocks<H, I>(
     storage: Arc<Storage>,
     hashes: I,

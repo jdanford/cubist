@@ -64,29 +64,20 @@ pub async fn main(cli: BackupArgs) -> Result<()> {
         ..
     } = unarc(state);
     let stats = unrwarc(stats);
+    let (hash, record) = upload_archive(storage.clone(), archive, stats.start_time).await?;
+    archive_records.insert(hash, record);
 
-    if cli.transient {
-        let archive = unrwarc(archive);
-        let mut block_records = unrwarc(block_records);
-        let removed_blocks = block_records.remove_refs(archive.block_refs);
-        let removed_hashes = removed_blocks.map(|result| result.map(|(hash, _)| hash));
-        try_delete_blocks(storage.clone(), removed_hashes, cli.tasks).await?;
-    } else {
-        let (hash, record) = upload_archive(storage.clone(), archive, stats.start_time).await?;
-        archive_records.insert(hash, record);
-
-        if !cli.dry_run {
-            try_join!(
-                upload_block_records(storage.clone(), block_records.clone()),
-                upload_archive_records(storage.clone(), rwarc(archive_records)),
-            )?;
-        }
-
-        let block_count = block_records.read().await.len();
-        let short_hash = hash.format_short(block_count);
-        let style = AnsiColor::Green.on_default();
-        info!("{style}created archive{style:#} {short_hash}");
+    if !cli.dry_run {
+        try_join!(
+            upload_block_records(storage.clone(), block_records.clone()),
+            upload_archive_records(storage.clone(), rwarc(archive_records)),
+        )?;
     }
+
+    let block_count = block_records.read().await.len();
+    let short_hash = hash.format_short(block_count);
+    let style = AnsiColor::Green.on_default();
+    info!("{style}created archive{style:#} {short_hash}");
 
     let storage = unarc(storage);
     let full_stats = stats.finalize(storage.stats());
